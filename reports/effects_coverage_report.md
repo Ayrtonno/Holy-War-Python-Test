@@ -1,0 +1,270 @@
+# Holy War - Effetti Copertura (Auto Report)
+
+- Totale carte uniche: **258**
+- DEDICATED: **106**
+- GENERIC: **111**
+- MANUAL_NEEDED: **41**
+
+## MANUAL_NEEDED
+- Acqua | Artefatto | CRI-1
+- Araldo della Fine | Santo | CRI-1
+- Aria | Artefatto | CRI-1
+- Brigante | Santo | CRI-1
+- Campana | Artefatto | CRI-1
+- Chiesa | Edificio | CRI-1
+- Fuoco | Artefatto | CRI-1
+- Giorno 5: Creature del Mare | Santo | CRI-1
+- Giorno 6: Creature di Terra | Santo | CRI-1
+- Giudizio Universale | Maledizione | CRI-1
+- Moribondo | Santo | CRI-1
+- Papa | Santo | CRI-1
+- Proibizione Cristiana | Maledizione | CRI-1
+- Rifugio Sacro | Artefatto | CRI-1
+- Terra | Artefatto | CRI-1
+- Vescovo della Città Buia | Santo | CRI-1
+- Vescovo della Città Lucente | Santo | CRI-1
+- Coccodrillo del Nilo | Santo | EGI-1
+- Esondazione del Nilo | Artefatto | EGI-1
+- Geb | Santo | EGI-1
+- Geroglifici | Artefatto | EGI-1
+- Neith | Santo | EGI-1
+- Piramide: Chefren | Artefatto | EGI-1
+- Piramide: Cheope | Artefatto | EGI-1
+- Piramide: Micerino | Artefatto | EGI-1
+- Proibizione Egizia | Maledizione | EGI-1
+- Ra | Santo | EGI-1
+- Schiavi | Santo | EGI-1
+- Schiavo Mutilato | Santo | EGI-1
+- Set | Santo | EGI-1
+- Sfinge | Edificio | EGI-1
+- Token Piaga | Token | EGI-1
+- Fujn-dar | Santo | PHD-1
+- Gggnag'ljep | Artefatto | PHD-1
+- Kah-ok | Santo | PHD-1
+- Pkad-nok | Santo | PHD-1
+- Proibizione di Ph | Maledizione | PHD-1
+- Token Gub-ner | Token | PHD-1
+- Calice Insanguinato | Artefatto | Ombre Maya
+- Spirito dei Sepolti | Santo | Ombre Maya
+- Spirito Vacuo | Token | Ombre Maya
+
+## GENERIC
+- Altare dei Sette Sigilli | Edificio | CRI-1 | rimuovi
+- Biblioteca Apostolica | Edificio | CRI-1 | cerca, reliquiario
+- Biblioteca d'Oro | Edificio | CRI-1 | pesca
+- Canti Religiosi | Artefatto | CRI-1 | cimitero
+- Cronologia Sacra | Benedizione | CRI-1 | pesca, cimitero
+- Custode della Creazione | Santo | CRI-1 | cimitero, evoca
+- Dio, il Creatore | Santo | CRI-1 | reliquiario, evoca
+- Frate Curatore | Santo | CRI-1 | pesca
+- Giorno 2: Cielo Terrestre | Benedizione | CRI-1 | nessun santo puo attaccare il turno in cui questa carta e stata attivata
+- Giorno 3: Terre e Mari | Maledizione | CRI-1 | scambialo con un santo in attacco
+- Giorno 4: Stelle | Benedizione | CRI-1 | guarda le prime, reliquiario
+- Giorno 7: Riposo | Maledizione | CRI-1 | non potra attaccare durante il prossimo turno
+- Giorno Festivo | Benedizione | CRI-1 | pesca, reliquiario
+- Guerriero Santificato | Santo | CRI-1 | cimitero
+- Impostore | Santo | CRI-1 | evoca
+- Martire Esiliato | Santo | CRI-1 | rimuovi
+- Mela del Peccato | Benedizione | CRI-1 | scomunicata, equipaggia
+- Missionario | Santo | CRI-1 | infliggi, reliquiario
+- Offerta ai Sigilli | Benedizione | CRI-1 | pesca
+- Paladino Corrotto | Santo | CRI-1 | pesca, rimuovi, distruggilo, evoca
+- Pellegrinaggio Forzato | Maledizione | CRI-1 | scambia i santi in attacco
+- Perdono | Benedizione | CRI-1 | reliquiario, scomunicata
+- Preghiera | Benedizione | CRI-1 | rimuovi
+- Prete Anziano | Santo | CRI-1 | rimuovi
+- Processione | Benedizione | CRI-1 | pesca, guarda la prima carta del mazzo
+- Profanatore | Santo | CRI-1 | cimitero
+- Quarto Sigillo: Morte | Maledizione | CRI-1 | distruggilo
+- Sacri Vasi | Benedizione | CRI-1 | rimuovi
+- Sacrificio | Benedizione | CRI-1 | pesca, reliquiario, scarta una carta e pescane due
+- Secondo Sigillo: Guerra | Maledizione | CRI-1 | distruggi un santo
+- Settimo Sigillo | Benedizione | CRI-1 | cerca, reliquiario
+- Settimo Sigillo: Apocalisse | Benedizione | CRI-1 | distruggi tutti i santi sul terreno
+- Terzo Sigillo: Carestia | Maledizione | CRI-1 | pesca, cimitero
+- Trombe del Giudizio | Artefatto | CRI-1 | infliggi
+- Umanità | Artefatto | CRI-1 | equipaggia
+- Veggente dell'Apocalisse | Santo | CRI-1 | pesca, cerca, reliquiario
+- Veggenza | Benedizione | CRI-1 | guarda le prime, reliquiario
+- Visione Celestiale | Benedizione | CRI-1 | pesca
+- Anubi | Santo | EGI-1 | cimitero, evoca
+- Atum | Santo | EGI-1 | evoca
+- Bende Consacrate | Benedizione | EGI-1 | equipaggia, equipaggiala
+- Deriu-hebet | Santo | EGI-1 | pesca, reliquiario
+- Faro di Alessandria | Artefatto | EGI-1 | pesca, reliquiario
+- Iside | Santo | EGI-1 | cerca, cimitero, evoca
+- Medicina Egizia | Benedizione | EGI-1 | ripristina
+- Mummificazione | Benedizione | EGI-1 | reliquiario, cimitero, scomunicata
+- Nefti | Santo | EGI-1 | cimitero, evoca
+- Nun | Artefatto | EGI-1 | pesca
+- Oggetti di Famiglia | Benedizione | EGI-1 | equipaggia
+- Osiride | Santo | EGI-1 | cimitero, scomunicata
+- Piaga Ignota | Maledizione | EGI-1 | evoca
+- Ptah | Santo | EGI-1 | pesca, reliquiario
+- Rito Funebre | Benedizione | EGI-1 | reliquiario, cimitero
+- Sacerdote Oroscopo | Santo | EGI-1 | cerca, reliquiario
+- Seth | Santo | EGI-1 | reliquiario, cimitero
+- Tempesta di Sabbia | Maledizione | EGI-1 | ogni santo sul terreno perde
+- Ultima Offerta | Benedizione | EGI-1 | cimitero
+- Unut | Santo | EGI-1 | scomunicata
+- Vasi Canopi | Artefatto | EGI-1 | evoca, equipaggia, equipaggiala
+- Av'drna | Edificio | PHD-1 | pesca
+- Avidità di Av | Maledizione | PHD-1 | pesca
+- Distorsione del Reliquiario | Benedizione | Ph-DakGaph | pesca
+- Frammento dello Specchio | Artefatto | Ph-DakGaph | reliquiario
+- Fujn'lyat | Benedizione | PHD-1 | reliquiario, cimitero
+- Gub-ner Antico | Santo | Ph-DakGaph | reliquiario, scomunicata, evoca
+- Libro di Ya-ner | Artefatto | Ph-DakGaph | evoca
+- Llakhnal | Santo | PHD-1 | evoca
+- Maledizione di Ykknødar | Maledizione | PHD-1 | reliquiario, cimitero
+- Manifestazione di Ph-Dak'Gaph | Santo | Ph-DakGaph | pesca, rimuovi, reliquiario, scomunicata, evoca
+- Paradosso di Ykknødar | Maledizione | Ph-DakGaph | pesca, reliquiario
+- Ph'drna | Edificio | PHD-1 | evoca
+- Ph'kdam | Benedizione | PHD-1 | cerca, reliquiario
+- Pkad-nok'ljep | Benedizione | PHD-1 | pesca
+- Rito della Ri-Manifestazione | Benedizione | Ph-DakGaph | pesca, reliquiario
+- Sacerdote del Vuoto | Santo | Ph-DakGaph | reliquiario, scomunicata
+- Specchio di Ykknødar | Artefatto | PHD-1 | reliquiario, evoca
+- Volere di Ph | Innata | PHD-1 | pesca, rimuovi, scomunicata
+- Ya-ner | Santo | PHD-1 | ripristina, evoca
+- Ykknødar | Santo | PHD-1 | pesca, evoca
+- Ah Puch | Santo | Ombre Maya | cimitero
+- Anima Errante | Santo | Ombre Maya | evoca
+- Camazotz | Santo | Ombre Maya | cimitero, evoca
+- Cenote Sacro | Artefatto | Ombre Maya | rimuovi
+- Eco dei Morti | Artefatto | Ombre Maya | cimitero
+- Fiume dei Morti | Edificio | Ombre Maya | cimitero
+- Furia di Camazotz | Maledizione | Ombre Maya | pesca
+- Hun-Came | Santo | MAY-1 | cimitero
+- Ix Chel | Santo | Ombre Maya | reliquiario, cimitero, evoca
+- Maledizione di Xibalba | Maledizione | Ombre Maya | cimitero
+- Promessa dell'oltretomba | Innata | Ombre Maya | reliquiario, cimitero, scomunicata
+- Resurrezione del Sacerdote | Benedizione | Ombre Maya | pesca
+- Rituale dei Guardiani | Benedizione | Ombre Maya | pesca, cimitero, evoca
+- Rituale Sepolcrale | Benedizione | Ombre Maya | cimitero
+- Sacrificio del Tempo | Maledizione | Ombre Maya | reliquiario, cimitero
+- Sacrificio della Fertilità | Benedizione | Ombre Maya | rimuovi, cimitero
+- Spirito dell'Esercito Dorato | Artefatto | Ombre Maya | evoca
+- Sussurro degli Antenati | Maledizione | Ombre Maya | pesca
+- Tikal | Edificio | Ombre Maya | reliquiario
+- Vucub.Came | Santo | Ombre Maya | cimitero, evoca
+- Xibalba | Artefatto | Ombre Maya | cimitero, evoca
+- Cura Rapida | Benedizione | NEU-1 | conferisci
+- Cura Totale | Benedizione | NEU-1 | ripristina
+- Meditazione | Benedizione | NEU-1 | pesca
+- Muraglia | Maledizione | NEU-1 | annulla il primo attacco che ricevi in questo turno
+- Pozione Celestiale | Benedizione | NEU-1 | riportare la sua fede al valore iniziale
+- Pozione Perdi-tempo | Maledizione | NEU-1 | non puo attaccare nel suo prossimo turno
+- Ricerca Archeologica | Benedizione | NEU-1 | cerca, reliquiario
+- Ritorno Infame | Maledizione | NEU-1 | cimitero, evoca
+- Seguace | Santo | NEU-1 | pesca, cimitero
+- Vilipendio | Maledizione | NEU-1 | avversario ottiene
+- Visioni Errate | Benedizione | NEU-1 | guarda la carta in fondo al tuo reliquiario, reliquiario
+
+## DEDICATED
+- Arca della salvezza | Maledizione | CRI-1 | legacy:explicit
+- Ascensione | Benedizione | CRI-1 | legacy:explicit
+- Custode dei Sigilli | Santo | CRI-1 | legacy:explicit
+- Elemosina | Maledizione | CRI-1 | legacy:explicit
+- Genesi: Compimento | Benedizione | CRI-1 | legacy:explicit
+- Giorno 1: Cieli e Terra | Benedizione | CRI-1 | legacy:explicit
+- Paladino della Fede | Santo | CRI-1 | legacy:explicit
+- Primo Sigillo | Benedizione | CRI-1 | legacy:explicit
+- Assalto Invernale | Benedizione | NOR-1 | registry:play, legacy:explicit
+- Bifrost | Maledizione | NOR-1 | registry:play, legacy:explicit
+- Fenrir | Santo | NOR-1 | registry:enter
+- Figli di Odino | Benedizione | NOR-1 | registry:play, legacy:explicit
+- Gungnir | Artefatto | NOR-1 | registry:enter
+- Huginn | Santo | NOR-1 | registry:enter, legacy:explicit
+- Járngreipr | Artefatto | NOR-1 | registry:enter
+- Jordh | Santo | NOR-1 | registry:enter
+- Jormungandr | Santo | NOR-1 | registry:enter
+- Loki | Santo | NOR-1 | registry:activate
+- Megingjörð | Artefatto | NOR-1 | registry:enter
+- Mjolnir | Artefatto | NOR-1 | registry:enter
+- Muninn | Santo | NOR-1 | registry:enter, legacy:explicit
+- Odino | Santo | NOR-1 | registry:enter
+- Ragnarok | Benedizione | NOR-1 | registry:play, legacy:explicit
+- Saga degli Eroi Caduti | Artefatto | NOR-1 | registry:enter
+- Sif | Santo | NOR-1 | registry:enter
+- Skadi | Santo | NOR-1 | registry:enter, legacy:explicit
+- Tanngnjostr | Santo | NOR-1 | registry:activate
+- Tanngrisnir | Santo | NOR-1 | registry:activate
+- Tempesta di Asgard | Maledizione | NOR-1 | registry:play, legacy:explicit
+- Thor | Santo | NOR-1 | registry:enter
+- Valhalla | Edificio | NOR-1 | registry:enter
+- Yggdrasil | Edificio | NOR-1 | registry:activate, legacy:explicit
+- Albero di Pietra | Santo | ANI-1 | registry:enter
+- Albero Fortunato | Santo | ANI-1 | registry:enter
+- Albero Sacro | Santo | ANI-1 | registry:enter
+- Albero Sconsacrato | Santo | ANI-1 | registry:enter
+- Albero Secolare | Santo | ANI-1 | registry:enter
+- Anfibio Tossico | Santo | ANI-1 | registry:enter
+- Aquila Vorace | Santo | ANI-1 | registry:enter
+- Cataclisma Ciclico | Artefatto | ANI-1 | registry:enter
+- Caverna Profonda | Artefatto | ANI-1 | registry:enter
+- Ciclicità Climatica | Innata | ANI-1 | registry:enter
+- Colori d'Autunno | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Corteccia | Artefatto | ANI-1 | registry:enter
+- Creature del Sottobosco | Santo | ANI-1 | registry:enter
+- Cuore della foresta | Artefatto | ANI-1 | registry:enter
+- Diboscamento | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Fiamma Primordiale | Edificio | ANI-1 | registry:enter
+- Fioritura Primaverile | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Foresta Sacra | Edificio | ANI-1 | registry:enter
+- Golem di Pietra | Santo | ANI-1 | registry:enter
+- Incendio | Artefatto | ANI-1 | registry:enter
+- Insetto della Palude | Santo | ANI-1 | registry:enter
+- Insetto Dorato | Santo | ANI-1 | registry:enter
+- Inverno | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Larva Pestilenziale | Santo | ANI-1 | registry:enter
+- Legame Primordiale | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Memoria della Pietra | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Monsone | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Muschio Tossico | Santo | ANI-1 | registry:enter
+- Occhi della Notte | Santo | ANI-1 | registry:enter
+- Pianta Carnivora | Santo | ANI-1 | registry:enter
+- Pietra Bianca | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Pietra Focaia | Santo | ANI-1 | registry:enter
+- Pietra Levigata | Santo | ANI-1 | registry:enter
+- Pietra Nera | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Pietre Aguzze | Artefatto | ANI-1 | registry:enter
+- Pietre Pesanti | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Pioggia | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Pioggia Acida | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Preghiera: Fertilità | Benedizione | ANI-1 | registry:play
+- Proibizione Naturale | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Radici | Artefatto | ANI-1 | registry:enter
+- Ruscello Sacro | Edificio | ANI-1 | registry:enter
+- Sabbie Mobili | Artefatto | ANI-1 | registry:enter
+- Sacrificio Naturale | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Segno Del Passato | Artefatto | ANI-1 | registry:enter
+- Sequoia | Santo | ANI-1 | registry:enter
+- Spore | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Stalagmiti | Santo | ANI-1 | registry:enter
+- Stalattiti | Santo | ANI-1 | registry:enter
+- Tempesta | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Terremoto: Magnitudo 10 | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Terremoto: Magnitudo 3 | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Tifone | Benedizione | ANI-1 | registry:play, legacy:explicit
+- Token Albero | Token | ANI-1 | registry:enter
+- Token Sacrificale | Token | ANI-1 | registry:enter
+- Tornado | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Totem di Pietra | Santo | ANI-1 | registry:enter, legacy:explicit
+- Uragano | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Voragine | Maledizione | ANI-1 | registry:play, legacy:explicit
+- Vulcano | Santo | ANI-1 | registry:activate
+- Passaggio all'Aldilà | Benedizione | EGI-1 | legacy:explicit
+- Sacerdote Orologio | Santo | EGI-1 | legacy:explicit
+- Dono di Kah | Benedizione | PHD-1 | legacy:explicit
+- Furia di Llakhnal | Maledizione | PHD-1 | legacy:explicit
+- Risveglio di Ph-Dak'Gaph | Benedizione | Ph-DakGaph | legacy:explicit
+- Barriera Magica | Benedizione | NEU-1 | legacy:explicit
+- Barriera Magica Celestiale | Benedizione | NEU-1 | legacy:explicit
+- Collasso | Maledizione | NEU-1 | legacy:explicit
+- Concentrazione | Benedizione | NEU-1 | legacy:explicit
+- Contemplazione | Benedizione | NEU-1 | legacy:explicit
+- Corruzione | Maledizione | NEU-1 | legacy:explicit
+- Cura | Benedizione | NEU-1 | legacy:explicit
+- Rinforzi | Benedizione | NEU-1 | legacy:explicit
+- Ritorno Catastrofico | Benedizione | NEU-1 | legacy:explicit

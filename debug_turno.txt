@@ -1,0 +1,27 @@
+Setup iniziale completato: entrambi i giocatori hanno pescato 5 carte.
+Preparazione: Giocatore dispone di 10 Ispirazione e non puo attaccare.
+Giocatore posiziona Albero Secolare in Attacco 1.
+Giocatore posiziona Albero Fortunato in Attacco 2.
+Preparazione: AI dispone di 10 Ispirazione e non puo attaccare.
+AI posiziona Seguace in Attacco 1.
+AI usa Muraglia, ma l'effetto non e implementato nell'MVP.
+Fine preparazione: lancio moneta -> inizia AI.
+Turno 1: AI pesca 3 carte e ottiene 10 Ispirazione.
+AI posiziona Jordh in Difesa 1.
+AI applica Barriera Magica Celestiale a Seguace.
+AI attacca con Seguace contro Albero Fortunato e infligge 2 danni (Fede 2->0).
+Albero Fortunato viene distrutto: Giocatore guadagna 2 Peccato.
+Turno 2: Giocatore pesca 3 carte e ottiene 10 Ispirazione.
+Giocatore posiziona Seguace in Attacco 2.
+Seguace blocca l'attacco grazie a Barriera Magica.
+Giocatore attacca con Seguace contro Seguace e infligge 1 danni (Fede 5->4).
+Giocatore posiziona Insetto della Palude in Attacco 3.
+Giocatore attacca con Insetto della Palude contro Seguace e infligge 1 danni (Fede 4->3).
+Turno 3: AI pesca 3 carte e ottiene 10 Ispirazione.
+AI posiziona Thor in Attacco 2.
+AI usa Pozione Celestiale, ma l'effetto non e implementato nell'MVP.
+AI usa Meditazione, ma l'effetto non e implementato nell'MVP.
+AI attacca con Seguace contro Seguace e infligge 2 danni (Fede 5->3).
+AI attacca con Thor contro Insetto della Palude e infligge 8 danni (Fede 2->0).
+Insetto della Palude viene distrutto: Giocatore guadagna 2 Peccato.
+Turno 4: Giocatore pesca 3 carte e ottiene 10 Ispirazione.
