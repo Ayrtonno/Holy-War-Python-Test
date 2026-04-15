@@ -1055,7 +1055,7 @@
     "crosses": "4",
     "faith": 4,
     "strength": 4,
-    "effect_text": "Se questo Santo distrugge un Santo avversario, ripristina la sua Fede a 4.",
+    "effect_text": "Se questo Santo distrugge un Santo avversario riceve +4 fede.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -2015,7 +2015,7 @@
     "crosses": "White",
     "faith": 10,
     "strength": null,
-    "effect_text": "",
+    "effect_text": "Finché Ph'drna è in campo, ogni santo viene evocato nel campo dell’altro giocatore. Il tuo avversario può distruggerlo solo sacrificando 1 edificio o 4 artefatti e pagando 10 ispirazione.",
     "expansion": "PHD-1",
     "is_token": false
   },
@@ -2585,7 +2585,7 @@
     "crosses": "2",
     "faith": 3,
     "strength": null,
-    "effect_text": "I tuoi Santi sono immuni alle Maledizioni che causerebbero la loro distruzione.",
+    "effect_text": "I tuoi Santi sono immuni agli effetti delle maledizioni.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -2605,17 +2605,7 @@
     "crosses": "6",
     "faith": 5,
     "strength": 4,
-    "effect_text": "Se Altare dei Sette Sigilli è sul campo con almeno 7 Segnalini Sigillo, questo Santo riceve +5 Forza. Quando questo Santo viene sconfitto, aggiungi 3 Segnalini Sigillo su Altare dei Sette Sigilli.",
-    "expansion": "ANI-1",
-    "is_token": false
-  },
-  {
-    "name": "Arca della salvezza",
-    "card_type": "Maledizione",
-    "crosses": "8",
-    "faith": null,
-    "strength": null,
-    "effect_text": "Scegli due Santi sul campo. Distruggi tutti gli altri Santi.",
+    "effect_text": "Se Altare dei Sette Sigilli è sul campo con almeno 7 Segnalini Sigillo, questo Santo riceve +5 Forza. Quando questo Santo viene sconfitto in battaglia o distrutto per effetto di una carta, aggiungi 3 Segnalini Sigillo su Altare dei Sette Sigilli.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -2665,7 +2655,7 @@
     "crosses": "6",
     "faith": 0,
     "strength": 3,
-    "effect_text": "Puoi giocare questa carta solo se sacrifichi un tuo Santo. Quando giochi questa carta, aggiungi la Fede iniziale del Santo sacrificato alla Fede di questa carta. Quando questi Santi vengono sconfitti, non generano Peccato.",
+    "effect_text": "Sacrifica un tuo Santo. Quando giochi questa carta, aggiungi la Fede iniziale del Santo sacrificato alla Fede di questa carta. Quando questo Santo viene sconfitto in battaglia o distrutto per effetto di una carta non genera Peccato.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -2675,7 +2665,7 @@
     "crosses": "10",
     "faith": 10,
     "strength": null,
-    "effect_text": "All'inizio del tuo turno, aggiungi 1 Segnalino su questa carta. Puoi attivare l'effetto di questa carta rimuovendo un qualsiasi numero di Segnalini da essa. Il costo in Ispirazione per attivare questo effetto è pari al numero di Segnalini rimossi. Per ogni Segnalino rimosso, ogni tuo Santo sul campo riceve +1 Fede.",
+    "effect_text": "Mentre Campana è sul tuo terreno, all'inizio del tuo turno, aggiungi su di essa 1 Segnalino. Puoi attivare l'effetto di questa carta rimuovendo un qualsiasi numero di Segnalini da essa. Il costo in Ispirazione per attivare questo effetto è pari al numero di Segnalini rimossi. Per ogni Segnalino rimosso, ogni tuo Santo sul campo riceve +1 Fede.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -4456,7 +4446,7 @@
     "faith": null,
     "strength": null,
     "effect_text": "Ogni giocatore prende tutte le sue carte scomunicate e le mette nel proprio reliquiario, poi mischia. Poi ogni giocatore pesca 2 carte.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4476,7 +4466,7 @@
     "faith": 3,
     "strength": null,
     "effect_text": "Una volta per turno, puoi scomunicare la carta in cima al tuo reliquiario.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4526,7 +4516,7 @@
     "faith": 6,
     "strength": 3,
     "effect_text": "Quando questa carta entra in campo, puoi evocare un Token Gub-ner sul tuo campo. Ogni volta che un Token Gub-ner viene sconfitto, puoi scegliere una carta scomunicata e rimetterla nel reliquiario del suo proprietario. Poi mischia.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4546,7 +4536,7 @@
     "faith": 7,
     "strength": null,
     "effect_text": "Una volta per turno, evoca un Token Gub-ner sul tuo campo. Puoi controllare massimo 2 copie di \"Libro di Ya-ner\". Quando questa carta lascia il campo, distruggi ogni Token Gub-ner sul tuo campo e per ognuno di essi, rimuovi 2 Peccato.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4576,7 +4566,7 @@
     "faith": 35,
     "strength": 0,
     "effect_text": "Puoi giocare questa carta senza pagare il suo costo di Ispirazione se hai 10 o più carte scomunicate. Quando questa carta entra in campo, scegli una carta Artefatto, Edificio o Santo scomunicata e giocala senza pagare il suo costo di Ispirazione. Ogni volta che una carta viene scomunicata, rimuovi 2 Peccato. Ogni volta che l'avversario pesca una carta, riceve 1 Peccato. Quando questa carta lascia il campo, prendi tutte le carte scomunicate e rimettile nei rispettivi reliquiari, poi ogni giocatore mischia il proprio reliquiario.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4586,7 +4576,7 @@
     "faith": null,
     "strength": null,
     "effect_text": "Ogni giocatore scomunica le prime 5 carte del proprio reliquiario. Dopo la risoluzione, il giocatore con più carte scomunicate pesca 3 carte. In caso di parità, entrambi pescano 3 carte.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4595,7 +4585,7 @@
     "crosses": "White",
     "faith": 10,
     "strength": null,
-    "effect_text": "",
+    "effect_text": "Finché Ph'drna è in campo, ogni santo viene evocato nel campo dell’altro giocatore. Il tuo avversario può distruggerlo solo sacrificando 1 edificio o 4 artefatti e pagando 10 ispirazione.",
     "expansion": "PHD-1",
     "is_token": false
   },
@@ -4646,7 +4636,7 @@
     "faith": null,
     "strength": null,
     "effect_text": "Scegli fino a 5 carte scomunicate bersaglio e aggiungile alla tua mano. Poi rimuovi 10 Peccato. Poi scomunica questa carta.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4656,7 +4646,7 @@
     "faith": null,
     "strength": null,
     "effect_text": "Scegli fino a 3 carte scomunicate bersaglio e rimettile nel tuo reliquiario. Poi mischia il reliquiario. Se controlli Av'drna o Ph'drna, pesca una carta.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {
@@ -4666,7 +4656,7 @@
     "faith": 4,
     "strength": 2,
     "effect_text": "Quando questa carta entra in campo, puoi scegliere una carta scomunicata e rimetterla nel tuo reliquiario. Poi mischia. Ogni volta che una carta viene scomunicata, questo Santo riceve +1 Forza.",
-    "expansion": "Full List",
+    "expansion": "PHD-1",
     "is_token": false
   },
   {

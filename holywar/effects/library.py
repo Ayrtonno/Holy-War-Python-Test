@@ -3,8 +3,7 @@ from __future__ import annotations
 import importlib
 import pkgutil
 
-from holywar.effects import legacy_handlers
-from holywar.effects.registry import NOT_HANDLED, get_activate, get_enter, get_play
+from holywar.effects.runtime import runtime_cards
 
 _MODULES_LOADED = False
 
@@ -22,32 +21,14 @@ def _load_card_modules() -> None:
 
 def resolve_enter_effect(engine, player_idx: int, uid: str) -> str | None:
     _load_card_modules()
-    inst = engine.state.instances[uid]
-    handler = get_enter(inst.definition.name)
-    if handler is not None:
-        out = handler(engine, player_idx, uid)
-        if out is not NOT_HANDLED:
-            return out
-    return legacy_handlers.resolve_enter_effect(engine, player_idx, uid)
+    return str(runtime_cards.resolve_enter(engine, player_idx, uid))
 
 
 def resolve_card_effect(engine, player_idx: int, uid: str, target: str | None) -> str:
     _load_card_modules()
-    inst = engine.state.instances[uid]
-    handler = get_play(inst.definition.name)
-    if handler is not None:
-        out = handler(engine, player_idx, uid, target)
-        if out is not NOT_HANDLED:
-            return out
-    return legacy_handlers.resolve_card_effect(engine, player_idx, uid, target)
+    return str(runtime_cards.resolve_play(engine, player_idx, uid, target))
 
 
 def resolve_activated_effect(engine, player_idx: int, uid: str, target: str | None) -> str:
     _load_card_modules()
-    inst = engine.state.instances[uid]
-    handler = get_activate(inst.definition.name)
-    if handler is not None:
-        out = handler(engine, player_idx, uid, target)
-        if out is not NOT_HANDLED:
-            return str(out)
-    return legacy_handlers.resolve_activated_effect(engine, player_idx, uid, target)
+    return str(runtime_cards.resolve_activate(engine, player_idx, uid, target))
