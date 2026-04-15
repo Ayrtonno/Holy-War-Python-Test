@@ -6,12 +6,78 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.effects import runtime_ported
 from holywar.effects.registry import NOT_HANDLED, get_activate, get_enter, get_play
 
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
     from holywar.scripting_api import RuleEventContext
+
+
+SUPPORTED_CONDITION_KEYS = {
+    "all_of",
+    "any_of",
+    "not",
+    "payload_from_zone_in",
+    "payload_to_zone_in",
+    "event_card_owner",
+    "event_card_type_in",
+    "turn_scope",
+    "phase_is",
+    "source_on_field",
+    "my_saints_gte",
+    "my_saints_lte",
+    "opponent_saints_gte",
+    "opponent_saints_lte",
+    "my_inspiration_gte",
+    "my_inspiration_lte",
+    "opponent_inspiration_gte",
+    "my_sin_gte",
+    "my_sin_lte",
+    "opponent_sin_gte",
+    "opponent_sin_lte",
+    "payload_reason_in",
+}
+
+EFFECT_ACTION_ALIASES = {
+    "add_faith": "increase_faith",
+    "buff_faith": "increase_faith",
+    "remove_faith": "decrease_faith",
+    "damage_faith": "decrease_faith",
+    "buff_strength": "increase_strength",
+    "add_strength": "increase_strength",
+    "remove_strength": "decrease_strength",
+    "draw_extra_card": "draw_cards",
+    "add_draw": "draw_cards",
+    "deal_sin": "inflict_sin",
+    "add_sin": "inflict_sin",
+    "reduce_sin": "remove_sin",
+    "gain_inspiration": "add_inspiration",
+    "pay_inspiration": "pay_inspiration",
+}
+
+SUPPORTED_EFFECT_ACTIONS = {
+    "increase_faith",
+    "decrease_faith",
+    "increase_strength",
+    "calice_upkeep",
+    "calice_endturn",
+    "campana_add_counter",
+    "cataclisma_ciclico",
+    "kah_ok_tick",
+    "trombe_del_giudizio_tick",
+    "av_drna_on_opponent_draw",
+    "deriu_hebet_tick",
+    "pay_sin_or_destroy_self",
+    "tikal_tick",
+    "mill_cards",
+    "draw_cards",
+    "inflict_sin",
+    "remove_sin",
+    "add_inspiration",
+    "pay_inspiration",
+}
 
 
 def _norm(text: str) -> str:
@@ -51,11 +117,18 @@ class EffectSpec:
     duration: str = "permanent"
     amount_multiplier_card_name: str | None = None
     once_per_turn_group: str | None = None
+    target_player: str | None = None
 
 
 @dataclass(slots=True)
 class TriggeredEffectSpec:
     trigger: TriggerSpec
+    target: TargetSpec
+    effect: EffectSpec
+
+
+@dataclass(slots=True)
+class ActionSpec:
     target: TargetSpec
     effect: EffectSpec
 
@@ -67,6 +140,7 @@ class CardScript:
     on_enter_mode: str = "auto"
     on_activate_mode: str = "auto"
     triggered_effects: list[TriggeredEffectSpec] = field(default_factory=list)
+    on_play_actions: list[ActionSpec] = field(default_factory=list)
 
 
 class RuntimeCardManager:
@@ -76,6 +150,7 @@ class RuntimeCardManager:
         self._subscribed_engines: set[int] = set()
         self._temp_faith: dict[int, dict[str, list[tuple[str, int, str]]]] = {}
         self._bootstrap_from_cards_json()
+        self._bootstrap_from_script_files()
 
     def clear_for_tests(self) -> None:
         self._scripts.clear()
@@ -107,6 +182,35 @@ class RuntimeCardManager:
         self._scripts[_norm(script.name)] = script
 
     def register_script_from_dict(self, card_name: str, spec: dict[str, Any]) -> None:
+        def _parse_effect(raw: dict[str, Any]) -> EffectSpec:
+            return EffectSpec(
+                action=str(raw.get("action", "")),
+                amount=int(raw.get("amount", 0)),
+                duration=str(raw.get("duration", "permanent")),
+                amount_multiplier_card_name=str(raw.get("amount_multiplier_card_name"))
+                if raw.get("amount_multiplier_card_name") is not None
+                else None,
+                once_per_turn_group=str(raw.get("once_per_turn_group"))
+                if raw.get("once_per_turn_group") is not None
+                else None,
+                target_player=str(raw.get("target_player")) if raw.get("target_player") is not None else None,
+            )
+
+        def _parse_target(raw: dict[str, Any]) -> TargetSpec:
+            filt = raw.get("card_filter", {}) or {}
+            return TargetSpec(
+                type=str(raw.get("type", "cards_controlled_by_owner")),
+                card_filter=CardFilterSpec(
+                    name_contains=filt.get("name_contains"),
+                    card_type_in=list(filt.get("card_type_in", []) or []),
+                    exclude_event_card=bool(filt.get("exclude_event_card", False)),
+                    crosses_gte=(int(filt["crosses_gte"]) if filt.get("crosses_gte") is not None else None),
+                    crosses_lte=(int(filt["crosses_lte"]) if filt.get("crosses_lte") is not None else None),
+                ),
+                zone=str(raw.get("zone", "field")),
+                owner=str(raw.get("owner", "me")),
+            )
+
         trig_specs: list[TriggeredEffectSpec] = []
         for t in spec.get("triggered_effects", []):
             trig = TriggerSpec(
@@ -114,36 +218,14 @@ class RuntimeCardManager:
                 frequency=str(t.get("trigger", {}).get("frequency", "each_turn")),
                 condition=dict(t.get("trigger", {}).get("condition", {}) or {}),
             )
-            filt = t.get("target", {}).get("card_filter", {}) or {}
-            target = TargetSpec(
-                type=str(t.get("target", {}).get("type", "cards_controlled_by_owner")),
-                card_filter=CardFilterSpec(
-                    name_contains=filt.get("name_contains"),
-                    card_type_in=list(filt.get("card_type_in", []) or []),
-                    exclude_event_card=bool(filt.get("exclude_event_card", False)),
-                    crosses_gte=(
-                        int(filt["crosses_gte"]) if filt.get("crosses_gte") is not None else None
-                    ),
-                    crosses_lte=(
-                        int(filt["crosses_lte"]) if filt.get("crosses_lte") is not None else None
-                    ),
-                ),
-                zone=str(t.get("target", {}).get("zone", "field")),
-                owner=str(t.get("target", {}).get("owner", "me")),
-            )
-            eff = t.get("effect", {}) or {}
-            effect = EffectSpec(
-                action=str(eff.get("action", "")),
-                amount=int(eff.get("amount", 0)),
-                duration=str(eff.get("duration", "permanent")),
-                amount_multiplier_card_name=str(eff.get("amount_multiplier_card_name"))
-                if eff.get("amount_multiplier_card_name") is not None
-                else None,
-                once_per_turn_group=str(eff.get("once_per_turn_group"))
-                if eff.get("once_per_turn_group") is not None
-                else None,
-            )
+            target = _parse_target(t.get("target", {}) or {})
+            effect = _parse_effect(t.get("effect", {}) or {})
             trig_specs.append(TriggeredEffectSpec(trigger=trig, target=target, effect=effect))
+        on_play_actions: list[ActionSpec] = []
+        for a in spec.get("on_play_actions", []):
+            target = _parse_target(a.get("target", {}) or {})
+            effect = _parse_effect(a.get("effect", {}) or {})
+            on_play_actions.append(ActionSpec(target=target, effect=effect))
         self.register_script(
             CardScript(
                 name=card_name,
@@ -151,12 +233,28 @@ class RuntimeCardManager:
                 on_enter_mode=str(spec.get("on_enter_mode", "auto")),
                 on_activate_mode=str(spec.get("on_activate_mode", "auto")),
                 triggered_effects=trig_specs,
+                on_play_actions=on_play_actions,
             )
         )
+
+    def _bootstrap_from_script_files(self) -> None:
+        for card_name, spec in iter_card_scripts():
+            key = _norm(card_name)
+            existing = self._scripts.get(key)
+            if existing is not None:
+                has_custom = bool(existing.triggered_effects or existing.on_play_actions)
+                has_non_auto_modes = any(
+                    _norm(mode) != "auto"
+                    for mode in (existing.on_play_mode, existing.on_enter_mode, existing.on_activate_mode)
+                )
+                if has_custom or has_non_auto_modes:
+                    continue
+            self.register_script_from_dict(card_name, spec)
 
     def ensure_all_cards_migrated(self, engine: GameEngine) -> None:
         if not self._scripts:
             self._bootstrap_from_cards_json()
+        self._bootstrap_from_script_files()
         for inst in engine.state.instances.values():
             key = _norm(inst.definition.name)
             if key not in self._scripts:
@@ -175,6 +273,13 @@ class RuntimeCardManager:
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
         mode = _norm(script.on_play_mode)
 
+        if mode in {"scripted", "custom"} and script.on_play_actions:
+            self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
+            return f"{inst.definition.name}: effetto risolto via script."
+        if mode == "auto" and script.on_play_actions:
+            self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
+            return f"{inst.definition.name}: effetto risolto via script."
+
         if mode in {"registry", "auto", "custom"}:
             handler = get_play(inst.definition.name)
             if handler is not None:
@@ -184,6 +289,11 @@ class RuntimeCardManager:
         if mode in {"ported", "auto", "runtime"}:
             return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
         return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
+
+    def _run_play_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
+        for action in actions:
+            targets = self._resolve_targets(engine, owner_idx, action.target)
+            self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
 
     def resolve_enter(self, engine: GameEngine, player_idx: int, uid: str) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -344,6 +454,7 @@ class RuntimeCardManager:
         effect: EffectSpec,
     ) -> None:
         action = _norm(effect.action)
+        action = EFFECT_ACTION_ALIASES.get(action, action)
         if effect.once_per_turn_group:
             group_key = f"runtime_once:{_norm(effect.once_per_turn_group)}:{owner_idx}:{engine.state.turn_number}"
             done = engine.state.flags.setdefault("runtime_once", {})
@@ -432,6 +543,114 @@ class RuntimeCardManager:
                     f"Cataclisma Ciclico distrugge {target_name}: {engine.state.players[owner_idx].name} perde 1 Peccato."
                 )
             return
+        if action == "kah_ok_tick":
+            inst = engine.state.instances[source_uid]
+            inst.current_faith = (inst.current_faith or 0) + 2
+            if (inst.current_faith or 0) >= 10:
+                gained = max(0, inst.current_faith or 0)
+                engine.destroy_saint_by_uid(owner_idx, source_uid, cause="effect")
+                engine.gain_sin(owner_idx, gained)
+                engine.state.log(
+                    f"Kah-ok raggiunge 10 Fede e si distrugge: {engine.state.players[owner_idx].name} +{gained} Peccato."
+                )
+            return
+        if action == "trombe_del_giudizio_tick":
+            if not engine._has_building(owner_idx, "Altare dei Sette Sigilli"):
+                return
+            seals = engine._get_altare_sigilli(owner_idx)
+            if seals >= 7:
+                amount = 10
+            elif seals >= 5:
+                amount = 6
+            elif seals >= 3:
+                amount = 3
+            else:
+                amount = 0
+            if amount > 0:
+                engine.gain_sin(1 - owner_idx, amount)
+            return
+        if action == "av_drna_on_opponent_draw":
+            inst = engine.state.instances[source_uid]
+            inst.current_faith = max(0, (inst.current_faith or 0) - 1)
+            engine.reduce_sin(owner_idx, 2)
+            if (inst.current_faith or 0) <= 0:
+                engine.send_to_graveyard(owner_idx, source_uid)
+            return
+        if action == "deriu_hebet_tick":
+            player = engine.state.players[owner_idx]
+            if not player.deck:
+                return
+            top_uid = player.deck[-1]
+            ctype = _norm(engine.state.instances[top_uid].definition.card_type)
+            if ctype in {"benedizione", "maledizione"}:
+                engine.move_deck_card_to_hand(owner_idx, top_uid)
+            else:
+                engine.rng.shuffle(player.deck)
+            return
+        if action == "pay_sin_or_destroy_self":
+            cost = max(0, int(effect.amount))
+            player = engine.state.players[owner_idx]
+            if player.sin >= cost:
+                player.sin -= cost
+            else:
+                engine.send_to_graveyard(owner_idx, source_uid)
+            return
+        if action == "tikal_tick":
+            player = engine.state.players[owner_idx]
+            if not player.deck:
+                return
+            top_uid = player.deck[-1]
+            ctype = _norm(engine.state.instances[top_uid].definition.card_type)
+            if ctype == "santo":
+                engine.move_deck_card_to_hand(owner_idx, top_uid)
+            else:
+                player.deck.pop()
+                player.deck.insert(0, top_uid)
+            return
+        if action == "mill_cards":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            player = engine.state.players[target]
+            for _ in range(max(0, int(effect.amount))):
+                if not player.deck:
+                    break
+                uid = player.deck.pop()
+                player.graveyard.append(uid)
+            return
+        if action == "draw_cards":
+            target = self._resolve_player_scope(owner_idx, effect.target_player)
+            engine.draw_cards(target, max(0, int(effect.amount or 1)))
+            return
+        if action == "inflict_sin":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            engine.gain_sin(target, max(0, int(effect.amount)))
+            return
+        if action == "remove_sin":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            engine.reduce_sin(target, max(0, int(effect.amount)))
+            return
+        if action == "add_inspiration":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            player.inspiration = max(0, int(player.inspiration) + int(effect.amount))
+            return
+        if action == "pay_inspiration":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            player.inspiration = max(0, int(player.inspiration) - max(0, int(effect.amount)))
+            return
+
+    @staticmethod
+    def _resolve_player_scope(owner_idx: int, scope: str | None) -> int:
+        key = _norm(scope or "me")
+        if key in {"me", "owner", "controller", "self"}:
+            return owner_idx
+        if key in {"opponent", "enemy", "other"}:
+            return 1 - owner_idx
+        if key in {"player0", "p0", "0"}:
+            return 0
+        if key in {"player1", "p1", "1"}:
+            return 1
+        return owner_idx
 
     def _count_named_cards_on_field(self, engine: GameEngine, card_name: str) -> int:
         key = _norm(card_name)
@@ -448,6 +667,31 @@ class RuntimeCardManager:
     def _event_matches(self, ctx: "RuleEventContext", owner_idx: int, condition: dict[str, Any]) -> bool:
         if not condition:
             return True
+        return self._eval_condition_node(ctx, owner_idx, condition)
+
+    def _eval_condition_node(self, ctx: "RuleEventContext", owner_idx: int, node: dict[str, Any]) -> bool:
+        if not node:
+            return True
+        all_of = node.get("all_of")
+        if isinstance(all_of, list):
+            for sub in all_of:
+                if isinstance(sub, dict) and not self._eval_condition_node(ctx, owner_idx, sub):
+                    return False
+        any_of = node.get("any_of")
+        if isinstance(any_of, list) and any_of:
+            ok = False
+            for sub in any_of:
+                if isinstance(sub, dict) and self._eval_condition_node(ctx, owner_idx, sub):
+                    ok = True
+                    break
+            if not ok:
+                return False
+        not_of = node.get("not")
+        if isinstance(not_of, dict) and self._eval_condition_node(ctx, owner_idx, not_of):
+            return False
+        return self._eval_condition_leaf(ctx, owner_idx, node)
+
+    def _eval_condition_leaf(self, ctx: "RuleEventContext", owner_idx: int, condition: dict[str, Any]) -> bool:
         payload = ctx.payload
         event_card_uid = str(payload.get("card", ""))
 
@@ -456,6 +700,13 @@ class RuntimeCardManager:
             from_zone = _norm(str(payload.get("from_zone", "")))
             allowed = {_norm(z) for z in from_zone_in}
             if from_zone not in allowed:
+                return False
+
+        to_zone_in = condition.get("payload_to_zone_in")
+        if to_zone_in:
+            to_zone = _norm(str(payload.get("to_zone", payload.get("destination", ""))))
+            allowed_to = {_norm(z) for z in to_zone_in}
+            if to_zone not in allowed_to:
                 return False
 
         owner_rule = _norm(str(condition.get("event_card_owner", "")))
@@ -475,142 +726,70 @@ class RuntimeCardManager:
             allowed_types = {_norm(v) for v in ctype_in}
             if _norm(inst.definition.card_type) not in allowed_types:
                 return False
+
+        turn_scope = _norm(str(condition.get("turn_scope", "")))
+        if turn_scope:
+            if turn_scope in {"my", "owner", "controller"} and int(ctx.engine.state.active_player) != int(owner_idx):
+                return False
+            if turn_scope in {"opponent", "enemy"} and int(ctx.engine.state.active_player) == int(owner_idx):
+                return False
+
+        phase_is = _norm(str(condition.get("phase_is", "")))
+        if phase_is:
+            runtime_state = ctx.engine.state.flags.setdefault("runtime_state", {})
+            current_phase = _norm(str(runtime_state.get("phase", "")))
+            if phase_is != current_phase:
+                return False
+
+        if condition.get("source_on_field") is True and not self._is_uid_on_field(ctx.engine, str(payload.get("source", ""))):
+            return False
+
+        my_saints_gte = condition.get("my_saints_gte")
+        if my_saints_gte is not None and len(ctx.engine.all_saints_on_field(owner_idx)) < int(my_saints_gte):
+            return False
+        my_saints_lte = condition.get("my_saints_lte")
+        if my_saints_lte is not None and len(ctx.engine.all_saints_on_field(owner_idx)) > int(my_saints_lte):
+            return False
+        opp = 1 - owner_idx
+        opp_saints_gte = condition.get("opponent_saints_gte")
+        if opp_saints_gte is not None and len(ctx.engine.all_saints_on_field(opp)) < int(opp_saints_gte):
+            return False
+        opp_saints_lte = condition.get("opponent_saints_lte")
+        if opp_saints_lte is not None and len(ctx.engine.all_saints_on_field(opp)) > int(opp_saints_lte):
+            return False
+
+        my_insp_gte = condition.get("my_inspiration_gte")
+        if my_insp_gte is not None and int(ctx.engine.state.players[owner_idx].inspiration) < int(my_insp_gte):
+            return False
+        my_insp_lte = condition.get("my_inspiration_lte")
+        if my_insp_lte is not None and int(ctx.engine.state.players[owner_idx].inspiration) > int(my_insp_lte):
+            return False
+        opp_insp_gte = condition.get("opponent_inspiration_gte")
+        if opp_insp_gte is not None and int(ctx.engine.state.players[opp].inspiration) < int(opp_insp_gte):
+            return False
+        my_sin_gte = condition.get("my_sin_gte")
+        if my_sin_gte is not None and int(ctx.engine.state.players[owner_idx].sin) < int(my_sin_gte):
+            return False
+        my_sin_lte = condition.get("my_sin_lte")
+        if my_sin_lte is not None and int(ctx.engine.state.players[owner_idx].sin) > int(my_sin_lte):
+            return False
+        opp_sin_gte = condition.get("opponent_sin_gte")
+        if opp_sin_gte is not None and int(ctx.engine.state.players[opp].sin) < int(opp_sin_gte):
+            return False
+        opp_sin_lte = condition.get("opponent_sin_lte")
+        if opp_sin_lte is not None and int(ctx.engine.state.players[opp].sin) > int(opp_sin_lte):
+            return False
+
+        reason_in = condition.get("payload_reason_in")
+        if reason_in:
+            reason = _norm(str(payload.get("reason", "")))
+            allowed_reason = {_norm(v) for v in reason_in}
+            if reason not in allowed_reason:
+                return False
         return True
 
 
 runtime_cards = RuntimeCardManager()
-
-# Example declarative trigger structure (requested by user).
-runtime_cards.register_script_from_dict(
-    "Foresta Sacra",
-    {
-        "on_play_mode": "auto",
-        "on_enter_mode": "auto",
-        "on_activate_mode": "auto",
-        "triggered_effects": [
-            {
-                "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-                "target": {
-                    "type": "cards_controlled_by_owner",
-                    "card_filter": {"name_contains": "Albero"},
-                    "zone": "field",
-                    "owner": "me",
-                },
-                "effect": {"action": "increase_faith", "amount": 2, "duration": "until_source_leaves"},
-            }
-        ],
-    },
-)
-
-runtime_cards.register_script_from_dict(
-    "Saga degli Eroi Caduti",
-    {
-        "on_play_mode": "auto",
-        "on_enter_mode": "auto",
-        "on_activate_mode": "auto",
-        "triggered_effects": [
-            {
-                "trigger": {
-                    "event": "on_card_sent_to_graveyard",
-                    "frequency": "each_turn",
-                    "condition": {
-                        "payload_from_zone_in": ["attack", "defense"],
-                        "event_card_owner": "me",
-                        "event_card_type_in": ["santo", "token"],
-                    },
-                },
-                "target": {
-                    "type": "cards_controlled_by_owner",
-                    "card_filter": {
-                        "card_type_in": ["santo", "token"],
-                        "exclude_event_card": True,
-                    },
-                    "zone": "field",
-                    "owner": "me",
-                },
-                "effect": {"action": "increase_strength", "amount": 1, "duration": "permanent"},
-            }
-        ],
-    },
-)
-
-runtime_cards.register_script_from_dict(
-    "Fuoco",
-    {
-        "on_play_mode": "auto",
-        "on_enter_mode": "auto",
-        "on_activate_mode": "auto",
-        "triggered_effects": [
-            {
-                "trigger": {"event": "on_turn_end", "frequency": "each_turn"},
-                "target": {
-                    "type": "all_saints_on_field",
-                    "card_filter": {"card_type_in": ["santo", "token"], "crosses_gte": 4},
-                },
-                "effect": {
-                    "action": "decrease_faith",
-                    "amount": 2,
-                    "amount_multiplier_card_name": "Fuoco",
-                    "once_per_turn_group": "fuoco_tick",
-                    "duration": "permanent",
-                },
-            }
-        ],
-    },
-)
-
-runtime_cards.register_script_from_dict(
-    "Calice Insanguinato",
-    {
-        "on_play_mode": "auto",
-        "on_enter_mode": "auto",
-        "on_activate_mode": "auto",
-        "triggered_effects": [
-            {
-                "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-                "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
-                "effect": {"action": "calice_upkeep"},
-            },
-            {
-                "trigger": {"event": "on_turn_end", "frequency": "each_turn"},
-                "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
-                "effect": {"action": "calice_endturn", "once_per_turn_group": "calice_endturn"},
-            },
-        ],
-    },
-)
-
-runtime_cards.register_script_from_dict(
-    "Campana",
-    {
-        "on_play_mode": "auto",
-        "on_enter_mode": "auto",
-        "on_activate_mode": "auto",
-        "triggered_effects": [
-            {
-                "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-                "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
-                "effect": {"action": "campana_add_counter"},
-            }
-        ],
-    },
-)
-
-runtime_cards.register_script_from_dict(
-    "Cataclisma Ciclico",
-    {
-        "on_play_mode": "auto",
-        "on_enter_mode": "auto",
-        "on_activate_mode": "auto",
-        "triggered_effects": [
-            {
-                "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-                "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
-                "effect": {"action": "cataclisma_ciclico", "once_per_turn_group": "cataclisma_tick"},
-            }
-        ],
-    },
-)
 
 
 __all__ = [
@@ -619,6 +798,7 @@ __all__ = [
     "TargetSpec",
     "EffectSpec",
     "TriggeredEffectSpec",
+    "ActionSpec",
     "CardScript",
     "RuntimeCardManager",
     "runtime_cards",

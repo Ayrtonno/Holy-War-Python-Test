@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from holywar.core.engine import GameEngine
+from holywar.core.state import GameState
 from holywar.data.models import CardDefinition
 from holywar.effects.runtime import RuntimeCardManager, runtime_cards
 
@@ -200,3 +201,49 @@ def test_campana_counter_tick_is_runtime_declarative() -> None:
     engine.start_turn()
     tags = engine.state.instances[a_uid].blessed
     assert any(t.startswith("campana_counter:") for t in tags)
+
+
+def test_runtime_triggers_are_rebound_when_engine_is_recreated_from_state() -> None:
+    runtime_cards.clear_for_tests()
+    runtime_cards._bootstrap_from_cards_json()  # type: ignore[attr-defined]
+    runtime_cards.register_script_from_dict(
+        "Fuoco",
+        {
+            "on_play_mode": "auto",
+            "on_enter_mode": "auto",
+            "on_activate_mode": "auto",
+            "triggered_effects": [
+                {
+                    "trigger": {"event": "on_turn_end", "frequency": "each_turn"},
+                    "target": {
+                        "type": "all_saints_on_field",
+                        "card_filter": {"card_type_in": ["santo", "token"], "crosses_gte": 4},
+                    },
+                    "effect": {"action": "decrease_faith", "amount": 2, "amount_multiplier_card_name": "Fuoco"},
+                }
+            ],
+        },
+    )
+    cards = [
+        CardDefinition("Fuoco", "Artefatto", "2", 1, None, "", "NEU-1"),
+        CardDefinition("Big", "Santo", "4", 5, 1, "", "NEU-1"),
+        CardDefinition("Filler", "Santo", "2", 1, 1, "", "NEU-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NEU-1", "NEU-1", seed=45)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i_fuoco = _force_card_in_hand(engine, 0, "Fuoco")
+    assert engine.play_card(0, i_fuoco, None).ok
+    i_big = _force_card_in_hand(engine, 0, "Big")
+    assert engine.play_card(0, i_big, "a1").ok
+    big_uid = engine.state.players[0].attack[0]
+    assert big_uid is not None
+    before = engine.state.instances[big_uid].current_faith or 0
+
+    restored_state = GameState.from_dict(engine.state.to_dict())
+    restored_engine = GameEngine(restored_state, seed=45)
+    restored_engine.end_turn()
+    after = restored_engine.state.instances[big_uid].current_faith or 0
+    assert after == max(0, before - 2)

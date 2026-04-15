@@ -19,6 +19,7 @@ from holywar.data.deck_builder import build_premade_deck, build_test_deck
 from holywar.data.models import CardDefinition
 from holywar.effects.library import resolve_activated_effect, resolve_card_effect, resolve_enter_effect
 from holywar.effects.runtime import runtime_cards
+from holywar.effects.state_flags import ensure_runtime_state, refresh_player_flags, set_phase
 from holywar.scripting_api import RuleAPI
 
 
@@ -42,12 +43,30 @@ class GameEngine:
     def __init__(self, state: GameState, seed: int | None = None):
         self.state = state
         self.rng = random.Random(seed)
+        self._bootstrap_runtime_bindings()
+        ensure_runtime_state(self)
+        refresh_player_flags(self)
+
+    def _bootstrap_runtime_bindings(self) -> None:
+        runtime_cards.ensure_all_cards_migrated(self)
+        for controller_idx in (0, 1):
+            player = self.state.players[controller_idx]
+            for uid in player.attack + player.defense + player.artifacts:
+                if uid is not None:
+                    runtime_cards.on_enter_bind_triggers(self, controller_idx, uid)
+            if player.building is not None:
+                runtime_cards.on_enter_bind_triggers(self, controller_idx, player.building)
 
     def rules_api(self, controller_idx: int) -> RuleAPI:
         return RuleAPI(self, controller_idx)
 
     def _emit_event(self, event: str, actor_idx: int, **payload) -> None:
         self.rules_api(actor_idx).emit(event, actor_idx=actor_idx, **payload)
+        # Alias English/Italian spellings used by scripted effects.
+        if "relicario" in event:
+            self.rules_api(actor_idx).emit(event.replace("relicario", "reliquiary"), actor_idx=actor_idx, **payload)
+        elif "reliquiary" in event:
+            self.rules_api(actor_idx).emit(event.replace("reliquiary", "relicario"), actor_idx=actor_idx, **payload)
 
     def _locate_uid_zone(self, owner_idx: int, uid: str) -> str:
         player = self.state.players[owner_idx]
@@ -174,11 +193,7 @@ class GameEngine:
             self._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
             self._emit_event("after_card_drawn_from_deck", player_idx, card=drawn_uid)
             self._emit_event("on_opponent_draws", 1 - player_idx, card=drawn_uid, opponent=player_idx)
-            # Chiesa: each card drawn gives +2 faith to all own saints.
-            if self._has_building(player_idx, "Chiesa"):
-                for s_uid in self.all_saints_on_field(player_idx):
-                    inst = self.state.instances[s_uid]
-                    inst.current_faith = (inst.current_faith or 0) + 2
+        refresh_player_flags(self)
         return drawn
 
     def all_saints_on_field(self, player_idx: int) -> list[str]:
@@ -306,12 +321,14 @@ class GameEngine:
         if amount <= 0:
             return
         self.state.players[player_idx].sin += amount
+        refresh_player_flags(self)
 
     def reduce_sin(self, player_idx: int, amount: int) -> None:
         if amount <= 0:
             return
         p = self.state.players[player_idx]
         p.sin = max(0, p.sin - amount)
+        refresh_player_flags(self)
 
     def destroy_saint_by_uid(
         self, owner_idx: int, uid: str, excommunicate: bool = False, cause: str = "effect"
@@ -448,9 +465,13 @@ class GameEngine:
     def start_turn(self) -> None:
         current = self.state.active_player
         player = self.state.players[current]
+        runtime_state = ensure_runtime_state(self)
+        runtime_state["battle_phase_started"] = False
+        set_phase(self, "turn_start")
         self._emit_event("on_turn_start", current, player=current)
         self._emit_event("on_my_turn_start", current, player=current)
         self._emit_event("on_opponent_turn_start", 1 - current, opponent=current)
+        set_phase(self, "draw")
         self._emit_event("before_draw_phase", current, player=current)
         self._emit_event("on_draw_phase_start", current, player=current)
 
@@ -459,22 +480,9 @@ class GameEngine:
         key = str(self.state.active_player)
         player.inspiration += int(bonus_next.get(key, 0))
         bonus_next[key] = 0
-        if self._has_building(self.state.active_player, "Valhalla"):
-            player.inspiration += 2
-        if self._has_building(self.state.active_player, "Ruscello Sacro"):
-            player.inspiration += 2
-        player.inspiration += self._count_artifact(self.state.active_player, "Aria")
         for uid in player.attack:
             if uid:
                 self.state.instances[uid].exhausted = False
-                if _norm(self.state.instances[uid].definition.name) == _norm("Kah-ok"):
-                    inst = self.state.instances[uid]
-                    inst.current_faith = (inst.current_faith or 0) + 2
-                    if (inst.current_faith or 0) >= 10:
-                        gained = inst.current_faith or 0
-                        self.destroy_saint_by_uid(self.state.active_player, uid, cause="effect")
-                        self.gain_sin(self.state.active_player, gained)
-                        self.state.log(f"Kah-ok raggiunge 10 Fede e si distrugge: {player.name} +{gained} Peccato.")
         # Ya-ner: at the start of your turn, summon Token Gub-ner in defense behind Ya-ner if missing.
         for i, a_uid in enumerate(player.attack):
             if not a_uid:
@@ -512,7 +520,6 @@ class GameEngine:
             spore_pending[str(self.state.active_player)] = False
         else:
             bonus_draw = 0
-            bonus_draw += self._count_artifact(self.state.active_player, "Esondazione del Nilo")
             pyramid_count = sum(
                 1
                 for uid in player.artifacts
@@ -526,11 +533,19 @@ class GameEngine:
                 bonus_draw += 2
             drawn = self.draw_cards(self.state.active_player, 3 + bonus_draw)
         self._emit_event("on_draw_phase_end", current, player=current, drawn=drawn)
+        set_phase(self, "main")
         self._emit_event("on_main_phase_start", current, player=current)
         self.state.log(f"Turno {self.state.turn_number}: {player.name} pesca {drawn} carte e ottiene 10 Ispirazione.")
+        refresh_player_flags(self)
 
     def end_turn(self) -> None:
         current = self.state.active_player
+        runtime_state = ensure_runtime_state(self)
+        if bool(runtime_state.get("battle_phase_started", False)):
+            set_phase(self, "battle")
+            self._emit_event("on_battle_phase_end", current, player=current)
+            runtime_state["battle_phase_started"] = False
+        set_phase(self, "end")
         self._emit_event("on_main_phase_end", current, player=current)
         self._emit_event("on_turn_end", current, player=current)
         self._emit_event("on_my_turn_end", current, player=current)
@@ -549,8 +564,12 @@ class GameEngine:
                 self.state.log(
                     f"Fine preparazione: lancio moneta -> inizia {self.state.players[self.state.active_player].name}."
                 )
+                set_phase(self, "setup")
+                refresh_player_flags(self)
                 return
             self.state.active_player = 1 - self.state.active_player
+            set_phase(self, "setup")
+            refresh_player_flags(self)
             return
         double_turns = self.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0})
         key = str(self.state.active_player)
@@ -558,6 +577,8 @@ class GameEngine:
             double_turns[key] = int(double_turns[key]) - 1
         self.state.active_player = 1 - self.state.active_player
         self.state.turn_number += 1
+        set_phase(self, "setup")
+        refresh_player_flags(self)
 
     def card_from_hand(self, player_idx: int, hand_index: int) -> CardInstance | None:
         player = self.state.players[player_idx]
@@ -819,6 +840,12 @@ class GameEngine:
             return ActionResult(False, "In questo turno gli attacchi sono bloccati da un effetto.")
         if player_idx != self.state.active_player:
             return ActionResult(False, "Puoi attaccare solo nel tuo turno.")
+        runtime_state = ensure_runtime_state(self)
+        if not bool(runtime_state.get("battle_phase_started", False)):
+            runtime_state["battle_phase_started"] = True
+            set_phase(self, "battle")
+            self._emit_event("on_battle_phase_start", player_idx, player=player_idx)
+            refresh_player_flags(self)
         attacker_player = self.state.players[player_idx]
         defender_idx = 1 - player_idx
         defender_player = self.state.players[defender_idx]

@@ -875,7 +875,7 @@
     "crosses": "5",
     "faith": 8,
     "strength": 3,
-    "effect_text": "Se questo Santo viene sconfitto da un Santo avversario, puoi prendere ogni carta \"Pietra\" dal tuo cimitero e metterla nel tuo reliquiario. Poi mischia il reliquiario. Se attivi questo effetto, scomunica questa carta.",
+    "effect_text": "Se questo Santo viene sconfitto da un Santo avversario, prendi ogni carta \"Pietra\" dal tuo cimitero e mettile nel tuo reliquiario. Poi mischia il reliquiario. Se attivi questo effetto, scomunica questa carta.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -895,7 +895,7 @@
     "crosses": "White",
     "faith": 10,
     "strength": 0,
-    "effect_text": "Quando peschi questa carta, mettila immediatamente in campo e termina il tuo turno. Alla fine del turno, evoca un Token Albero sul tuo campo. Ogni volta che un Token Albero viene sconfitto, questo Santo riceve +2 Fede (anziché generare Peccato per il controllore).",
+    "effect_text": "Quando questa carta viene pescata, se possibile, viene immediatamente posizionata sul terreno. Termina il tuo turno. Alla fine di ogni turno (tuo e dell'avversario), se esiste una zona santo libera sul tuo campo, evoca un Token Albero . Finchè questa carta resta sul terreno, ogni Token Albero sconfitto in battaglia fa ottenere +2 fede a questa carta (anziché generare Peccato per il controllore).",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -905,7 +905,7 @@
     "crosses": "3",
     "faith": 3,
     "strength": 3,
-    "effect_text": "Ogni Santo sconfitto da questo Santo viene scomunicato.",
+    "effect_text": "Ogni Santo sconfitto da questa carta viene scomunicato.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -935,7 +935,7 @@
     "crosses": "6",
     "faith": 2,
     "strength": 8,
-    "effect_text": "Se questo Santo distrugge un Santo con un attacco, torna nella tua mano.",
+    "effect_text": "Se questo Santo distrugge un Santo con un attacco, torna nella tua mano. Puoi attivare questo effetto solo una volta per turno.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -945,7 +945,7 @@
     "crosses": "9",
     "faith": 6,
     "strength": null,
-    "effect_text": "Prima della tua fase di pescata, devi distruggere un Santo bersaglio sul campo. Se hai distrutto un tuo Santo, infliggi 2 Peccato all'avversario. Se hai distrutto un Santo avversario, rimuovi 1 Peccato.",
+    "effect_text": "Prima della tua fase di pescata, devi distruggere un Santo bersaglio sul campo. Se hai distrutto un tuo Santo, infliggi 2 Peccato all'avversario. Se hai distrutto un Santo avversario, rimuovi 1 Peccato. Se non puoi distruggere nessun santo, distruggi questa carta.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -965,7 +965,7 @@
     "crosses": "",
     "faith": null,
     "strength": null,
-    "effect_text": "Una volta per turno, scegli una carta Santo con Croci pari o inferiori a 4 nel tuo cimitero. Evoca quel Santo sul tuo campo senza pagare il suo costo di Ispirazione.",
+    "effect_text": "Una volta per turno, scegli una carta Santo con Croci pari o inferiori a 4 nel tuo cimitero ed evocalo sul tuo lato del terreno.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -975,7 +975,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Per ogni carta Albero sul tuo campo, ricevi 2 Peccato e distruggi quella carta. Per ogni carta distrutta in questo modo, evoca una carta \"Segno Del Passato\" dalla tua mano o dal tuo reliquiario sul tuo campo.",
+    "effect_text": "Distruggi ogni carta \"Albero\" presente sul tuo lato di campo e guadagna 2 peccato per ogni carta distrutta. Per ogni carta distrutta in questo modo, evoca una carta \"Segno Del Passato\" dalla tua mano o dal tuo reliquiario sul tuo campo.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1025,7 +1025,7 @@
     "crosses": "10",
     "faith": 7,
     "strength": null,
-    "effect_text": "Ogni volta che un Santo avversario attacca, subisce 2 danni. Se un Santo avversario viene distrutto da questo effetto, rimuovi 2 Peccato.",
+    "effect_text": "Ogni volta che un Santo avversario attacca, subisce 2 danni. Se un Santo avversario viene distrutto da questo effetto, rimuovi 2 Peccato da te stesso.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1035,7 +1035,7 @@
     "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Ogni Santo con espansione \"Animismo\" sul tuo campo riceve +2 Fede e +2 Forza.",
+    "effect_text": "Ogni Santo della religione \"Animismo\" sul tuo campo riceve +2 Fede e +2 Forza.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1045,7 +1045,7 @@
     "crosses": "10",
     "faith": 10,
     "strength": null,
-    "effect_text": "Le tue carte Albero non possono essere bersagliate da Maledizioni o Benedizioni avversarie. Se una carta Albero viene scomunicata, viene messa nel reliquiario del suo proprietario invece che nella zona scomunicate.",
+    "effect_text": "Le tue carte Albero non possono essere bersagliate da Maledizioni o Benedizioni avversarie. Se una carta Albero viene scomunicata, viene invece messa nel reliquiario del suo proprietario.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1065,7 +1065,7 @@
     "crosses": "3",
     "faith": 2,
     "strength": null,
-    "effect_text": "Raddoppia il danno inflitto dall'effetto di \"Fiamma Primordiale\" per ogni copia di \"Incendio\" che controlli.",
+    "effect_text": "Raddoppia il danno inflitto ai santi dall'effetto di \"Fiamma Primordiale\" per ogni copia di \"Incendio\" che controlli.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1095,7 +1095,7 @@
     "crosses": "8",
     "faith": null,
     "strength": null,
-    "effect_text": "Scegli fino a 3 carte bersaglio sul campo con Croci pari o inferiori a 8. Scomunica quelle carte insieme a questa carta.",
+    "effect_text": "Scegli fino a 3 carte sul tuo campo o sul campo avversario, con Croci pari o inferiori a 8. Scomunica quelle carte. Infine, scomunica questa carta.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1105,7 +1105,7 @@
     "crosses": "3",
     "faith": 2,
     "strength": 1,
-    "effect_text": "Dimezza (arrotondando per difetto) la Forza del Santo che distrugge questa carta.",
+    "effect_text": "Dimezza la Forza del Santo che distrugge questa carta.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1115,7 +1115,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Per ogni carta Albero che controlli, puoi spostare una carta bersaglio con Croci pari o inferiori a 7 dal tuo cimitero al tuo reliquiario. Poi mischia il reliquiario.",
+    "effect_text": "Per ogni carta Albero che controlli, puoi spostare una carta con Croci pari o inferiori a 7 dal tuo cimitero al tuo reliquiario. Poi mischia il reliquiario.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1135,7 +1135,7 @@
     "crosses": "3",
     "faith": null,
     "strength": null,
-    "effect_text": "Manda 3 carte dalla tua mano o dalla cima del tuo reliquiario al cimitero. Poi scegli fino a 3 carte bersaglio con Croci pari o inferiori a 8 sul campo e rimettile nei reliquiari dei rispettivi proprietari. Poi ogni giocatore mischia il proprio reliquiario.",
+    "effect_text": "Manda 3 carte dalla tua mano o dalla cima del tuo reliquiario al cimitero. Poi scegli 1 carta sul terreno per ogni carta scartata con Croci pari o inferiori a 8 sul campo e rimettile nei reliquiari dei rispettivi proprietari. Poi ogni giocatore mischia il proprio reliquiario.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1155,7 +1155,7 @@
     "crosses": "2",
     "faith": 2,
     "strength": 2,
-    "effect_text": "Questo Santo può attaccare anche se si trova in zona di difesa.",
+    "effect_text": "Questo Santo può attaccare dalla zona di difesa.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1235,7 +1235,7 @@
     "crosses": "2",
     "faith": null,
     "strength": null,
-    "effect_text": "Ogni tuo Santo ferito riceve +4 Fede.",
+    "effect_text": "Ogni tuo Santo guadagna +4 Fede.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1275,7 +1275,7 @@
     "crosses": "5",
     "faith": 6,
     "strength": null,
-    "effect_text": "All'inizio del tuo turno, ogni carta Albero riceve +2 Fede.",
+    "effect_text": "All'inizio del tuo turno, ogni carta Albero guadagna +2 Fede.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1315,7 +1315,7 @@
     "crosses": "6",
     "faith": 8,
     "strength": null,
-    "effect_text": "I Santi avversari perdono 4 Forza.",
+    "effect_text": "Finche questa carta è presente sul campo, i Santi avversari perdono 4 Forza.",
     "expansion": "ANI-1",
     "is_token": false
   },
