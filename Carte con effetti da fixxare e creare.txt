@@ -1,0 +1,2 @@
+Fixxare:
+Albero Sacro (non summona effettivamente i token. Controllare effettivo cambio turno dopo autoevocazione)
