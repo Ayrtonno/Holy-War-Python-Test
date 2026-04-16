@@ -9,18 +9,16 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {
-                "event": "on_this_card_kills_in_battle",
-                "frequency": "each_turn",
+                "event": "on_this_card_kills_in_battle"
             },
-            "target": {"type": "event_card"},
+            "target": {"type": "source_card"},
             "effect": {"action": "increase_faith", "amount": 2},
         },
         {
             "trigger": {
-                "event": "on_this_card_kills_in_battle",
-                "frequency": "each_turn",
+                "event": "on_this_card_kills_in_battle"
             },
-            "target": {"type": "event_card"},
+            "target": {"type": "source_card"},
             "effect": {"action": "increase_strength", "amount": 2},
         },
     ],
