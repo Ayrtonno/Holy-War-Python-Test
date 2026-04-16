@@ -515,6 +515,14 @@ class GameEngine:
             self.excommunicate_card(owner_idx, uid, from_zone_override=from_zone)
         else:
             self.send_to_graveyard(owner_idx, uid, token_to_white=True, from_zone_override=from_zone)
+        if attack_slot is not None:
+            back_uid = board_player.defense[attack_slot]
+            if back_uid is not None:
+                board_player.attack[attack_slot] = back_uid
+                board_player.defense[attack_slot] = None
+                self.state.log(
+                    f"{self.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
+                )
         if cause == "battle":
             self._emit_event("on_saint_defeated_in_battle", owner_idx, saint=uid, by_whom=None)
         else:
@@ -1052,18 +1060,9 @@ class GameEngine:
         )
         lethal = (defender.current_faith or 0) <= 0
         if lethal:
-            excommunicate = attacker_name_key == _norm("Albero Sconsacrato")
+            excommunicate = runtime_cards.get_battle_excommunicate_on_lethal(attacker.definition.name)
             self.destroy_saint_by_uid(self.state.instances[defender_uid].owner, defender_uid, excommunicate=excommunicate, cause="battle")
             self._emit_event("on_this_card_kills_in_battle", player_idx, card=attacker_uid, victim=defender_uid)
-            if attacker_name_key == _norm("Schiavo Mutilato"):
-                attacker.current_faith = (attacker.current_faith or 0) + 2
-                attacker.definition.strength = (attacker.definition.strength or 0) + 2
-            if attacker_name_key == _norm("Aquila Vorace"):
-                if attacker_uid in attacker_player.attack:
-                    slot_idx = attacker_player.attack.index(attacker_uid)
-                    attacker_player.attack[slot_idx] = None
-                attacker_player.hand.append(attacker_uid)
-                self.state.log(f"{attacker.definition.name} torna nella mano del proprietario.")
             if attacker_name_key == _norm("Golem di Pietra"):
                 attacker.current_faith = 4
             if attacker_name_key == _norm("Sequoia"):

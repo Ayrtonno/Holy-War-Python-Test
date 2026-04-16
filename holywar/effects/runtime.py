@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from holywar.core import state
 from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.effects import runtime_ported
 from holywar.effects.registry import NOT_HANDLED, get_activate, get_enter, get_play
@@ -635,6 +636,10 @@ class RuntimeCardManager:
                     return
                 if _te.trigger.event == "on_opponent_turn_start" and ctx.player_idx != _owner:
                     return
+                if _te.trigger.event.startswith("on_this_card_"):
+                    event_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))
+                    if event_uid != _source:
+                        return
                 if not self._event_matches(ctx, _owner, _te.trigger.condition):
                     return
                 ctx.engine.state.flags["_runtime_event_card"] = str(
@@ -656,6 +661,20 @@ class RuntimeCardManager:
             api.subscribe(event_name, _handler)
             by_source[source_uid].append((event_name, _handler))
 
+    def on_leave_unbind_triggers(self, engine: GameEngine, owner_idx: int, source_uid: str) -> None:
+        eng_key = id(engine)
+        by_source = self._bindings.get(eng_key, {})
+        bindings = by_source.pop(source_uid, [])
+        if not bindings:
+            return
+
+        api = engine.rules_api(owner_idx)
+        for event_name, handler in bindings:
+            try:
+                api.unsubscribe(event_name, handler)
+            except Exception:
+                pass
+
     def _ensure_leave_subscription(self, engine: GameEngine) -> None:
         key = id(engine)
         if key in self._subscribed_engines:
@@ -665,8 +684,24 @@ class RuntimeCardManager:
 
     def _on_source_leaves_field(self, ctx: RuleEventContext) -> None:
         source_uid = str(ctx.payload.get("card", ""))
-        if not source_uid:
-            return
+        owner_idx = -1
+        inst = ctx.engine.state.instances.get(source_uid)
+        if inst is not None:
+            owner_idx = inst.owner
+
+        if owner_idx in (0, 1):
+            self.on_leave_unbind_triggers(ctx.engine, owner_idx, source_uid)
+            if not source_uid:
+                    return
+
+        owner_idx = -1
+        inst = ctx.engine.state.instances.get(source_uid)
+        if inst is not None:
+            owner_idx = inst.owner
+
+        if owner_idx in (0, 1):
+            self.on_leave_unbind_triggers(ctx.engine, owner_idx, source_uid)
+
         eng_key = id(ctx.engine)
         source_buffs = self._temp_faith.get(eng_key, {}).pop(source_uid, [])
         for target_uid, amount, marker in source_buffs:
@@ -781,7 +816,8 @@ class RuntimeCardManager:
         action = _norm(effect.action)
         action = EFFECT_ACTION_ALIASES.get(action, action)
         if effect.once_per_turn_group:
-            group_key = f"runtime_once:{_norm(effect.once_per_turn_group)}:{owner_idx}:{engine.state.turn_number}"
+            group_key = f"runtime_once:{_norm(effect.once_per_turn_group)}:{owner_idx}:{source_uid}:{engine.state.turn_number}"
+            print("DEBUG runtime_once:", group_key)
             done = engine.state.flags.setdefault("runtime_once", {})
             if done.get(group_key, False):
                 return
@@ -800,6 +836,29 @@ class RuntimeCardManager:
         if action == "increase_strength":
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
+            return
+        if action == "return_to_hand":
+            for uid in targets:
+                inst = engine.state.instances.get(uid)
+                if inst is None:
+                    continue
+
+                owner = inst.owner
+                player = engine.state.players[owner]
+
+                # Rimuovi dalla zona attacco
+                if uid in player.attack:
+                    idx = player.attack.index(uid)
+                    player.attack[idx] = None
+
+                # Rimuovi dalla difesa, se esiste
+                if hasattr(player, "defense") and uid in player.defense:
+                    idx = player.defense.index(uid)
+                    player.defense[idx] = None
+
+                # Aggiungi alla mano
+                if uid not in player.hand:
+                    player.hand.append(uid)
             return
         if action == "double_strength":
             for t_uid in targets:
