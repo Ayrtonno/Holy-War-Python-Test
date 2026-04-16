@@ -1267,7 +1267,8 @@ def resolve_card_effect(engine: "GameEngine", player_idx: int, uid: str, target:
         return f"Inverno risolta: {done} carte scomunicate."
 
     if name_key == _norm("Tornado"):
-        keep_uid = engine.resolve_target_saint(opponent_idx, target).uid if engine.resolve_target_saint(opponent_idx, target) else None
+        target_saint = engine.resolve_target_saint(opponent_idx, target)
+        keep_uid = target_saint.uid if target_saint else None
         for idx in (0, 1):
             for s_uid in list(engine.all_saints_on_field(idx)):
                 if s_uid == keep_uid:

@@ -7,13 +7,5 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "triggered_effects": [],
-    "on_play_actions": [
-        {
-            "effect": {
-                "action": "draw_cards",
-                "amount": 1,
-                "target_player": "me",
-            }
-        }
-    ],
+    "on_play_actions": [],
 }
