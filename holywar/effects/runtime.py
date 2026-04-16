@@ -63,6 +63,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "increase_strength",
     "calice_upkeep",
     "calice_endturn",
+    "add_seal_counter",
+    "remove_seal_counter",
     "campana_add_counter",
     "cataclisma_ciclico",
     "kah_ok_tick",
@@ -139,6 +141,9 @@ class CardScript:
     on_play_mode: str = "auto"
     on_enter_mode: str = "auto"
     on_activate_mode: str = "auto"
+    play_targeting: str = "auto"
+    activate_targeting: str = "auto"
+    attack_targeting: str = "auto"
     triggered_effects: list[TriggeredEffectSpec] = field(default_factory=list)
     on_play_actions: list[ActionSpec] = field(default_factory=list)
 
@@ -232,6 +237,9 @@ class RuntimeCardManager:
                 on_play_mode=str(spec.get("on_play_mode", "auto")),
                 on_enter_mode=str(spec.get("on_enter_mode", "auto")),
                 on_activate_mode=str(spec.get("on_activate_mode", "auto")),
+                play_targeting=str(spec.get("play_targeting", "auto")),
+                activate_targeting=str(spec.get("activate_targeting", "auto")),
+                attack_targeting=str(spec.get("attack_targeting", "auto")),
                 triggered_effects=trig_specs,
                 on_play_actions=on_play_actions,
             )
@@ -264,6 +272,27 @@ class RuntimeCardManager:
     def is_migrated(self, card_name: str) -> bool:
         return _norm(card_name) in self._scripts
 
+    def get_script(self, card_name: str) -> CardScript | None:
+        return self._scripts.get(_norm(card_name))
+
+    def get_play_targeting_mode(self, card_name: str) -> str:
+        script = self.get_script(card_name)
+        if script is None:
+            return "auto"
+        return str(script.play_targeting or "auto").strip().lower() or "auto"
+
+    def get_activate_targeting_mode(self, card_name: str) -> str:
+        script = self.get_script(card_name)
+        if script is None:
+            return "auto"
+        return str(script.activate_targeting or "auto").strip().lower() or "auto"
+
+    def get_attack_targeting_mode(self, card_name: str) -> str:
+        script = self.get_script(card_name)
+        if script is None:
+            return "auto"
+        return str(script.attack_targeting or "auto").strip().lower() or "auto"
+
     def migrated_count(self) -> int:
         return len(self._scripts)
 
@@ -272,23 +301,34 @@ class RuntimeCardManager:
         inst = engine.state.instances[uid]
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
         mode = _norm(script.on_play_mode)
+        flags = engine.state.flags
+        previous_source = flags.get("_runtime_effect_source")
 
-        if mode in {"scripted", "custom"} and script.on_play_actions:
-            self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
-            return f"{inst.definition.name}: effetto risolto via script."
-        if mode == "auto" and script.on_play_actions:
-            self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
-            return f"{inst.definition.name}: effetto risolto via script."
+        flags["_runtime_effect_source"] = uid
+        try:
+            if mode in {"noop", "none"}:
+                return f"{inst.definition.name}: nessun effetto all'ingresso."
+            if mode in {"scripted", "custom"} and script.on_play_actions:
+                self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
+                return f"{inst.definition.name}: effetto risolto via script."
+            if mode == "auto" and script.on_play_actions:
+                self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
+                return f"{inst.definition.name}: effetto risolto via script."
 
-        if mode in {"registry", "auto", "custom"}:
-            handler = get_play(inst.definition.name)
-            if handler is not None:
-                out = handler(engine, player_idx, uid, target)
-                if out is not NOT_HANDLED:
-                    return str(out)
-        if mode in {"ported", "auto", "runtime"}:
+            if mode in {"registry", "auto", "custom"}:
+                handler = get_play(inst.definition.name)
+                if handler is not None:
+                    out = handler(engine, player_idx, uid, target)
+                    if out is not NOT_HANDLED:
+                        return str(out)
+            if mode in {"ported", "auto", "runtime"}:
+                return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
             return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
-        return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
+        finally:
+            if previous_source is None:
+                flags.pop("_runtime_effect_source", None)
+            else:
+                flags["_runtime_effect_source"] = previous_source
 
     def _run_play_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
         for action in actions:
@@ -317,16 +357,25 @@ class RuntimeCardManager:
         inst = engine.state.instances[uid]
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
         mode = _norm(script.on_activate_mode)
+        flags = engine.state.flags
+        previous_source = flags.get("_runtime_effect_source")
 
-        if mode in {"registry", "auto", "custom"}:
-            handler = get_activate(inst.definition.name)
-            if handler is not None:
-                out = handler(engine, player_idx, uid, target)
-                if out is not NOT_HANDLED:
-                    return str(out)
-        if mode in {"ported", "auto", "runtime"}:
+        flags["_runtime_effect_source"] = uid
+        try:
+            if mode in {"registry", "auto", "custom"}:
+                handler = get_activate(inst.definition.name)
+                if handler is not None:
+                    out = handler(engine, player_idx, uid, target)
+                    if out is not NOT_HANDLED:
+                        return str(out)
+            if mode in {"ported", "auto", "runtime"}:
+                return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
             return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
-        return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
+        finally:
+            if previous_source is None:
+                flags.pop("_runtime_effect_source", None)
+            else:
+                flags["_runtime_effect_source"] = previous_source
 
     def on_enter_bind_triggers(self, engine: GameEngine, owner_idx: int, source_uid: str) -> None:
         self.ensure_all_cards_migrated(engine)
@@ -341,9 +390,21 @@ class RuntimeCardManager:
 
         for te in script.triggered_effects:
             event_name = te.trigger.event
+            allow_source_off_field = {
+                "on_this_card_destroyed",
+                "on_card_destroyed_on_field",
+                "on_saint_destroyed_by_effect",
+                "on_saint_defeated_in_battle",
+                "on_saint_defeated_or_destroyed",
+                "on_this_card_leaves_field",
+                "on_card_sent_to_graveyard",
+                "on_card_excommunicated",
+                "on_card_returned_to_reliquario",
+                "on_card_shuffled_into_reliquario",
+            }
 
-            def _handler(ctx: RuleEventContext, _te=te, _owner=owner_idx, _source=source_uid):
-                if not self._is_uid_on_field(ctx.engine, _source):
+            def _handler(ctx: RuleEventContext, _te=te, _owner=owner_idx, _source=source_uid, _event_name=event_name):
+                if _event_name not in allow_source_off_field and not self._is_uid_on_field(ctx.engine, _source):
                     return
                 if _te.trigger.event == "on_my_turn_start" and ctx.player_idx != _owner:
                     return
@@ -355,6 +416,9 @@ class RuntimeCardManager:
                 ctx.engine.state.flags["_runtime_event_name"] = str(ctx.event)
                 try:
                     targets = self._resolve_targets(ctx.engine, _owner, _te.target)
+                    if not targets:
+                        self._apply_effect(ctx.engine, _owner, _source, [], _te.effect)
+                        return
                     self._apply_effect(ctx.engine, _owner, _source, targets, _te.effect)
                 finally:
                     ctx.engine.state.flags.pop("_runtime_event_card", None)
@@ -475,6 +539,18 @@ class RuntimeCardManager:
         if action == "increase_strength":
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
+            return
+        if action == "add_seal_counter":
+            amount = max(0, int(effect.amount))
+            if amount <= 0:
+                return
+            engine._set_altare_sigilli(owner_idx, engine._get_altare_sigilli(owner_idx) + amount)
+            return
+        if action == "remove_seal_counter":
+            amount = max(0, int(effect.amount))
+            if amount <= 0:
+                return
+            engine._set_altare_sigilli(owner_idx, max(0, engine._get_altare_sigilli(owner_idx) - amount))
             return
         if action == "decrease_faith":
             amount = int(effect.amount)

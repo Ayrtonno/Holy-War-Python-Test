@@ -10,6 +10,7 @@ from holywar.ai.simple_ai import choose_action
 from holywar.cli import ensure_cards
 from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
+from holywar.effects.runtime import runtime_cards
 from holywar.data.deck_builder import (
     available_premade_decks,
     available_religions,
@@ -260,6 +261,24 @@ class HolyWarGUI(tk.Tk):
     def _candidate_slot_tokens(self) -> list[str]:
         return ["a1", "a2", "a3", "d1", "d2", "d3", "r1", "r2", "r3", "r4", "b"]
 
+    def _card_script(self, uid: str):
+        if self.engine is None:
+            return None
+        card_name = self.engine.state.instances[uid].definition.name
+        return runtime_cards.get_script(card_name)
+
+    def _play_targeting_mode(self, uid: str) -> str:
+        script = self._card_script(uid)
+        if script is None:
+            return "auto"
+        return str(script.play_targeting or "auto").strip().lower() or "auto"
+
+    def _activate_targeting_mode(self, uid: str) -> str:
+        script = self._card_script(uid)
+        if script is None:
+            return "auto"
+        return str(script.activate_targeting or "auto").strip().lower() or "auto"
+
     def _valid_play_targets(self, player_idx: int, hand_idx: int, uid: str, quick: bool) -> list[str]:
         if self.engine is None:
             return []
@@ -284,9 +303,13 @@ class HolyWarGUI(tk.Tk):
     def _valid_activation_targets(self, player_idx: int, source: str, uid: str | None) -> list[str]:
         if self.engine is None:
             return []
-        candidates: list[str] = []
-        if uid is not None:
-            candidates.extend(self._guided_target_candidates(uid))
+        if uid is None:
+            return []
+        mode = self._activate_targeting_mode(uid)
+        if mode == "board_card":
+            candidates = self._board_activation_candidates(player_idx)
+        else:
+            return []
         out: list[str] = []
         for token in dict.fromkeys(candidates):
             if self._can_activate_target(player_idx, source, token):
@@ -299,6 +322,9 @@ class HolyWarGUI(tk.Tk):
         uid = self.engine.resolve_board_uid(player_idx, source)
         if uid is None:
             return False
+        mode = self._activate_targeting_mode(uid)
+        if mode == "yggdrasil":
+            return True
         if self._can_activate_target(player_idx, source, None):
             return True
         return bool(self._valid_activation_targets(player_idx, source, uid))
@@ -325,16 +351,14 @@ class HolyWarGUI(tk.Tk):
     def _card_target_hints(self, card_uid: str | None) -> tuple[bool, bool]:
         if self.engine is None or card_uid is None:
             return (False, False)
-        inst = self.engine.state.instances[card_uid]
-        txt = self._norm_text(inst.definition.effect_text or "")
-        ctype = inst.definition.card_type.lower().strip()
-        wants_opp_saints = (
-            "santo avversario" in txt
-            or ("avversar" in txt and "santo" in txt)
-            or (ctype == "maledizione" and "tuo santo" not in txt and "sul tuo terreno" not in txt)
-        )
-        wants_own_saints = "tuo santo" in txt or "sul tuo terreno" in txt or "tuoi santi" in txt
-        return (wants_own_saints, wants_opp_saints)
+        mode = self._play_targeting_mode(card_uid)
+        if mode == "own_saint":
+            return (True, False)
+        if mode == "opponent_saint":
+            return (False, True)
+        if mode == "board_card":
+            return (True, True)
+        return (False, False)
 
     def _resolve_highlight_widget(
         self,
@@ -1019,175 +1043,62 @@ class HolyWarGUI(tk.Tk):
         self.card_detail_text.configure(state="disabled")
 
     def _card_allows_multi_target(self, uid: str) -> bool:
-        if self.engine is None:
-            return False
-        txt = (self.engine.state.instances[uid].definition.effect_text or "").lower()
-        return (
-            "scegli due" in txt
-            or "due santi" in txt
-            or "due tuoi santi" in txt
-            or "due santi bersaglio" in txt
-            or "2 carte" in txt
-            or "due carte" in txt
-            or "2 bersagli" in txt
-            or "due bersagli" in txt
-            or "fino a 2" in txt
-            or "fino a due" in txt
-            or "scegli 3" in txt
-            or "3 bersagli" in txt
-            or "scegli 5" in txt
-            or "5 bersagli" in txt
-            or ("santo" in txt and ("artefatto" in txt or "edificio" in txt))
-        )
+        return self._play_targeting_mode(uid) == "multi"
 
     def _card_requires_target(self, uid: str) -> bool:
-        if self.engine is None:
-            return False
-        txt = (self.engine.state.instances[uid].definition.effect_text or "").lower().strip()
-        if not txt:
-            return False
-        target_markers = [
-            "scegli",
-            "bersaglio",
-            "equipaggia",
-            "su un tuo santo",
-            "su un santo",
-            "santo avversario",
-            "tuo santo",
-            "cerca nel reliquiario",
-            "cerca nel cimitero",
-            "carta scomunicata",
-            "dal cimitero",
-            "dal reliquiario",
-            "distruggi un santo",
-            "distruggi due santi",
-            "artefatto avversario",
-            "edificio avversario",
-        ]
-        return any(m in txt for m in target_markers)
+        mode = self._play_targeting_mode(uid)
+        return mode in {"own_saint", "opponent_saint", "relicario_artifact", "manual", "multi", "monsone"}
 
     def _target_selection_limits(self, uid: str) -> tuple[int, int | None]:
-        if self.engine is None:
-            return (0, None)
-        txt = (self.engine.state.instances[uid].definition.effect_text or "").lower()
-
-        # Most common explicit counts.
-        if any(k in txt for k in ["scegli 5", "5 bersagli"]):
-            return (5, 5)
-        if any(k in txt for k in ["scegli 3", "3 bersagli"]):
-            return (3, 3)
-        if any(
-            k in txt
-            for k in [
-                "scegli due",
-                "due santi",
-                "due tuoi santi",
-                "due santi bersaglio",
-                "2 carte",
-                "due carte",
-                "2 bersagli",
-                "due bersagli",
-            ]
-        ):
-            return (2, 2)
-        if any(k in txt for k in ["fino a 2", "fino a due"]):
-            return (0, 2)
-        # Effects that normally require two different targets.
-        if "santo" in txt and ("artefatto" in txt or "edificio" in txt):
-            return (2, 2)
-        # Default: optional single target.
+        mode = self._play_targeting_mode(uid)
+        if mode == "multi":
+            return (1, None)
+        if mode in {"own_saint", "opponent_saint", "relicario_artifact", "manual"}:
+            return (1, 1)
+        if mode == "monsone":
+            return (0, 3)
         return (0, 1)
 
-    def _norm_text(self, text: str) -> str:
-        return text.lower().strip()
-
     def _is_monsone_card(self, uid: str) -> bool:
-        if self.engine is None:
-            return False
-        name = self._norm_text(self.engine.state.instances[uid].definition.name)
-        return name == self._norm_text("Monsone")
+        return self._play_targeting_mode(uid) == "monsone"
 
     def _guided_target_candidates(self, uid: str) -> list[str]:
         if self.engine is None:
             return []
         engine = self.engine
         own_idx = self.current_human_idx() or 0
-        opp_idx = 1 - own_idx
         own = engine.state.players[own_idx]
-        opp = engine.state.players[opp_idx]
-        inst = engine.state.instances[uid]
-        txt = self._norm_text(inst.definition.effect_text or "")
-        ctype = inst.definition.card_type.lower().strip()
+        mode = self._play_targeting_mode(uid)
         out: list[str] = []
 
-        wants_deck = "reliquiario" in txt and ("cerca" in txt or "aggiung" in txt)
-        wants_grave = "cimitero" in txt
-        wants_excom = "scomunicat" in txt
-        wants_opp_art = "artefatto" in txt and "avversar" in txt
-        wants_opp_building = "edificio" in txt and "avversar" in txt
-        wants_opp_saints = (
-            "santo avversario" in txt
-            or ("avversar" in txt and "santo" in txt)
-            or (ctype == "maledizione" and "tuo santo" not in txt and "sul tuo terreno" not in txt)
-        )
-        wants_own_saints = "tuo santo" in txt or "sul tuo terreno" in txt or "tuoi santi" in txt
-        if "santo bersaglio" in txt and not wants_opp_saints and not wants_own_saints:
-            if ctype == "benedizione":
-                wants_own_saints = True
-            elif ctype == "maledizione":
-                wants_opp_saints = True
-
-        # No signal from effect text: no guided candidates.
-        if not any([wants_deck, wants_grave, wants_excom, wants_opp_art, wants_opp_building, wants_opp_saints, wants_own_saints]):
-            return []
-
-        if wants_own_saints:
+        if mode == "own_saint":
             for i in range(3):
                 if own.attack[i] is not None:
                     out.append(f"a{i+1}")
                 if own.defense[i] is not None:
                     out.append(f"d{i+1}")
+            return out
 
-        if wants_opp_saints:
-            for i in range(3):
-                if opp.attack[i] is not None:
-                    out.append(f"a{i+1}")
-                if opp.defense[i] is not None:
-                    out.append(f"d{i+1}")
-
-        if wants_opp_art:
-            for i in range(4):
-                if opp.artifacts[i] is not None:
-                    out.append(f"r{i+1}")
-        if wants_opp_building and opp.building is not None:
-            out.append("b")
-
-        def _filter_name(card_uid: str) -> bool:
-            name = self._norm_text(engine.state.instances[card_uid].definition.name)
-            ctype_name = self._norm_text(engine.state.instances[card_uid].definition.card_type)
-            if "\"giorno\"" in txt or " carte \"giorno\"" in txt or "carte giorno" in txt:
-                return "giorno" in name
-            if "artefatto" in txt and "reliquiario" in txt:
-                return ctype_name == "artefatto"
-            if "benedizione o maledizione" in txt or "benedizione/maledizione" in txt:
-                return ctype_name in {"benedizione", "maledizione"}
-            if "santo" in txt and "reliquiario" in txt:
-                return ctype_name in {"santo", "token"}
-            return True
-
-        if wants_deck:
+        if mode == "relicario_artifact":
             for c_uid in own.deck:
-                if _filter_name(c_uid):
-                    out.append(f"deck:{engine.state.instances[c_uid].definition.name}")
-        if wants_grave:
-            for c_uid in own.graveyard:
-                if _filter_name(c_uid):
-                    out.append(f"grave:{engine.state.instances[c_uid].definition.name}")
-        if wants_excom:
-            for c_uid in own.excommunicated:
-                if _filter_name(c_uid):
-                    out.append(f"excom:{engine.state.instances[c_uid].definition.name}")
-        return list(dict.fromkeys(out))
+                if self.engine.state.instances[c_uid].definition.card_type.lower().strip() == "artefatto":
+                    out.append(f"deck:{self.engine.state.instances[c_uid].definition.name}")
+            return list(dict.fromkeys(out))
+
+        if mode == "manual":
+            return []
+
+        # No structured manual target metadata: no guided candidates.
+        if mode not in {"multi", "monsone"}:
+            return []
+        return []
+
+    def _board_activation_candidates(self, player_idx: int) -> list[str]:
+        if self.engine is None:
+            return []
+        candidates = self._candidate_slot_tokens()
+        # Keep both sides available; the engine validation will reject illegal choices.
+        return candidates
 
     def _format_guided_candidate(self, token: str, own_idx: int) -> str:
         if self.engine is None:
@@ -1398,6 +1309,58 @@ class HolyWarGUI(tk.Tk):
         target = f"monsone:discard={','.join(discard_uids)};return={','.join(return_uids)}"
         return (False, target)
 
+    def _yggdrasil_target_payload(self, uid: str) -> tuple[bool, str | None]:
+        if self.engine is None:
+            return (True, None)
+        own_idx = self.current_human_idx() or 0
+        player = self.engine.state.players[own_idx]
+
+        choices = [
+            ("Potenzia un tuo Santo", "buff"),
+            ("Recupera un Artefatto dal cimitero", "artifact"),
+            ("Pesca 1 carta", "draw"),
+            ("Attiva Warcry", "warcry"),
+        ]
+        canceled, selected = self._open_target_picker(
+            title="Yggdrasil - Modalita",
+            prompt="Scegli la modalita di attivazione.",
+            choices=choices,
+            allow_multi=False,
+            min_targets=1,
+            max_targets=1,
+            allow_none=False,
+            allow_manual=False,
+        )
+        if canceled or not selected:
+            return (True, None)
+        mode = selected.strip().lower()
+        if mode == "buff":
+            saint_choices: list[tuple[str, str]] = []
+            for token in self._candidate_slot_tokens():
+                if token.startswith("a") or token.startswith("d"):
+                    widget = self._resolve_highlight_widget(token, own_idx=own_idx, side_hint="own", card_uid=uid)
+                    if widget is not None:
+                        saint_choices.append((self._format_guided_candidate(token, own_idx), token))
+            if not saint_choices:
+                messagebox.showwarning("Yggdrasil", "Nessun santo valido da potenziare.")
+                return (True, None)
+            self._set_slot_highlights([token for _, token in saint_choices], card_uid=uid, side_hint="own")
+            canceled, saint_target = self._open_target_picker(
+                title="Yggdrasil - Bersaglio",
+                prompt="Seleziona un tuo Santo da potenziare.",
+                choices=saint_choices,
+                allow_multi=False,
+                min_targets=1,
+                max_targets=1,
+                allow_none=False,
+                allow_manual=False,
+            )
+            self._clear_slot_highlights()
+            if canceled or not saint_target:
+                return (True, None)
+            return (False, f"buff:{saint_target}")
+        return (False, mode)
+
     def ask_guided_quick_target(self, uid: str) -> None:
         if self._is_monsone_card(uid):
             canceled, target = self._monsone_target_payload(uid)
@@ -1421,8 +1384,24 @@ class HolyWarGUI(tk.Tk):
         multi = self._card_allows_multi_target(uid)
         min_targets, max_targets = self._target_selection_limits(uid)
         allow_none = self._can_play_target(own_idx, hand_idx, None, quick=is_quick)
+        mode = self._play_targeting_mode(uid)
         choices = [(self._format_guided_candidate(c, own_idx), c) for c in candidates]
         if not choices:
+            if mode == "manual":
+                canceled, selected = self._open_target_picker(
+                    title="Selezione Bersaglio",
+                    prompt="Inserisci manualmente il bersaglio della carta.",
+                    choices=[],
+                    allow_multi=False,
+                    min_targets=0,
+                    max_targets=1,
+                    allow_none=allow_none,
+                    allow_manual=True,
+                )
+                if canceled:
+                    return
+                self.play_uid(uid, selected)
+                return
             if allow_none:
                 self.play_uid(uid, None)
                 return
@@ -1545,37 +1524,43 @@ class HolyWarGUI(tk.Tk):
         if uid is None:
             messagebox.showwarning("Abilita non valida", "Sorgente non valida.")
             return
-        min_targets, max_targets = self._target_selection_limits(uid)
-        valid_tokens = self._valid_activation_targets(own_idx, source, uid)
-        allow_no_target = self._can_activate_target(own_idx, source, None)
-        if not valid_tokens and not allow_no_target:
-            messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
-            return
-        all_board = all(self._is_board_token(c) for c in valid_tokens)
-        if valid_tokens and all_board:
-            canceled, target = self._open_board_target_picker(
-                title="Attiva Abilita",
-                prompt="Clicca sul campo i bersagli validi dell'abilita.",
-                candidates=valid_tokens,
-                min_targets=min_targets,
-                max_targets=max_targets,
-                allow_none=allow_no_target,
-                card_uid=uid,
-            )
+        mode = self._activate_targeting_mode(uid)
+        if mode == "yggdrasil":
+            canceled, target = self._yggdrasil_target_payload(uid)
+            if canceled:
+                return
         else:
-            self._set_slot_highlights(valid_tokens, card_uid=uid)
-            choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
-            canceled, target = self._open_target_picker(
-                title="Attiva Abilita",
-                prompt="Seleziona un bersaglio valido per l'abilita.",
-                choices=choices,
-                allow_multi=(max_targets is None or max_targets > 1),
-                min_targets=min_targets,
-                max_targets=max_targets,
-                allow_none=allow_no_target,
-                allow_manual=False,
-            )
-            self._clear_slot_highlights()
+            min_targets, max_targets = self._target_selection_limits(uid)
+            valid_tokens = self._valid_activation_targets(own_idx, source, uid)
+            allow_no_target = self._can_activate_target(own_idx, source, None)
+            if not valid_tokens and not allow_no_target:
+                messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
+                return
+            all_board = all(self._is_board_token(c) for c in valid_tokens)
+            if valid_tokens and all_board:
+                canceled, target = self._open_board_target_picker(
+                    title="Attiva Abilita",
+                    prompt="Clicca sul campo i bersagli validi dell'abilita.",
+                    candidates=valid_tokens,
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=allow_no_target,
+                    card_uid=uid,
+                )
+            else:
+                self._set_slot_highlights(valid_tokens, card_uid=uid)
+                choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
+                canceled, target = self._open_target_picker(
+                    title="Attiva Abilita",
+                    prompt="Seleziona un bersaglio valido per l'abilita.",
+                    choices=choices,
+                    allow_multi=(max_targets is None or max_targets > 1),
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=allow_no_target,
+                    allow_manual=False,
+                )
+                self._clear_slot_highlights()
         if canceled:
             return
         res = self.engine.activate_ability(own_idx, source, target)

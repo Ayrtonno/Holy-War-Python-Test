@@ -3,17 +3,20 @@
 CARD_NAME = """Araldo della Fine"""
 
 SCRIPT = {
-    "on_play_mode": "scripted",
+    "on_play_mode": "noop",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "triggered_effects": [],
-    "on_play_actions": [
+    "triggered_effects": [
         {
-            "effect": {
-                "action": "inflict_sin",
-                "amount": 3,
-                "target_player": "opponent",
-            }
+            "trigger": {"event": "on_this_card_destroyed", "frequency": "each_turn"},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"name_contains": "Altare dei Sette Sigilli"},
+            },
+            "effect": {"action": "add_seal_counter", "amount": 3},
         }
     ],
+    "on_play_actions": [],
 }

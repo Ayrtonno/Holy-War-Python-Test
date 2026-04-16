@@ -3,17 +3,20 @@
 CARD_NAME = """Custode dei Sigilli"""
 
 SCRIPT = {
-    "on_play_mode": "scripted",
+    "on_play_mode": "noop",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "triggered_effects": [],
-    "on_play_actions": [
+    "triggered_effects": [
         {
-            "effect": {
-                "action": "add_inspiration",
-                "amount": 1,
-                "target_player": "me",
-            }
+            "trigger": {"event": "on_enter_field", "frequency": "each_turn"},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"name_contains": "__no_target__"},
+            },
+            "effect": {"action": "add_seal_counter", "amount": 2},
         }
     ],
+    "on_play_actions": [],
 }

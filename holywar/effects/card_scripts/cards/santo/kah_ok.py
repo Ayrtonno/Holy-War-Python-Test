@@ -3,13 +3,18 @@
 CARD_NAME = """Kah-ok"""
 
 SCRIPT = {
-    "on_play_mode": "scripted",
+    "on_play_mode": "noop",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "triggered_effects": [
         {
             "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-            "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"name_contains": "Kah-ok"},
+            },
             "effect": {"action": "kah_ok_tick"}
         }
     ],

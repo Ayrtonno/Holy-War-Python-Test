@@ -284,6 +284,36 @@ class GameEngine:
             return
         inst.blessed = [t for t in inst.blessed if not t.startswith("sigilli:")]
         inst.blessed.append(f"sigilli:{max(0, value)}")
+        self._refresh_custode_sigilli_bonus(player_idx)
+
+    def _refresh_custode_sigilli_bonus(self, player_idx: int) -> None:
+        seals = self._get_altare_sigilli(player_idx)
+        level = seals // 6
+        if level <= 0:
+            return
+        for uid in self.all_saints_on_field(player_idx):
+            inst = self.state.instances[uid]
+            if _norm(inst.definition.name) != _norm("Custode dei Sigilli"):
+                continue
+            current_level = 0
+            keep: list[str] = []
+            for tag in inst.blessed:
+                if tag.startswith("custode_bonus:"):
+                    try:
+                        current_level = int(tag.split(":", 1)[1])
+                    except ValueError:
+                        current_level = 0
+                    continue
+                keep.append(tag)
+            if level > current_level:
+                delta = level - current_level
+                inst.current_faith = (inst.current_faith or 0) + delta * 3
+                keep.extend([f"buff_str:3"] * delta)
+                keep.append(f"custode_bonus:{level}")
+                inst.blessed = keep
+            else:
+                keep.append(f"custode_bonus:{current_level}")
+                inst.blessed = keep
 
     def get_effective_strength(self, uid: str) -> int:
         inst = self.state.instances[uid]
@@ -341,6 +371,19 @@ class GameEngine:
             inst.blessed.remove("moribondo_shield")
             self.state.log(f"Moribondo annulla la distruzione di {inst.definition.name}.")
             return
+        if cause == "effect":
+            source_uid = str(self.state.flags.get("_runtime_effect_source", ""))
+            if source_uid and source_uid in self.state.instances:
+                source = self.state.instances[source_uid]
+                if (
+                    int(source.owner) != int(owner_idx)
+                    and _norm(source.definition.card_type) == _norm("artefatto")
+                    and self._has_artifact(owner_idx, "Terra")
+                ):
+                    self.state.log(
+                        f"Terra impedisce a {source.definition.name} di distruggere {inst.definition.name}."
+                    )
+                    return
         if _norm(inst.definition.name) == _norm("Ya-ner") and cause == "battle":
             token_uid = None
             for s_uid in player.attack + player.defense:
@@ -424,16 +467,6 @@ class GameEngine:
         self._emit_event("on_saint_defeated_or_destroyed", owner_idx, saint=uid, reason=cause)
 
         # Death/graveyard triggers (card-specific).
-        if name_key == _norm("Albero Fortunato"):
-            drawn = self.draw_cards(owner_idx, 2)
-            self.state.log(f"{inst.definition.name} attiva effetto: {player.name} pesca {drawn} carte.")
-        if name_key == _norm("Seguace"):
-            drawn = self.draw_cards(owner_idx, 1)
-            self.state.log(f"{inst.definition.name} attiva effetto: {player.name} pesca {drawn} carta.")
-        if name_key == _norm("Araldo della Fine"):
-            sig = self._get_altare_sigilli(owner_idx)
-            self._set_altare_sigilli(owner_idx, sig + 3)
-            self.state.log("Araldo della Fine distrutto: Altare dei Sette Sigilli guadagna 3 Sigilli.")
         if name_key == _norm("Sacerdote Orologio"):
             linked_uid = None
             for tag in inst.blessed:
@@ -445,14 +478,6 @@ class GameEngine:
                     if linked_uid in (self.state.players[idx].attack + self.state.players[idx].defense):
                         self.destroy_saint_by_uid(idx, linked_uid, cause="effect")
                         break
-        if name_key == _norm("Spirito dei Sepolti"):
-            for idx in (0, 1):
-                for s_uid in self.all_saints_on_field(idx):
-                    if s_uid == uid:
-                        continue
-                    s = self.state.instances[s_uid]
-                    s.current_faith = (s.current_faith or 0) + 1
-                    s.blessed.append("buff_str:2")
 
         if attack_slot is not None:
             reserve_uid = player.defense[attack_slot]
@@ -711,6 +736,7 @@ class GameEngine:
             enter_msg = resolve_enter_effect(self, player_idx, uid)
             if enter_msg:
                 self.state.log(enter_msg)
+            self._refresh_custode_sigilli_bonus(player_idx)
         elif ctype == "artefatto":
             if _norm(card.definition.name) == _norm("Mjolnir"):
                 req_idx = next(
@@ -923,10 +949,11 @@ class GameEngine:
         defender_uid = defender_player.attack[target_slot]
         if defender_uid is None:
             return ActionResult(False, "Nessun Santo avversario nel bersaglio scelto.")
-        if _norm(self.state.instances[defender_uid].definition.name) == _norm("Papa"):
+        defender_name = self.state.instances[defender_uid].definition.name
+        if runtime_cards.get_attack_targeting_mode(defender_name) == "only_if_no_other_attackers":
             others = [u for i, u in enumerate(defender_player.attack) if i != target_slot and u is not None]
             if others:
-                return ActionResult(False, "Papa puo essere bersagliato solo se non ci sono altri santi in attacco.")
+                return ActionResult(False, f"{defender_name} puo essere bersagliato solo se non ci sono altri santi in attacco.")
 
         attacker.exhausted = True
         attack_count[str(player_idx)] = int(attack_count.get(str(player_idx), 0)) + 1
@@ -1004,11 +1031,6 @@ class GameEngine:
                 attacker.definition.strength = (attacker.definition.strength or 0) * 2
             if attacker_name_key == _norm("Odino"):
                 attacker.definition.strength = (attacker.definition.strength or 0) + 2
-            if attacker_name_key == _norm("Fujn-dar"):
-                for _ in range(2):
-                    if defender_player.hand:
-                        drop = defender_player.hand.pop(0)
-                        defender_player.graveyard.append(drop)
         elif attacker_name_key == _norm("Odino"):
             attacker.definition.strength = (attacker.definition.strength or 0) + 1
         else:
