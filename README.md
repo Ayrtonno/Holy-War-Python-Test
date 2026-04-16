@@ -13,19 +13,19 @@ pip install -e .[dev]
 ## Avvio
 
 ```powershell
-holywar --deck-xlsx "E:\Script HW\Holy War.xlsx"
+.\.venv\Scripts\python.exe -m holywar.cli --cards-json "holywar/data/cards.json"
 ```
 
 Import deck premade custom da JSON:
 
 ```powershell
-holywar --cards-json "holywar/data/cards.json" --premades-json "my_premades.json"
+.\.venv\Scripts\python.exe -m holywar.cli --cards-json "holywar/data/cards.json" --premades-json "my_premades.json"
 ```
 
 Export deck premade (base) in JSON modificabile:
 
 ```powershell
-holywar --export-premades-json "my_premades.json"
+.\.venv\Scripts\python.exe -m holywar.cli --export-premades-json "my_premades.json"
 ```
 
 ## Avvio GUI
@@ -74,8 +74,8 @@ Controlli GUI principali:
 
 - `holywar/effects/library.py`: dispatcher leggero
 - `holywar/effects/registry.py`: registry handler per carta (`register_play`, `register_enter`)
-- `holywar/effects/cards/...`: modulo per carta (Animismo/Norrena gia scaffoldati, un file per carta)
-- `holywar/effects/legacy_handlers.py`: fallback compatibilita con logica pre-refactor
+- `holywar/effects/card_scripts/cards/...`: script per carta, uno per file
+- `holywar/effects/cards/...`: moduli legacy ancora presenti solo per compatibilita interna, non il flusso di lavoro normale
 
 ## Note
 
