@@ -28,6 +28,17 @@ class RuleEventBus:
         if handler not in handlers:
             handlers.append(handler)
 
+    def unsubscribe(self, event: str, handler: EventHandler) -> None:
+        handlers = self._subs.get(event)
+        if not handlers:
+            return
+        try:
+            handlers.remove(handler)
+        except ValueError:
+            return
+        if not handlers:
+            self._subs.pop(event, None)
+
     def emit(self, ctx: RuleEventContext) -> None:
         for cb in tuple(self._subs.get(ctx.event, [])):
             cb(ctx)
@@ -356,6 +367,9 @@ class RuleAPI:
     def subscribe(self, event: str, handler: EventHandler) -> None:
         self.bus.subscribe(event, handler)
 
+    def unsubscribe(self, event: str, handler: EventHandler) -> None:
+        self.bus.unsubscribe(event, handler)
+
     def emit(self, event: str, **payload: Any) -> None:
         self.bus.emit(RuleEventContext(self.engine, self.controller_idx, event, payload))
 
@@ -665,28 +679,5 @@ class RuleAPI:
         self.state.winner = int(player)
         if reason:
             self.state.log(f"Vittoria per effetto: {reason}.")
-
-    def __getattr__(self, name: str):
-        if name not in DECLARED_FUNCTIONS:
-            raise AttributeError(name)
-
-        def _fallback(*args, **kwargs):
-            key = f"call:{name}"
-            self._stats[key] = self._stats.get(key, 0) + 1
-            if name.startswith("count_"):
-                return 0
-            if name.startswith("get_"):
-                return 0
-            if name.startswith("is_") or name.startswith("can_") or name.startswith("has_"):
-                return False
-            if name.startswith("target_"):
-                return []
-            if name == "win_the_game" and args:
-                self.state.winner = int(args[0])
-                return None
-            return None
-
-        return _fallback
-
 
 __all__ = ["RuleAPI", "RuleEvents", "RuleEventBus", "RuleEventContext", "DECLARED_FUNCTIONS"]

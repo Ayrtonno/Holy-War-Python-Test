@@ -44,6 +44,9 @@ SUPPORTED_CONDITION_KEYS = {
     "controller_has_saint_with_name",
     "controller_has_card_in_hand_with_name",
     "controller_has_card_in_deck_with_name",
+    "controller_has_building_with_name",
+    "controller_altare_sigilli_gte",
+    "controller_drawn_cards_this_turn_gte",
     "controller_has_distinct_saints_gte",
     "selected_target_in",
     "selected_target_startswith",
@@ -95,8 +98,10 @@ SUPPORTED_EFFECT_ACTIONS = {
     "summon_named_card",
     "move_source_to_board",
     "move_to_deck_bottom",
+    "move_to_relicario",
     "request_end_turn",
     "shuffle_deck",
+    "return_to_hand_once_per_turn",
     "swap_attack_defense",
     "increase_faith_per_opponent_saints",
     "increase_faith_if_damaged",
@@ -124,6 +129,7 @@ class CardFilterSpec:
     exclude_event_card: bool = False
     crosses_gte: int | None = None
     crosses_lte: int | None = None
+    drawn_this_turn_only: bool = False
 
 
 @dataclass(slots=True)
@@ -141,7 +147,7 @@ class EffectSpec:
     amount: int = 0
     duration: str = "permanent"
     amount_multiplier_card_name: str | None = None
-    once_per_turn_group: str | None = None
+    usage_limit_per_turn: int | None = None
     target_player: str | None = None
     card_name: str | None = None
 
@@ -235,9 +241,11 @@ class RuntimeCardManager:
                 amount_multiplier_card_name=str(raw.get("amount_multiplier_card_name"))
                 if raw.get("amount_multiplier_card_name") is not None
                 else None,
-                once_per_turn_group=str(raw.get("once_per_turn_group"))
-                if raw.get("once_per_turn_group") is not None
-                else None,
+                usage_limit_per_turn=(
+                    int(raw.get("usage_limit_per_turn", 0))
+                    if raw.get("usage_limit_per_turn") is not None
+                    else None
+                ),
                 target_player=str(raw.get("target_player")) if raw.get("target_player") is not None else None,
                 card_name=str(raw.get("card_name")) if raw.get("card_name") is not None else None,
             )
@@ -253,6 +261,7 @@ class RuntimeCardManager:
                     exclude_event_card=bool(filt.get("exclude_event_card", False)),
                     crosses_gte=(int(filt["crosses_gte"]) if filt.get("crosses_gte") is not None else None),
                     crosses_lte=(int(filt["crosses_lte"]) if filt.get("crosses_lte") is not None else None),
+                    drawn_this_turn_only=bool(filt.get("drawn_this_turn_only", False)),
                 ),
                 zone=str(raw.get("zone", "field")),
                 owner=str(raw.get("owner", "me")),
@@ -474,6 +483,7 @@ class RuntimeCardManager:
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = str(target or "")
         try:
+            is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"noop", "none"}:
                 return f"{inst.definition.name}: nessun effetto all'ingresso."
             if mode in {"scripted", "custom"} and script.on_play_actions:
@@ -482,6 +492,8 @@ class RuntimeCardManager:
             if mode == "auto" and script.on_play_actions:
                 self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
                 return f"{inst.definition.name}: effetto risolto via script."
+            if is_saint:
+                return f"{inst.definition.name}: nessun effetto scriptato."
 
             if mode in {"registry", "auto", "custom"}:
                 handler = get_play(inst.definition.name)
@@ -524,12 +536,15 @@ class RuntimeCardManager:
         flags["_runtime_selected_target"] = ""
 
         try:
+            is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"scripted", "custom"} and script.on_enter_actions:
                 self._run_enter_actions(engine, player_idx, uid, script.on_enter_actions)
                 return f"{inst.definition.name}: effetto di ingresso risolto via script."
             if mode == "auto" and script.on_enter_actions:
                 self._run_enter_actions(engine, player_idx, uid, script.on_enter_actions)
                 return f"{inst.definition.name}: effetto di ingresso risolto via script."
+            if is_saint:
+                return f"{inst.definition.name}: nessun effetto scriptato."
 
             if mode in {"registry", "auto", "custom"}:
                 handler = get_enter(inst.definition.name)
@@ -560,6 +575,7 @@ class RuntimeCardManager:
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = str(target or "")
         try:
+            is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"registry", "auto", "custom"}:
                 handler = get_activate(inst.definition.name)
                 if handler is not None:
@@ -569,6 +585,8 @@ class RuntimeCardManager:
             if mode in {"scripted", "custom"} and script.on_activate_actions:
                 self._run_activate_actions(engine, player_idx, uid, script.on_activate_actions)
                 return f"{inst.definition.name}: effetto attivato via script."
+            if is_saint:
+                return f"{inst.definition.name}: nessun effetto scriptato."
             if mode in {"ported", "auto", "runtime"}:
                 return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
             return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
@@ -609,6 +627,14 @@ class RuntimeCardManager:
             return
         eng_key = id(engine)
         by_source = self._bindings.setdefault(eng_key, {})
+        previous_bindings = by_source.pop(source_uid, [])
+        if previous_bindings:
+            api = engine.rules_api(owner_idx)
+            for event_name, handler in previous_bindings:
+                try:
+                    api.unsubscribe(event_name, handler)
+                except Exception:
+                    pass
         by_source[source_uid] = []
 
         api = engine.rules_api(owner_idx)
@@ -642,6 +668,15 @@ class RuntimeCardManager:
                         return
                 if not self._event_matches(ctx, _owner, _te.trigger.condition):
                     return
+                source_inst = ctx.engine.state.instances.get(_source)
+                source_name = source_inst.definition.name if source_inst is not None else _source
+                event_card_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))
+                event_card_name = (
+                    ctx.engine.state.instances[event_card_uid].definition.name
+                    if event_card_uid in ctx.engine.state.instances
+                    else event_card_uid
+                )
+                ctx.engine.state.log(f"{source_name}: trigger {ctx.event} su {event_card_name} (turno {ctx.engine.state.turn_number}).")
                 ctx.engine.state.flags["_runtime_event_card"] = str(
                     ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", "")))
                 )
@@ -800,6 +835,10 @@ class RuntimeCardManager:
             if target.card_filter.crosses_lte is not None:
                 if cross_val is None or cross_val > int(target.card_filter.crosses_lte):
                     continue
+            if target.card_filter.drawn_this_turn_only:
+                drawn = engine.state.flags.get("cards_drawn_this_turn", {})
+                if uid not in set(drawn.get(str(owner_idx), [])):
+                    continue
             out.append(uid)
         if target.max_targets is not None and target.max_targets >= 0:
             return out[: int(target.max_targets)]
@@ -815,13 +854,11 @@ class RuntimeCardManager:
     ) -> None:
         action = _norm(effect.action)
         action = EFFECT_ACTION_ALIASES.get(action, action)
-        if effect.once_per_turn_group:
-            group_key = f"runtime_once:{_norm(effect.once_per_turn_group)}:{owner_idx}:{source_uid}:{engine.state.turn_number}"
-            print("DEBUG runtime_once:", group_key)
-            done = engine.state.flags.setdefault("runtime_once", {})
-            if done.get(group_key, False):
-                return
-            done[group_key] = True
+        if action == "return_to_hand_once_per_turn":
+            self._apply_return_to_hand_once_per_turn(engine, owner_idx, source_uid, targets)
+            return
+        if not self._effect_usage_can_use(engine, owner_idx, source_uid, effect):
+            return
         if action == "increase_faith":
             for t_uid in targets:
                 inst = engine.state.instances[t_uid]
@@ -844,21 +881,10 @@ class RuntimeCardManager:
                     continue
 
                 owner = inst.owner
-                player = engine.state.players[owner]
-
-                # Rimuovi dalla zona attacco
-                if uid in player.attack:
-                    idx = player.attack.index(uid)
-                    player.attack[idx] = None
-
-                # Rimuovi dalla difesa, se esiste
-                if hasattr(player, "defense") and uid in player.defense:
-                    idx = player.defense.index(uid)
-                    player.defense[idx] = None
-
-                # Aggiungi alla mano
-                if uid not in player.hand:
-                    player.hand.append(uid)
+                if not engine.move_board_card_to_hand(owner, uid):
+                    continue
+                self._effect_usage_consume(engine, owner_idx, source_uid, effect)
+                engine._emit_event("on_this_card_leaves_field", owner, card=uid, destination="hand")
             return
         if action == "double_strength":
             for t_uid in targets:
@@ -1163,6 +1189,44 @@ class RuntimeCardManager:
                 if engine.move_graveyard_card_to_deck_bottom(owner, t_uid):
                     engine.state.log(f"{inst.definition.name} torna nel reliquiario.")
             return
+        if action == "move_to_relicario":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                owner = inst.owner
+                player = engine.state.players[owner]
+                moved = False
+                if t_uid in player.hand:
+                    player.hand.remove(t_uid)
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                elif t_uid in player.graveyard:
+                    player.graveyard.remove(t_uid)
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                elif t_uid in player.attack:
+                    idx = player.attack.index(t_uid)
+                    player.attack[idx] = None
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                elif t_uid in player.defense:
+                    idx = player.defense.index(t_uid)
+                    player.defense[idx] = None
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                elif t_uid in player.artifacts:
+                    idx = player.artifacts.index(t_uid)
+                    player.artifacts[idx] = None
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                elif player.building == t_uid:
+                    player.building = None
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                if moved:
+                    engine.state.log(f"{inst.definition.name} torna nel reliquiario.")
+            return
         if action == "shuffle_deck":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             engine.rng.shuffle(engine.state.players[target].deck)
@@ -1256,6 +1320,57 @@ class RuntimeCardManager:
             if p.building and _norm(engine.state.instances[p.building].definition.name) == key:
                 total += 1
         return total
+
+    def _effect_usage_state(self, engine: GameEngine) -> dict[str, int]:
+        return engine.state.flags.setdefault("effect_usage_per_turn", {})
+
+    def _effect_usage_key(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> str:
+        group = _norm(effect.action or "effect")
+        return f"{group}:{owner_idx}:{source_uid}:{engine.state.turn_number}"
+
+    def _effect_usage_limit(self, effect: EffectSpec) -> int:
+        if effect.usage_limit_per_turn is not None:
+            return max(1, int(effect.usage_limit_per_turn))
+        return 0
+
+    def _effect_usage_used(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> int:
+        return int(self._effect_usage_state(engine).get(self._effect_usage_key(engine, owner_idx, source_uid, effect), 0))
+
+    def _effect_usage_can_use(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> bool:
+        limit = self._effect_usage_limit(effect)
+        if limit <= 0:
+            return True
+        return self._effect_usage_used(engine, owner_idx, source_uid, effect) < limit
+
+    def _effect_usage_consume(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> None:
+        limit = self._effect_usage_limit(effect)
+        if limit <= 0:
+            return
+        key = self._effect_usage_key(engine, owner_idx, source_uid, effect)
+        usage = self._effect_usage_state(engine)
+        usage[key] = int(usage.get(key, 0)) + 1
+
+    def _apply_return_to_hand_once_per_turn(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        source_uid: str,
+        targets: list[str],
+    ) -> None:
+        source_inst = engine.state.instances.get(source_uid)
+        marker = f"once_per_turn:return_to_hand_once_per_turn:{engine.state.turn_number}"
+        if source_inst is not None and marker in source_inst.blessed:
+            return
+        for uid in targets:
+            inst = engine.state.instances.get(uid)
+            if inst is None:
+                continue
+            owner = inst.owner
+            if not engine.move_board_card_to_hand(owner, uid):
+                continue
+            if source_inst is not None and marker not in source_inst.blessed:
+                source_inst.blessed.append(marker)
+            engine._emit_event("on_this_card_leaves_field", owner, card=uid, destination="hand")
 
     def _event_matches(self, ctx: "RuleEventContext", owner_idx: int, condition: dict[str, Any]) -> bool:
         if not condition:
@@ -1364,6 +1479,12 @@ class RuntimeCardManager:
             wanted = _norm(str(hand_name))
             if not any(_norm(ctx.engine.state.instances[uid].definition.name) == wanted for uid in ctx.engine.state.players[owner_idx].hand):
                 return False
+        building_name = condition.get("controller_has_building_with_name")
+        if building_name:
+            wanted = _norm(str(building_name))
+            b_uid = ctx.engine.state.players[owner_idx].building
+            if b_uid is None or _norm(ctx.engine.state.instances[b_uid].definition.name) != wanted:
+                return False
         event_name_is = condition.get("event_card_name_is")
         if event_name_is and event_card_uid:
             wanted = _norm(str(event_name_is))
@@ -1380,6 +1501,15 @@ class RuntimeCardManager:
         if deck_name:
             wanted = _norm(str(deck_name))
             if not any(_norm(ctx.engine.state.instances[uid].definition.name) == wanted for uid in ctx.engine.state.players[owner_idx].deck):
+                return False
+        drawn_this_turn_gte = condition.get("controller_drawn_cards_this_turn_gte")
+        if drawn_this_turn_gte is not None:
+            drawn = ctx.engine.state.flags.get("cards_drawn_this_turn", {})
+            if len(drawn.get(str(owner_idx), [])) < int(drawn_this_turn_gte):
+                return False
+        altare_sigilli_gte = condition.get("controller_altare_sigilli_gte")
+        if altare_sigilli_gte is not None:
+            if ctx.engine._get_altare_sigilli(owner_idx) < int(altare_sigilli_gte):
                 return False
         distinct_saints_gte = condition.get("controller_has_distinct_saints_gte")
         if distinct_saints_gte is not None:

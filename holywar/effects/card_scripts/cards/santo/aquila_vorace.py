@@ -14,8 +14,7 @@ SCRIPT = {
             },
             "target": {"type": "event_card"},
             "effect": {
-                "action": "return_to_hand",
-                "once_per_turn_group": "aquila_vorace_return",
+                "action": "return_to_hand_once_per_turn",
             }
         }
     ],

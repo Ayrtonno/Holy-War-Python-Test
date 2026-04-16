@@ -336,6 +336,8 @@ class HolyWarGUI(tk.Tk):
         mode = self._activate_targeting_mode(uid)
         if mode == "yggdrasil":
             return True
+        if mode == "veggente":
+            return True
         if self._can_activate_target(player_idx, source, None):
             return True
         return bool(self._valid_activation_targets(player_idx, source, uid))
@@ -1374,6 +1376,25 @@ class HolyWarGUI(tk.Tk):
             return (False, f"buff:{saint_target}")
         return (False, mode)
 
+    def _veggente_target_payload(self, uid: str) -> tuple[bool, str | None]:
+        choices = [
+            ("Aggiungi 1 Segnalino Sigillo", "add"),
+            ("Rimuovi 3 Segnalini e pesca 1 carta", "draw"),
+        ]
+        canceled, selected = self._open_target_picker(
+            title="Veggente dell'Apocalisse",
+            prompt="Scegli la modalita di attivazione.",
+            choices=choices,
+            allow_multi=False,
+            min_targets=1,
+            max_targets=1,
+            allow_none=False,
+            allow_manual=False,
+        )
+        if canceled or not selected:
+            return (True, None)
+        return (False, selected.strip().lower())
+
     def ask_guided_quick_target(self, uid: str) -> None:
         if self._is_monsone_card(uid):
             canceled, target = self._monsone_target_payload(uid)
@@ -1567,7 +1588,11 @@ class HolyWarGUI(tk.Tk):
             self.refresh()
             self.begin_turn_if_needed()
             return
-        if mode == "yggdrasil":
+        if mode == "veggente":
+            canceled, target = self._veggente_target_payload(uid)
+            if canceled:
+                return
+        elif mode == "yggdrasil":
             canceled, target = self._yggdrasil_target_payload(uid)
             if canceled:
                 return

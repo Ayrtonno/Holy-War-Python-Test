@@ -7,7 +7,7 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "play_targeting": "none",
-    "battle_survival_mode": "thor",
+    "battle_survival_mode": "excommunicate_card_from_graveyard",
     "battle_survival_names": ["Tanngnjostr", "Tanngrisnir"],
     "battle_survival_restore_faith": 4,
     "triggered_effects": [],

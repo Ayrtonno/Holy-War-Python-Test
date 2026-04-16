@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from holywar.core.engine import GameEngine
-from holywar.effects.runtime import runtime_cards
+from holywar.effects.runtime import CardFilterSpec, TargetSpec, runtime_cards
 from holywar.data.models import CardDefinition
 
 
@@ -799,6 +799,56 @@ def test_loki_sacrifices_self_to_summon_from_hand() -> None:
     )
 
 
+def test_aquila_vorace_returns_to_hand_again_after_replay_on_later_turn() -> None:
+    cards = [
+        CardDefinition("Aquila Vorace", "Santo", "6", 2, 8, "", "ANI-1"),
+        CardDefinition("Victim1", "Santo", "2", 2, 1, "", "ANI-1"),
+        CardDefinition("Victim2", "Santo", "2", 2, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=116)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+
+    idx_a = _force_card_in_hand(engine, 0, "Aquila Vorace")
+    uid_a = p0.hand[idx_a]
+    for uid in list(p0.hand):
+        if uid != uid_a:
+            p0.hand.remove(uid)
+            p0.deck.append(uid)
+    idx_a = p0.hand.index(uid_a)
+    assert engine.play_card(0, idx_a, "a1").ok
+
+    idx_v1 = _force_card_in_hand(engine, 1, "Victim1")
+    assert engine.play_card(1, idx_v1, "a1").ok
+    engine.end_turn()
+    engine.start_turn()
+    out = engine.attack(0, 0, 0)
+    assert out.ok
+    assert uid_a in p0.hand
+    assert p0.attack[0] is None
+
+    engine.end_turn()
+    engine.start_turn()
+    engine.end_turn()
+    engine.start_turn()
+
+    idx_a2 = p0.hand.index(uid_a)
+    assert engine.play_card(0, idx_a2, "a1").ok
+    idx_v2 = _force_card_in_hand(engine, 1, "Victim2")
+    assert engine.play_card(1, idx_v2, "a1").ok
+    engine.end_turn()
+    engine.start_turn()
+    out2 = engine.attack(0, 0, 0)
+    assert out2.ok
+    assert uid_a in p0.hand
+    assert p0.attack[0] is None
+
+
 def test_tanng_cards_activate_scripted_sacrifice_to_buff_thor() -> None:
     cards = [
         CardDefinition("Thor", "Santo", "9", 10, 8, "", "NOR-1"),
@@ -917,3 +967,71 @@ def test_missionario_returns_to_relicario_after_effect_death() -> None:
     engine.end_turn()
     assert uid in engine.state.players[0].deck
     assert uid not in engine.state.players[0].graveyard
+
+
+def test_ptah_can_return_a_drawn_card_to_relicario() -> None:
+    cards = [
+        CardDefinition("Ptah", "Santo", "3", 3, 2, "", "EGI-1"),
+        CardDefinition("Drawn", "Santo", "1", 1, 1, "", "EGI-1"),
+        CardDefinition("Replacement", "Santo", "1", 1, 1, "", "EGI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "EGI-1", "EGI-1", seed=116)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+    ptah_idx = _force_card_in_hand(engine, 0, "Ptah")
+    ptah_uid = p0.hand[ptah_idx]
+    assert engine.play_card(0, ptah_idx, "a1").ok
+    drawn_uid = next(uid for uid in p0.hand if engine.state.instances[uid].definition.name == "Drawn")
+    replacement_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "Replacement")
+    p0.hand = [drawn_uid]
+    p0.deck = [replacement_uid]
+    engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["0"] = [drawn_uid]
+    targets = runtime_cards._resolve_targets(  # noqa: SLF001 - targeted regression for Ptah primitive
+        engine,
+        0,
+        TargetSpec(
+            type="cards_controlled_by_owner",
+            card_filter=CardFilterSpec(drawn_this_turn_only=True),
+            zone="hand",
+            owner="me",
+            max_targets=1,
+        ),
+    )
+    assert targets == [drawn_uid]
+    runtime_cards._apply_effect(engine, 0, ptah_uid, targets, runtime_cards.get_script("Ptah").triggered_effects[0].effect)  # noqa: SLF001
+    assert drawn_uid in p0.deck
+    assert drawn_uid not in p0.hand
+
+
+def test_veggente_searches_sigillo_and_uses_altar_script() -> None:
+    cards = [
+        CardDefinition("Veggente dell'Apocalisse", "Santo", "7", 8, 3, "", "ANI-1"),
+        CardDefinition("Altare dei Sette Sigilli", "Edificio", "7", 6, None, "", "ANI-1"),
+        CardDefinition("Primo Sigillo", "Benedizione", "1", 0, 0, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=117)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+    altar_idx = _force_card_in_hand(engine, 0, "Altare dei Sette Sigilli")
+    assert engine.play_card(0, altar_idx, None).ok
+    p0.inspiration = 20
+    veg_idx = _force_card_in_hand(engine, 0, "Veggente dell'Apocalisse")
+    assert engine.play_card(0, veg_idx, "a1").ok
+    assert any(engine.state.instances[uid].definition.name == "Primo Sigillo" for uid in p0.hand)
+    p0.inspiration = 20
+    engine._set_altare_sigilli(0, 0)
+    out_add = engine.activate_ability(0, "a1", "add")
+    assert out_add.ok
+    assert engine._get_altare_sigilli(0) == 1
+    engine._set_altare_sigilli(0, 3)
+    before_hand = len(p0.hand)
+    out = engine.activate_ability(0, "a1", "draw")
+    assert out.ok
+    assert engine._get_altare_sigilli(0) == 0
+    assert len(p0.hand) == before_hand + 1

@@ -165,6 +165,7 @@ class GameEngine:
                 "spent_inspiration_turn": {"0": 0, "1": 0},
                 "bonus_inspiration_next_turn": {"0": 0, "1": 0},
                 "counter_spell_ready": {"0": 0, "1": 0},
+                "cards_drawn_this_turn": {"0": [], "1": []},
             },
         )
         engine = GameEngine(state, seed=seed)
@@ -177,6 +178,8 @@ class GameEngine:
     def initial_setup_draw(self) -> None:
         for idx in (0, 1):
             self.draw_cards(idx, 5)
+        self.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["0"] = []
+        self.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["1"] = []
         self.state.log("Setup iniziale completato: entrambi i giocatori hanno pescato 5 carte.")
 
     def draw_cards(self, player_idx: int, amount: int) -> int:
@@ -190,6 +193,7 @@ class GameEngine:
             drawn_uid = player.deck.pop()
             player.hand.append(drawn_uid)
             drawn += 1
+            self.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []}).setdefault(str(player_idx), []).append(drawn_uid)
             self._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
             card_name = self.state.instances[drawn_uid].definition.name
             if runtime_cards.get_auto_play_on_draw(card_name):
@@ -447,7 +451,7 @@ class GameEngine:
             board_player.defense[defense_slot] = None
         if cause == "battle":
             survival_mode = runtime_cards.get_battle_survival_mode(inst.definition.name)
-            if survival_mode == "ya_ner":
+            if survival_mode == "sacrifice_token_from_field":
                 token_name = runtime_cards.get_battle_survival_token_name(inst.definition.name)
                 token_uid = None
                 if token_name:
@@ -468,7 +472,7 @@ class GameEngine:
                         board_player.defense[defense_slot] = uid
                     self.state.log(f"{inst.definition.name} evita la distruzione sacrificando {token_name}.")
                     return
-            if survival_mode == "thor":
+            if survival_mode == "excommunicate_card_from_graveyard":
                 rescue_names = {_norm(name) for name in runtime_cards.get_battle_survival_names(inst.definition.name)}
                 rescue_uid = None
                 for g_uid in list(board_player.graveyard):
@@ -550,20 +554,20 @@ class GameEngine:
         for uid in player.attack:
             if uid:
                 self.state.instances[uid].exhausted = False
-        # Ya-ner: at the start of your turn, summon Token Gub-ner in defense behind Ya-ner if missing.
         for i, a_uid in enumerate(player.attack):
             if not a_uid:
                 continue
-            if _norm(self.state.instances[a_uid].definition.name) != _norm("Ya-ner"):
+            token_name = runtime_cards.get_turn_start_summon_token_name(self.state.instances[a_uid].definition.name)
+            if not token_name:
                 continue
             def_uid = player.defense[i]
-            if def_uid and _norm(self.state.instances[def_uid].definition.name) == _norm("Token Gub-ner"):
+            if def_uid and _norm(self.state.instances[def_uid].definition.name) == _norm(token_name):
                 continue
             token_uid = None
             for pool_name in ("white_deck", "deck", "graveyard", "excommunicated"):
                 pool = getattr(player, pool_name)
                 for c_uid in list(pool):
-                    if _norm(self.state.instances[c_uid].definition.name) != _norm("Token Gub-ner"):
+                    if _norm(self.state.instances[c_uid].definition.name) != _norm(token_name):
                         continue
                     pool.remove(c_uid)
                     token_uid = c_uid
@@ -572,7 +576,7 @@ class GameEngine:
                     break
             if token_uid is not None and player.defense[i] is None:
                 player.defense[i] = token_uid
-                self.state.log(f"{player.name} evoca Token Gub-ner dietro Ya-ner.")
+                self.state.log(f"{player.name} evoca {token_name} dietro {self.state.instances[a_uid].definition.name}.")
         self.state.flags.setdefault("attack_count", {"0": 0, "1": 0})[str(self.state.active_player)] = 0
         self.state.flags.setdefault("spent_inspiration_turn", {"0": 0, "1": 0})[str(self.state.active_player)] = 0
         self._cleanup_zero_faith_saints()
@@ -617,6 +621,7 @@ class GameEngine:
         self._emit_event("on_turn_end", current, player=current)
         self._emit_event("on_my_turn_end", current, player=current)
         self._emit_event("on_opponent_turn_end", 1 - current, opponent=current)
+        self.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})[str(current)] = []
         self._cleanup_zero_faith_saints()
         self.check_win_conditions()
         if self.state.winner is not None:
@@ -633,10 +638,14 @@ class GameEngine:
                 )
                 set_phase(self, "setup")
                 refresh_player_flags(self)
+                self._reset_effect_usage_this_turn()
+                self._reset_turn_once_markers_this_turn()
                 return
             self.state.active_player = 1 - self.state.active_player
             set_phase(self, "setup")
             refresh_player_flags(self)
+            self._reset_effect_usage_this_turn()
+            self._reset_turn_once_markers_this_turn()
             return
         double_turns = self.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0})
         key = str(self.state.active_player)
@@ -646,6 +655,8 @@ class GameEngine:
         self.state.turn_number += 1
         set_phase(self, "setup")
         refresh_player_flags(self)
+        self._reset_effect_usage_this_turn()
+        self._reset_turn_once_markers_this_turn()
 
     def card_from_hand(self, player_idx: int, hand_index: int) -> CardInstance | None:
         player = self.state.players[player_idx]
@@ -1089,16 +1100,14 @@ class GameEngine:
             if (attacker.current_faith or 0) <= 0:
                 self.destroy_saint_by_uid(self.state.instances[attacker_uid].owner, attacker_uid, cause="battle")
 
-        # Pkad-nok: both cards interacting with it are destroyed post-combat.
-        pkad = _norm("Pkad-nok")
         forced_destroy: list[tuple[int, str]] = []
         attacker_on_board = attacker_uid in (attacker_player.attack + attacker_player.defense)
         defender_on_board = defender_uid in (defender_player.attack + defender_player.defense)
-        if _norm(attacker.definition.name) == pkad and attacker_on_board:
+        if runtime_cards.get_post_battle_forced_destroy(attacker.definition.name) and attacker_on_board:
             forced_destroy.append((player_idx, attacker_uid))
             if defender_on_board:
                 forced_destroy.append((defender_idx, defender_uid))
-        if _norm(defender.definition.name) == pkad and defender_on_board:
+        if runtime_cards.get_post_battle_forced_destroy(defender.definition.name) and defender_on_board:
             forced_destroy.append((defender_idx, defender_uid))
             if attacker_on_board:
                 forced_destroy.append((player_idx, attacker_uid))
@@ -1407,6 +1416,25 @@ class GameEngine:
         player.hand.append(uid)
         return True
 
+    def move_board_card_to_hand(self, owner_idx: int, uid: str) -> bool:
+        player = self.state.players[owner_idx]
+        if len(player.hand) >= MAX_HAND:
+            return False
+        if uid in player.attack:
+            idx = player.attack.index(uid)
+            player.attack[idx] = None
+        if uid in player.defense:
+            idx = player.defense.index(uid)
+            player.defense[idx] = None
+        if uid in player.artifacts:
+            idx = player.artifacts.index(uid)
+            player.artifacts[idx] = None
+        if player.building == uid:
+            player.building = None
+        if uid not in player.hand:
+            player.hand.append(uid)
+        return True
+
     def move_graveyard_card_to_deck_bottom(self, player_idx: int, uid: str) -> bool:
         player = self.state.players[player_idx]
         if uid not in player.graveyard:
@@ -1414,6 +1442,16 @@ class GameEngine:
         player.graveyard.remove(uid)
         player.deck.insert(0, uid)
         return True
+
+    def _reset_effect_usage_this_turn(self) -> None:
+        self.state.flags["effect_usage_per_turn"] = {}
+
+    def _reset_turn_once_markers_this_turn(self) -> None:
+        marker_prefix = "once_per_turn:"
+        for inst in self.state.instances.values():
+            keep = [tag for tag in inst.blessed if not tag.startswith(marker_prefix)]
+            if len(keep) != len(inst.blessed):
+                inst.blessed = keep
 
     def place_card_from_uid(self, player_idx: int, uid: str, zone: str, slot: int) -> bool:
         player = self.state.players[player_idx]
