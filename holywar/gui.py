@@ -279,6 +279,17 @@ class HolyWarGUI(tk.Tk):
             return "auto"
         return str(script.activate_targeting or "auto").strip().lower() or "auto"
 
+    def _play_owner_idx(self, uid: str) -> int:
+        if self.engine is None:
+            return 0
+        script = self._card_script(uid)
+        if script is None:
+            return self.current_human_idx() or 0
+        owner = str(getattr(script, "play_owner", "me") or "me").strip().lower()
+        if owner in {"opponent", "enemy", "other"}:
+            return 1 - (self.current_human_idx() or 0)
+        return self.current_human_idx() or 0
+
     def _valid_play_targets(self, player_idx: int, hand_idx: int, uid: str, quick: bool) -> list[str]:
         if self.engine is None:
             return []
@@ -919,6 +930,7 @@ class HolyWarGUI(tk.Tk):
             else:
                 menu.add_command(label="Nessun target valido", state="disabled")
         elif ctype in {"santo", "token"}:
+            play_owner = self._play_owner_idx(uid)
             m_att = tk.Menu(menu, tearoff=0)
             att_targets: list[str] = []
             for s in range(1, 4):
@@ -939,7 +951,7 @@ class HolyWarGUI(tk.Tk):
             if not def_targets:
                 m_def.add_command(label="Nessuno slot valido", state="disabled")
             menu.add_cascade(label="Gioca in Difesa", menu=m_def)
-            self._set_slot_highlights(att_targets + def_targets, side_hint="own")
+            self._set_slot_highlights(att_targets + def_targets, side_hint="enemy" if play_owner != own_idx else "own")
         elif ctype in {"benedizione", "maledizione"}:
             valid_targets = self._valid_play_targets(own_idx, idx, uid, quick=False)
             if valid_targets:
@@ -1003,7 +1015,8 @@ class HolyWarGUI(tk.Tk):
         ctype = inst.definition.card_type.lower().strip()
         target: str | None = None
         if ctype in {"santo", "token"}:
-            target = self._first_open_slot(own_idx, "a") or self._first_open_slot(own_idx, "d")
+            play_owner = self._play_owner_idx(uid)
+            target = self._first_open_slot(play_owner, "a") or self._first_open_slot(play_owner, "d")
             if target is None:
                 messagebox.showwarning("Campo pieno", "Nessuno slot libero in Attacco/Difesa.")
                 return
@@ -1525,6 +1538,35 @@ class HolyWarGUI(tk.Tk):
             messagebox.showwarning("Abilita non valida", "Sorgente non valida.")
             return
         mode = self._activate_targeting_mode(uid)
+        if mode == "manual":
+            hand_choices: list[tuple[str, str]] = []
+            for h_uid in self.engine.state.players[own_idx].hand:
+                inst = self.engine.state.instances[h_uid]
+                if inst.definition.name in {"Fenrir", "Jormungandr"}:
+                    hand_choices.append((f"{inst.definition.name} ({inst.definition.card_type})", inst.definition.name))
+            if not hand_choices:
+                messagebox.showwarning("Abilita non valida", "Nessuna carta disponibile in mano.")
+                return
+            canceled, target = self._open_target_picker(
+                title="Attiva Abilita",
+                prompt="Scegli la carta da evocare.",
+                choices=hand_choices,
+                allow_multi=False,
+                min_targets=1,
+                max_targets=1,
+                allow_none=False,
+                allow_manual=False,
+            )
+            if canceled or not target:
+                return
+            res = self.engine.activate_ability(own_idx, source, target)
+            if res.ok:
+                self.start_chain(actor_idx=own_idx)
+            if not res.ok:
+                messagebox.showwarning("Abilita non valida", res.message)
+            self.refresh()
+            self.begin_turn_if_needed()
+            return
         if mode == "yggdrasil":
             canceled, target = self._yggdrasil_target_payload(uid)
             if canceled:

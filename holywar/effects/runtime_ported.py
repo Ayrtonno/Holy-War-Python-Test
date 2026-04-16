@@ -523,33 +523,11 @@ def resolve_enter_effect(engine: "GameEngine", player_idx: int, uid: str) -> str
                 return f"{player.name} attiva Skadi: {inst.definition.name} perde 3 Forza."
         return None
 
-    if name_key == _norm("Yggdrasil"):
-        for target_name in ("Thor", "Odino", "Loki"):
-            deck_uid = engine.find_card_uid_in_deck(player_idx, target_name)
-            if deck_uid and engine.move_deck_card_to_hand(player_idx, deck_uid):
-                return f"{player.name} attiva Yggdrasil e aggiunge {target_name} alla mano."
-        return None
-
     if name_key == _norm("Totem di Pietra"):
         spent = player.inspiration
         player.inspiration = 0
         card.current_faith = spent * 3
         return f"{player.name} attiva Totem di Pietra: Fede impostata a {card.current_faith}."
-
-    if name_key == _norm("Paladino della Fede"):
-        a_idx = next((i for i, v in enumerate(player.attack) if v is not None), None)
-        d_idx = next((i for i, v in enumerate(player.defense) if v is not None), None)
-        if a_idx is not None and d_idx is not None:
-            player.attack[a_idx], player.defense[d_idx] = player.defense[d_idx], player.attack[a_idx]
-            return f"{player.name} attiva Paladino della Fede: scambia un santo tra attacco e difesa."
-        return None
-
-    if name_key == _norm("Neith"):
-        hit = 0
-        for s_uid in list(engine.all_saints_on_field(1 - player_idx)):
-            _damage_saint(engine, s_uid, 1)
-            hit += 1
-        return f"{player.name} attiva Neith: 1 danno a {hit} santi avversari."
 
     if name_key == _norm("Sacerdote Orologio"):
         target_uid = None
@@ -942,19 +920,6 @@ def resolve_card_effect(engine: "GameEngine", player_idx: int, uid: str, target:
         return "Dono di Kah risolta."
 
     # Norrena
-    if name_key == _norm("Figli di Odino"):
-        target_card = engine.resolve_target_saint(player_idx, target)
-        if not target_card:
-            return "Nessun bersaglio valido per Figli di Odino."
-        odino = _has_named_saint_on_field(engine, player_idx, "Odino")
-        thor = _has_named_saint_on_field(engine, player_idx, "Thor")
-        boost = 6 if odino else 3
-        target_card.blessed.append(f"buff_str:{boost}")
-        if odino and thor:
-            engine.draw_cards(player_idx, 1)
-        state.log(f"{player.name} potenzia {target_card.definition.name} con Figli di Odino (+{boost} Forza).")
-        return "Figli di Odino risolta."
-
     if name_key == _norm("Bifrost"):
         target_card = engine.resolve_target_saint(opponent_idx, target)
         if not target_card:
@@ -991,15 +956,6 @@ def resolve_card_effect(engine: "GameEngine", player_idx: int, uid: str, target:
                 state.log(f"{player.name} evoca {name} con Ragnarok.")
                 break
         return "Ragnarok risolta."
-
-    if name_key == _norm("Tempesta di Asgard"):
-        thor_on_field = _has_named_saint_on_field(engine, player_idx, "Thor")
-        enemy_loss = 4 if thor_on_field else 2
-        for s_uid in engine.all_saints_on_field(opponent_idx):
-            _damage_saint(engine, s_uid, enemy_loss)
-        for s_uid in engine.all_saints_on_field(player_idx):
-            _damage_saint(engine, s_uid, 2)
-        return "Tempesta di Asgard risolta."
 
     if name_key == _norm("Assalto Invernale"):
         saint_grave = sum(
@@ -1419,24 +1375,6 @@ def resolve_activated_effect(engine: "GameEngine", player_idx: int, uid: str, ta
         engine.remove_from_board_no_sin(player_idx, uid)
         acted = True
         logs.append(f"{card.definition.name} viene mandato al cimitero senza peccato.")
-
-    if "conferisci a \"thor\" +4 fede" in _norm(raw_text):
-        thor_uid = next(
-            (s_uid for s_uid in engine.all_saints_on_field(player_idx) if _norm(state.instances[s_uid].definition.name) == _norm("Thor")),
-            None,
-        )
-        if thor_uid:
-            inst = state.instances[thor_uid]
-            inst.current_faith = (inst.current_faith or 0) + 4
-            acted = True
-            logs.append("Thor ottiene +4 Fede.")
-
-    if "scegli un santo sul tuo terreno e conferisci +4 fede" in text:
-        tgt = _pick_target_saint(engine, player_idx, target, prefer_own=True)
-        if tgt:
-            tgt.current_faith = (tgt.current_faith or 0) + 4
-            acted = True
-            logs.append(f"{tgt.definition.name} ottiene +4 Fede.")
 
     if "evocare" in text and ("dalla tua mano" in text or "dal tuo cimitero" in text or "dal reliquiario" in text):
         quoted = _extract_quoted_names(raw_text)

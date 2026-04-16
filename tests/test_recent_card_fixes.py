@@ -384,6 +384,126 @@ def test_tempesta_is_marked_as_no_target_by_script_metadata() -> None:
     assert runtime_cards.get_attack_targeting_mode("Papa") == "only_if_no_other_attackers"
     assert runtime_cards.get_activate_targeting_mode("Yggdrasil") == "yggdrasil"
     assert runtime_cards.get_activate_targeting_mode("Vulcano") == "board_card"
+    assert runtime_cards.get_play_targeting_mode("Missionario") == "none"
+    assert runtime_cards.get_play_targeting_mode("Loki") == "none"
+    assert runtime_cards.get_play_targeting_mode("Thor") == "none"
+    assert runtime_cards.get_activate_targeting_mode("Tanngnjostr") == "none"
+    assert runtime_cards.get_activate_targeting_mode("Tanngrisnir") == "none"
+    assert runtime_cards.get_activate_targeting_mode("Paladino della Fede") == "auto"
+    assert runtime_cards.get_play_owner("Missionario") == "opponent"
+    assert runtime_cards.get_activate_targeting_mode("Loki") == "manual"
+    assert runtime_cards.get_play_targeting_mode("Figli di Odino") == "own_saint"
+    assert runtime_cards.get_play_targeting_mode("Tempesta di Asgard") == "none"
+
+
+def test_yggdrasil_uses_scripted_enter_and_activate_modes() -> None:
+    cards = [
+        CardDefinition("Yggdrasil", "Edificio", "7", 6, None, "", "NOR-1"),
+        CardDefinition("Thor", "Santo", "3", 1, 2, "", "NOR-1"),
+        CardDefinition("Target", "Santo", "2", 1, 1, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=14)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    player = engine.state.players[0]
+    thor_uid = next(
+        uid
+        for uid in (player.hand + player.deck)
+        if engine.state.instances[uid].definition.name == "Thor"
+    )
+    if thor_uid in player.hand:
+        player.hand.remove(thor_uid)
+        player.deck.append(thor_uid)
+
+    i_target = _force_card_in_hand(engine, 0, "Target")
+    assert engine.play_card(0, i_target, "a1").ok
+    target_uid = engine.state.players[0].attack[0]
+    assert target_uid is not None
+
+    i_ygg = _force_card_in_hand(engine, 0, "Yggdrasil")
+    assert engine.play_card(0, i_ygg, None).ok
+    hand_names = [engine.state.instances[uid].definition.name for uid in engine.state.players[0].hand]
+    assert "Thor" in hand_names
+
+    before_faith = engine.state.instances[target_uid].current_faith
+    before_strength = engine.get_effective_strength(target_uid)
+    ygg_uid = engine.state.players[0].building
+    assert ygg_uid is not None
+    assert engine.state.instances[ygg_uid].definition.name == "Yggdrasil"
+    out = engine.activate_ability(0, "b", "buff:a1")
+    assert out.ok
+    assert engine.state.instances[target_uid].current_faith == before_faith + 2
+    assert engine.get_effective_strength(target_uid) == before_strength + 2
+
+
+def test_albero_sacro_auto_enters_and_requests_end_turn() -> None:
+    cards = [
+        CardDefinition("Albero Sacro", "Santo", "7", 6, 5, "", "ANI-1"),
+        CardDefinition("Token Albero", "Token", "1", 1, 0, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=15)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    player = engine.state.players[0]
+    tree_uid = next(uid for uid in player.deck if engine.state.instances[uid].definition.name == "Albero Sacro")
+    player.deck.remove(tree_uid)
+    player.deck.append(tree_uid)
+    active_before = engine.state.active_player
+    engine.start_turn()
+    assert engine.state.active_player != active_before
+    assert any(
+        uid and engine.state.instances[uid].definition.name == "Albero Sacro"
+        for uid in player.attack + player.defense
+    )
+
+
+def test_vescovo_della_citta_buia_scales_with_enemy_saints() -> None:
+    cards = [
+        CardDefinition("Vescovo della Città Buia", "Santo", "8", 5, 5, "", "ANI-1"),
+        CardDefinition("Enemy1", "Santo", "2", 2, 1, "", "ANI-1"),
+        CardDefinition("Enemy2", "Santo", "2", 2, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=16)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p2 = engine.state.players[1]
+    i1 = _force_card_in_hand(engine, 1, "Enemy1")
+    assert engine.play_card(1, i1, "a1").ok
+    i2 = _force_card_in_hand(engine, 1, "Enemy2")
+    assert engine.play_card(1, i2, "a2").ok
+    engine.end_turn()
+    i_v = _force_card_in_hand(engine, 0, "Vescovo della Città Buia")
+    assert engine.play_card(0, i_v, "a1").ok
+    v_uid = engine.state.players[0].attack[0]
+    assert v_uid is not None
+    assert engine.state.instances[v_uid].current_faith == engine.state.instances[v_uid].definition.faith + 10
+
+
+def test_vescovo_della_citta_lucente_heals_damaged_saints() -> None:
+    cards = [
+        CardDefinition("Vescovo della Città Lucente", "Santo", "6", 7, 4, "", "ANI-1"),
+        CardDefinition("Damaged", "Santo", "2", 3, 2, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=17)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i_d = _force_card_in_hand(engine, 0, "Damaged")
+    assert engine.play_card(0, i_d, "a1").ok
+    d_uid = engine.state.players[0].attack[0]
+    assert d_uid is not None
+    engine.state.instances[d_uid].current_faith = 1
+    i_v = _force_card_in_hand(engine, 0, "Vescovo della Città Lucente")
+    assert engine.play_card(0, i_v, "a2").ok
+    assert engine.state.instances[d_uid].current_faith == 6
 
 
 def test_ah_puch_grows_when_token_or_saint_is_sent_from_field_to_graveyard() -> None:
@@ -655,3 +775,145 @@ def test_fujn_dar_mills_two_cards_after_battle_kill() -> None:
     out = engine.attack(0, 0, 0)
     assert out.ok
     assert len(engine.state.players[1].hand) == victim_hand_before - 2
+
+
+def test_loki_sacrifices_self_to_summon_from_hand() -> None:
+    cards = [
+        CardDefinition("Loki", "Santo", "6", 6, 2, "", "NOR-1"),
+        CardDefinition("Fenrir", "Santo", "3", 4, 4, "", "NOR-1"),
+        CardDefinition("Jormungandr", "Santo", "10", 25, 6, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=110)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i_loki = _force_card_in_hand(engine, 0, "Loki")
+    assert engine.play_card(0, i_loki, "a1").ok
+    out = engine.activate_ability(0, "a1", "Fenrir")
+    assert out.ok
+    assert any(engine.state.instances[uid].definition.name == "Loki" for uid in engine.state.players[0].graveyard)
+    assert any(
+        uid is not None and engine.state.instances[uid].definition.name == "Fenrir"
+        for uid in engine.state.players[0].attack
+    )
+
+
+def test_tanng_cards_activate_scripted_sacrifice_to_buff_thor() -> None:
+    cards = [
+        CardDefinition("Thor", "Santo", "9", 10, 8, "", "NOR-1"),
+        CardDefinition("Tanngnjostr", "Santo", "2", 2, 3, "", "NOR-1"),
+        CardDefinition("Tanngrisnir", "Santo", "2", 2, 3, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=111)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    engine.state.players[0].inspiration = 30
+    i_thor = _force_card_in_hand(engine, 0, "Thor")
+    assert engine.play_card(0, i_thor, "a1").ok
+    i_t1 = _force_card_in_hand(engine, 0, "Tanngnjostr")
+    assert engine.play_card(0, i_t1, "a2").ok
+    thor_uid = engine.state.players[0].attack[0]
+    assert thor_uid is not None
+    before = engine.state.instances[thor_uid].current_faith or 0
+    out = engine.activate_ability(0, "a2", None)
+    assert out.ok
+    assert engine.state.instances[thor_uid].current_faith == before + 4
+    assert engine.state.players[0].attack[1] is None
+    assert any(engine.state.instances[uid].definition.name == "Tanngnjostr" for uid in engine.state.players[0].graveyard)
+
+
+def test_albero_sconsacrato_grants_inspiration_on_own_turn_start() -> None:
+    cards = [
+        CardDefinition("Albero Sconsacrato", "Santo", "3", 3, 0, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=112)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx = _force_card_in_hand(engine, 0, "Albero Sconsacrato")
+    assert engine.play_card(0, idx, "a1").ok
+    before = engine.state.players[0].inspiration
+    engine.end_turn()
+    engine.start_turn()
+    engine.end_turn()
+    engine.start_turn()
+    assert engine.state.players[0].inspiration >= before + 2
+
+
+def test_paladino_della_fede_swaps_one_own_saint_between_attack_and_defense() -> None:
+    cards = [
+        CardDefinition("Paladino della Fede", "Santo", "4", 4, 3, "", "CRI-1"),
+        CardDefinition("Friend A", "Santo", "2", 2, 2, "", "CRI-1"),
+        CardDefinition("Friend D", "Santo", "2", 2, 2, "", "CRI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "CRI-1", "CRI-1", seed=113)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx_a = _force_card_in_hand(engine, 0, "Friend A")
+    assert engine.play_card(0, idx_a, "a2").ok
+    idx_d = _force_card_in_hand(engine, 0, "Friend D")
+    assert engine.play_card(0, idx_d, "d1").ok
+    idx = _force_card_in_hand(engine, 0, "Paladino della Fede")
+    assert engine.play_card(0, idx, "a1").ok
+    assert engine.state.players[0].attack[0] is not None
+    assert engine.state.players[0].defense[0] is not None
+    before_attack = engine.state.instances[engine.state.players[0].attack[0]].definition.name
+    before_defense = engine.state.instances[engine.state.players[0].defense[0]].definition.name
+    assert before_attack == "Friend D"
+    assert before_defense == "Paladino della Fede"
+    after_attack = engine.state.instances[engine.state.players[0].attack[0]].definition.name
+    after_defense = engine.state.instances[engine.state.players[0].defense[0]].definition.name
+    assert after_attack == "Friend D"
+    assert after_defense == "Paladino della Fede"
+
+
+def test_prete_anziano_removes_three_sin_on_attack() -> None:
+    cards = [
+        CardDefinition("Prete Anziano", "Santo", "1", 1, 3, "", "ANI-1"),
+        CardDefinition("Enemy", "Santo", "2", 3, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=114)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i1 = _force_card_in_hand(engine, 0, "Prete Anziano")
+    assert engine.play_card(0, i1, "a1").ok
+    i2 = _force_card_in_hand(engine, 1, "Enemy")
+    engine.end_turn()
+    engine.start_turn()
+    assert engine.play_card(1, i2, "a1").ok
+    engine.end_turn()
+    engine.start_turn()
+    engine.state.players[0].sin = 5
+    before = engine.state.players[0].sin
+    out = engine.attack(0, 0, 0)
+    assert out.ok
+    assert engine.state.players[0].sin == before - 3
+
+
+def test_missionario_returns_to_relicario_after_effect_death() -> None:
+    cards = [
+        CardDefinition("Missionario", "Santo", "5", 6, 0, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=115)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx = _force_card_in_hand(engine, 0, "Missionario")
+    assert engine.play_card(0, idx, "a1").ok
+    uid = engine.state.players[1].attack[0]
+    assert uid is not None
+    engine.state.instances[uid].current_faith = 6
+    engine.end_turn()
+    assert engine.state.instances[uid].current_faith == 3
+    engine.end_turn()
+    assert uid in engine.state.players[0].deck
+    assert uid not in engine.state.players[0].graveyard

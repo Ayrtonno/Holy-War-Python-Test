@@ -18,7 +18,7 @@ from holywar.core.state import (
 from holywar.data.deck_builder import build_premade_deck, build_test_deck
 from holywar.data.models import CardDefinition
 from holywar.effects.library import resolve_activated_effect, resolve_card_effect, resolve_enter_effect
-from holywar.effects.runtime import runtime_cards
+from holywar.effects.runtime import EffectSpec, runtime_cards
 from holywar.effects.state_flags import ensure_runtime_state, refresh_player_flags, set_phase
 from holywar.scripting_api import RuleAPI
 
@@ -191,20 +191,48 @@ class GameEngine:
             player.hand.append(drawn_uid)
             drawn += 1
             self._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
+            card_name = self.state.instances[drawn_uid].definition.name
+            if runtime_cards.get_auto_play_on_draw(card_name):
+                flags = self.state.flags
+                previous_source = flags.get("_runtime_source_card")
+                previous_selected = flags.get("_runtime_selected_target")
+                flags["_runtime_source_card"] = drawn_uid
+                flags["_runtime_selected_target"] = ""
+                try:
+                    runtime_cards._apply_effect(self, player_idx, drawn_uid, [drawn_uid], EffectSpec(action="move_source_to_board"))
+                finally:
+                    if previous_source is None:
+                        flags.pop("_runtime_source_card", None)
+                    else:
+                        flags["_runtime_source_card"] = previous_source
+                    if previous_selected is None:
+                        flags.pop("_runtime_selected_target", None)
+                    else:
+                        flags["_runtime_selected_target"] = previous_selected
+            if runtime_cards.get_end_turn_on_draw(card_name):
+                self.state.flags.setdefault("runtime_state", {})["request_end_turn"] = True
             self._emit_event("after_card_drawn_from_deck", player_idx, card=drawn_uid)
             self._emit_event("on_opponent_draws", 1 - player_idx, card=drawn_uid, opponent=player_idx)
         refresh_player_flags(self)
         return drawn
 
     def all_saints_on_field(self, player_idx: int) -> list[str]:
-        player = self.state.players[player_idx]
         out: list[str] = []
-        for uid in player.attack + player.defense:
-            if uid is None:
-                continue
-            ctype = _norm(self.state.instances[uid].definition.card_type)
-            if ctype in SAINT_TYPES:
-                out.append(uid)
+        seen: set[str] = set()
+        for board_idx in (0, 1):
+            player = self.state.players[board_idx]
+            for uid in player.attack + player.defense:
+                if uid is None or uid in seen:
+                    continue
+                inst = self.state.instances.get(uid)
+                if inst is None:
+                    continue
+                if int(inst.owner) != int(player_idx):
+                    continue
+                ctype = _norm(inst.definition.card_type)
+                if ctype in SAINT_TYPES:
+                    out.append(uid)
+                    seen.add(uid)
         return out
 
     def all_attack_saints(self, player_idx: int) -> list[str]:
@@ -247,8 +275,8 @@ class GameEngine:
 
     def _cleanup_zero_faith_saints(self) -> None:
         seen: set[str] = set()
-        for owner_idx in (0, 1):
-            player = self.state.players[owner_idx]
+        for board_owner in (0, 1):
+            player = self.state.players[board_owner]
             for uid in list(player.attack + player.defense):
                 if uid is None or uid in seen or uid not in self.state.instances:
                     continue
@@ -258,7 +286,14 @@ class GameEngine:
                     continue
                 faith = inst.current_faith if inst.current_faith is not None else (inst.definition.faith or 0)
                 if faith <= 0:
-                    self.destroy_saint_by_uid(owner_idx, uid, cause="effect")
+                    self.destroy_saint_by_uid(inst.owner, uid, cause="effect")
+
+    def _find_board_owner_of_uid(self, uid: str) -> int | None:
+        for owner_idx in (0, 1):
+            player = self.state.players[owner_idx]
+            if uid in player.attack or uid in player.defense or uid == player.building:
+                return owner_idx
+        return None
 
     def _get_altare_sigilli(self, player_idx: int) -> int:
         uid = self.state.players[player_idx].building
@@ -330,19 +365,20 @@ class GameEngine:
             strength += 2
         if self._has_artifact(owner, "Gungnir"):
             strength += 1
-            if _norm(inst.definition.name) == _norm("Odino"):
-                strength += 4
-        if self._has_artifact(owner, "Megingjörð"):
-            if _norm(inst.definition.name) == _norm("Thor"):
-                strength += 6
-            else:
-                strength += 2
-        if self._has_artifact(owner, "Mjolnir") and _norm(inst.definition.name) == _norm("Thor"):
-            strength += 8
+        for rule in runtime_cards.get_strength_bonus_rules(inst.definition.name):
+            artifact_name = str(rule.get("artifact_name", "")).strip()
+            if not artifact_name or not self._has_artifact(owner, artifact_name):
+                continue
+            required_name = str(rule.get("if_card_name", "")).strip()
+            if required_name and _norm(inst.definition.name) != _norm(required_name):
+                continue
+            strength += int(rule.get("self_bonus", 0) or 0)
         if self._count_pyramids(owner) >= 1:
             strength += 5
-        if _norm(inst.definition.name) == _norm("Araldo della Fine") and self._get_altare_sigilli(owner) >= 7:
-            strength += 5
+        sigilli_threshold = runtime_cards.get_sigilli_strength_bonus_threshold(inst.definition.name)
+        sigilli_amount = runtime_cards.get_sigilli_strength_bonus_amount(inst.definition.name)
+        if sigilli_threshold is not None and sigilli_amount is not None and self._get_altare_sigilli(owner) >= int(sigilli_threshold):
+            strength += int(sigilli_amount)
         if self._has_artifact(opponent, "Segno Del Passato"):
             strength -= 4
         return max(0, strength)
@@ -363,10 +399,13 @@ class GameEngine:
     def destroy_saint_by_uid(
         self, owner_idx: int, uid: str, excommunicate: bool = False, cause: str = "effect"
     ) -> None:
-        player = self.state.players[owner_idx]
         if uid not in self.state.instances:
             return
         inst = self.state.instances[uid]
+        board_owner_idx = self._find_board_owner_of_uid(uid)
+        if board_owner_idx is None:
+            board_owner_idx = owner_idx
+        board_player = self.state.players[board_owner_idx]
         if "moribondo_shield" in inst.blessed:
             inst.blessed.remove("moribondo_shield")
             self.state.log(f"Moribondo annulla la distruzione di {inst.definition.name}.")
@@ -384,19 +423,6 @@ class GameEngine:
                         f"Terra impedisce a {source.definition.name} di distruggere {inst.definition.name}."
                     )
                     return
-        if _norm(inst.definition.name) == _norm("Ya-ner") and cause == "battle":
-            token_uid = None
-            for s_uid in player.attack + player.defense:
-                if not s_uid:
-                    continue
-                if _norm(self.state.instances[s_uid].definition.name) == _norm("Token Gub-ner"):
-                    token_uid = s_uid
-                    break
-            if token_uid is not None:
-                self.destroy_saint_by_uid(owner_idx, token_uid, cause="effect")
-                inst.current_faith = max(0, inst.definition.faith or 0)
-                self.state.log("Ya-ner evita la distruzione sacrificando un Token Gub-ner.")
-                return
         if "bende_consacrate" in inst.blessed:
             inst.blessed.remove("bende_consacrate")
             inst.current_faith = 1
@@ -405,46 +431,75 @@ class GameEngine:
         name_key = _norm(inst.definition.name)
         attack_slot = None
         defense_slot = None
-        for i, slot_uid in enumerate(player.attack):
+        for i, slot_uid in enumerate(board_player.attack):
             if slot_uid == uid:
                 attack_slot = i
                 break
         if attack_slot is None:
-            for i, slot_uid in enumerate(player.defense):
+            for i, slot_uid in enumerate(board_player.defense):
                 if slot_uid == uid:
                     defense_slot = i
                     break
         from_zone = "attack" if attack_slot is not None else ("defense" if defense_slot is not None else "field")
         if attack_slot is not None:
-            player.attack[attack_slot] = None
-        # Thor can survive battle destruction by excommunicating Tanngnjostr/Tanngrisnir from graveyard.
-        if name_key == _norm("Thor") and cause == "battle":
-            rescue_uid = None
-            for g_uid in list(player.graveyard):
-                g_name = _norm(self.state.instances[g_uid].definition.name)
-                if g_name in {_norm("Tanngnjostr"), _norm("Tanngrisnir")}:
-                    rescue_uid = g_uid
-                    break
-            if rescue_uid is not None:
-                player.graveyard.remove(rescue_uid)
-                player.excommunicated.append(rescue_uid)
-                if attack_slot is not None:
-                    player.attack[attack_slot] = uid
-                inst.current_faith = 4
-                self.state.log(
-                    f"{player.name} attiva Thor: scomunica {self.state.instances[rescue_uid].definition.name} "
-                    "e annulla la distruzione."
-                )
-                return
+            board_player.attack[attack_slot] = None
+        if defense_slot is not None:
+            board_player.defense[defense_slot] = None
+        if cause == "battle":
+            survival_mode = runtime_cards.get_battle_survival_mode(inst.definition.name)
+            if survival_mode == "ya_ner":
+                token_name = runtime_cards.get_battle_survival_token_name(inst.definition.name)
+                token_uid = None
+                if token_name:
+                    for s_uid in board_player.attack + board_player.defense:
+                        if not s_uid:
+                            continue
+                        if _norm(self.state.instances[s_uid].definition.name) == _norm(token_name):
+                            token_uid = s_uid
+                            break
+                if token_uid is not None:
+                    self.destroy_saint_by_uid(self.state.instances[token_uid].owner, token_uid, cause="effect")
+                    inst.current_faith = max(
+                        0, runtime_cards.get_battle_survival_restore_faith(inst.definition.name) or (inst.definition.faith or 0)
+                    )
+                    if attack_slot is not None:
+                        board_player.attack[attack_slot] = uid
+                    elif defense_slot is not None:
+                        board_player.defense[defense_slot] = uid
+                    self.state.log(f"{inst.definition.name} evita la distruzione sacrificando {token_name}.")
+                    return
+            if survival_mode == "thor":
+                rescue_names = {_norm(name) for name in runtime_cards.get_battle_survival_names(inst.definition.name)}
+                rescue_uid = None
+                for g_uid in list(board_player.graveyard):
+                    g_name = _norm(self.state.instances[g_uid].definition.name)
+                    if g_name in rescue_names:
+                        rescue_uid = g_uid
+                        break
+                if rescue_uid is not None:
+                    board_player.graveyard.remove(rescue_uid)
+                    board_player.excommunicated.append(rescue_uid)
+                    if attack_slot is not None:
+                        board_player.attack[attack_slot] = uid
+                    elif defense_slot is not None:
+                        board_player.defense[defense_slot] = uid
+                    inst.current_faith = max(
+                        0, runtime_cards.get_battle_survival_restore_faith(inst.definition.name) or (inst.definition.faith or 0)
+                    )
+                    self.state.log(
+                        f"{inst.definition.name} evita la distruzione: scomunica {self.state.instances[rescue_uid].definition.name} "
+                        "e annulla la distruzione."
+                    )
+                    return
         if _norm(inst.definition.card_type) != "token":
             sin_gain = max(0, inst.definition.faith or 0)
             if "no_sin_on_death" in inst.blessed:
                 sin_gain = 0
-            if self._has_artifact(owner_idx, "UmanitÃ ") and inst.blessed:
+            if self._has_artifact(owner_idx, "Umanit????") and inst.blessed:
                 sin_gain = 0
             self.gain_sin(owner_idx, sin_gain)
             self.state.log(
-                f"{inst.definition.name} viene distrutto: {player.name} guadagna {sin_gain} Peccato."
+                f"{inst.definition.name} viene distrutto: {self.state.players[owner_idx].name} guadagna {sin_gain} Peccato."
             )
         else:
             self.state.log(f"{inst.definition.name} (Token) viene distrutto.")
@@ -466,27 +521,6 @@ class GameEngine:
             self._emit_event("on_saint_destroyed_by_effect", owner_idx, saint=uid, by_whom=None)
         self._emit_event("on_saint_defeated_or_destroyed", owner_idx, saint=uid, reason=cause)
 
-        # Death/graveyard triggers (card-specific).
-        if name_key == _norm("Sacerdote Orologio"):
-            linked_uid = None
-            for tag in inst.blessed:
-                if tag.startswith("orologio_link:"):
-                    linked_uid = tag.split(":", 1)[1]
-                    break
-            if linked_uid:
-                for idx in (0, 1):
-                    if linked_uid in (self.state.players[idx].attack + self.state.players[idx].defense):
-                        self.destroy_saint_by_uid(idx, linked_uid, cause="effect")
-                        break
-
-        if attack_slot is not None:
-            reserve_uid = player.defense[attack_slot]
-            if reserve_uid is not None:
-                player.attack[attack_slot] = reserve_uid
-                player.defense[attack_slot] = None
-                self.state.log(
-                    f"{self.state.instances[reserve_uid].definition.name} viene promosso dalla difesa all'attacco."
-                )
     def start_turn(self) -> None:
         current = self.state.active_player
         player = self.state.players[current]
@@ -619,12 +653,15 @@ class GameEngine:
         if card is None:
             return ActionResult(False, "Indice mano non valido.")
         ctype = _norm(card.definition.card_type)
+        place_owner_idx = player_idx
         zone: str | None = None
         slot = -1
         sacrificed_faith_for_brigante = 0
 
         # Validate play constraints before spending inspiration or removing card from hand.
         if ctype in SAINT_TYPES:
+            if _norm(runtime_cards.get_play_owner(card.definition.name)) in {"opponent", "enemy", "other"}:
+                place_owner_idx = 1 - player_idx
             if _norm(card.definition.name) == _norm("Vulcano"):
                 return ActionResult(False, "Vulcano puo essere evocato solo tramite Terremoto: Magnitudo 10.")
             if _norm(card.definition.name) == _norm("Brigante"):
@@ -633,7 +670,7 @@ class GameEngine:
             zone, slot = self._parse_zone_target(target)
             if zone not in {"attack", "defense"}:
                 return ActionResult(False, "Per un Santo/Token indica zona: a1..a3 o d1..d3")
-            current = getattr(player, zone)[slot]
+            current = getattr(self.state.players[place_owner_idx], zone)[slot]
             if current is not None:
                 return ActionResult(False, "Slot occupato.")
         elif ctype == "artefatto":
@@ -711,11 +748,11 @@ class GameEngine:
                     sacr = self.state.instances[sacr_uid]
                     sacrificed_faith_for_brigante = max(0, sacr.definition.faith or 0)
                     sacr.blessed.append("no_sin_on_death")
-                    self.destroy_saint_by_uid(player_idx, sacr_uid, cause="effect")
+                    self.destroy_saint_by_uid(self.state.instances[sacr_uid].owner, sacr_uid, cause="effect")
             if zone == "attack":
-                player.attack[slot] = uid
+                self.state.players[place_owner_idx].attack[slot] = uid
             elif zone == "defense":
-                player.defense[slot] = uid
+                self.state.players[place_owner_idx].defense[slot] = uid
             else:
                 player.hand.append(uid)
                 return ActionResult(False, "Zona non valida per il posizionamento del santo.")
@@ -950,6 +987,8 @@ class GameEngine:
         if defender_uid is None:
             return ActionResult(False, "Nessun Santo avversario nel bersaglio scelto.")
         defender_name = self.state.instances[defender_uid].definition.name
+        if runtime_cards.get_attack_targeting_mode(defender_name) == "untargetable":
+            return ActionResult(False, f"{defender_name} non puo essere bersagliato dagli attacchi.")
         if runtime_cards.get_attack_targeting_mode(defender_name) == "only_if_no_other_attackers":
             others = [u for i, u in enumerate(defender_player.attack) if i != target_slot and u is not None]
             if others:
@@ -1014,7 +1053,7 @@ class GameEngine:
         lethal = (defender.current_faith or 0) <= 0
         if lethal:
             excommunicate = attacker_name_key == _norm("Albero Sconsacrato")
-            self.destroy_saint_by_uid(defender_idx, defender_uid, excommunicate=excommunicate, cause="battle")
+            self.destroy_saint_by_uid(self.state.instances[defender_uid].owner, defender_uid, excommunicate=excommunicate, cause="battle")
             self._emit_event("on_this_card_kills_in_battle", player_idx, card=attacker_uid, victim=defender_uid)
             if attacker_name_key == _norm("Schiavo Mutilato"):
                 attacker.current_faith = (attacker.current_faith or 0) + 2
@@ -1049,7 +1088,7 @@ class GameEngine:
                 f"{attacker.definition.name} subisce {retaliation} danni di ritorsione (Fede {before}->{after})."
             )
             if (attacker.current_faith or 0) <= 0:
-                self.destroy_saint_by_uid(player_idx, attacker_uid, cause="battle")
+                self.destroy_saint_by_uid(self.state.instances[attacker_uid].owner, attacker_uid, cause="battle")
 
         # Pkad-nok: both cards interacting with it are destroyed post-combat.
         pkad = _norm("Pkad-nok")
@@ -1068,7 +1107,7 @@ class GameEngine:
             if forced_uid not in (self.state.players[owner_idx].attack + self.state.players[owner_idx].defense):
                 continue
             faith_val = max(0, self.state.instances[forced_uid].definition.faith or 0)
-            self.destroy_saint_by_uid(owner_idx, forced_uid, cause="effect")
+            self.destroy_saint_by_uid(self.state.instances[forced_uid].owner, forced_uid, cause="effect")
             self.gain_sin(0, faith_val)
             self.gain_sin(1, faith_val)
 
@@ -1081,7 +1120,7 @@ class GameEngine:
         uid = player.attack[attack_slot]
         if uid is None:
             return
-        self.destroy_saint_by_uid(owner_idx, uid, cause="battle")
+        self.destroy_saint_by_uid(self.state.instances[uid].owner, uid, cause="battle")
 
     def send_to_graveyard(
         self,
@@ -1090,9 +1129,12 @@ class GameEngine:
         token_to_white: bool = False,
         from_zone_override: str | None = None,
     ) -> None:
-        player = self.state.players[owner_idx]
         card = self.state.instances[uid]
-        from_zone = from_zone_override or self._locate_uid_zone(owner_idx, uid)
+        board_owner_idx = self._find_board_owner_of_uid(uid)
+        if board_owner_idx is None:
+            board_owner_idx = owner_idx
+        player = self.state.players[board_owner_idx]
+        from_zone = from_zone_override or self._locate_uid_zone(board_owner_idx, uid)
         grave_target_idx = owner_idx
         for tag in list(card.blessed):
             if tag.startswith("grave_to_owner:"):
@@ -1118,8 +1160,11 @@ class GameEngine:
             self._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="graveyard")
 
     def excommunicate_card(self, owner_idx: int, uid: str, from_zone_override: str | None = None) -> None:
-        player = self.state.players[owner_idx]
-        from_zone = from_zone_override or self._locate_uid_zone(owner_idx, uid)
+        board_owner_idx = self._find_board_owner_of_uid(uid)
+        if board_owner_idx is None:
+            board_owner_idx = owner_idx
+        player = self.state.players[board_owner_idx]
+        from_zone = from_zone_override or self._locate_uid_zone(board_owner_idx, uid)
         if uid not in player.excommunicated:
             player.excommunicated.append(uid)
         self._remove_from_board(player, uid)
@@ -1266,7 +1311,10 @@ class GameEngine:
         return self.resolve_target_artifact_or_building(player_idx, value)
 
     def remove_from_board_no_sin(self, owner_idx: int, uid: str) -> None:
-        player = self.state.players[owner_idx]
+        board_owner_idx = self._find_board_owner_of_uid(uid)
+        if board_owner_idx is None:
+            board_owner_idx = owner_idx
+        player = self.state.players[board_owner_idx]
         if uid not in player.graveyard:
             player.graveyard.append(uid)
         self._remove_from_board(player, uid)
@@ -1291,7 +1339,7 @@ class GameEngine:
             f"{attacker.definition.name} subisce {burn} danni da Fiamma Primordiale (post-combattimento) (Fede {before}->{after})."
         )
         if (attacker.current_faith or 0) <= 0:
-            self.destroy_saint_by_uid(attacker_idx, attacker_uid, cause="effect")
+            self.destroy_saint_by_uid(self.state.instances[attacker_uid].owner, attacker_uid, cause="effect")
             self.reduce_sin(defender_idx, 2)
 
     def destroy_any_card(self, owner_idx: int, uid: str) -> None:
@@ -1299,7 +1347,7 @@ class GameEngine:
             return
         ctype = _norm(self.state.instances[uid].definition.card_type)
         if ctype in SAINT_TYPES:
-            self.destroy_saint_by_uid(owner_idx, uid, cause="effect")
+            self.destroy_saint_by_uid(self.state.instances[uid].owner, uid, cause="effect")
         else:
             self.send_to_graveyard(owner_idx, uid)
 
@@ -1318,7 +1366,7 @@ class GameEngine:
             target_uid = own_saints[0]
             target_owner = active_idx
         target_name = self.state.instances[target_uid].definition.name
-        self.destroy_saint_by_uid(target_owner, target_uid, cause="effect")
+        self.destroy_saint_by_uid(self.state.instances[target_uid].owner, target_uid, cause="effect")
         if target_owner == active_idx:
             self.gain_sin(opp_idx, 2)
             self.state.log(f"Cataclisma Ciclico distrugge {target_name}: +2 Peccato a {self.state.players[opp_idx].name}.")

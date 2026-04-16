@@ -9,11 +9,33 @@ SCRIPT = {
     "triggered_effects": [],
     "on_play_actions": [
         {
-            "effect": {
-                "action": "inflict_sin",
-                "amount": 5,
-                "target_player": "opponent",
-            }
+            "condition": {"controller_has_saint_with_name": "Thor"},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "opponent",
+                "card_filter": {"card_type_in": ["santo", "token"]},
+            },
+            "effect": {"action": "decrease_faith", "amount": 4},
+        },
+        {
+            "condition": {"not": {"controller_has_saint_with_name": "Thor"}},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "opponent",
+                "card_filter": {"card_type_in": ["santo", "token"]},
+            },
+            "effect": {"action": "decrease_faith", "amount": 2},
+        },
+        {
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"card_type_in": ["santo", "token"]},
+            },
+            "effect": {"action": "decrease_faith", "amount": 2},
         }
     ],
 }
