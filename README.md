@@ -31,13 +31,19 @@ holywar --export-premades-json "my_premades.json"
 ## Avvio GUI
 
 ```powershell
-python -m holywar.gui --deck-xlsx "E:\Script HW\Holy War.xlsx"
+.\.venv\Scripts\python.exe -m holywar.gui --cards-json "holywar/data/cards.json"
 ```
 
 Oppure, dopo `pip install -e .[dev]`:
 
 ```powershell
 holywar-gui --cards-json "holywar/data/cards.json"
+```
+
+Se usi la `venv` locale senza attivarla, il comando corretto resta questo:
+
+```powershell
+.\.venv\Scripts\python.exe -m holywar.gui --cards-json "holywar/data/cards.json"
 ```
 
 Con premade custom:
