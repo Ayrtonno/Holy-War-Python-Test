@@ -1,3 +1,0 @@
-Fixxare:
-Albero Sacro (non summona effettivamente i token. Controllare effettivo cambio turno dopo autoevocazione)
-Distorsione del reliquiario (Effetto non completo, manca la parte di rimettere le scomunicate nel deck)

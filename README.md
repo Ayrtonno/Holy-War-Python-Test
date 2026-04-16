@@ -1,6 +1,6 @@
-# Holy War (Terminal MVP)
+# Holy War
 
-MVP del gioco Holy War in Python da terminale.
+Holy War in Python con GUI e motore a script carta-per-carta.
 
 ## Setup
 
@@ -13,38 +13,10 @@ pip install -e .[dev]
 ## Avvio
 
 ```powershell
-holywar --deck-xlsx "E:\Script HW\Holy War.xlsx"
+.\.venv\Scripts\python.exe -m holywar.gui --cards-json "holywar/data/cards.json"
 ```
 
-Import deck premade custom da JSON:
-
-```powershell
-holywar --cards-json "holywar/data/cards.json" --premades-json "my_premades.json"
-```
-
-Export deck premade (base) in JSON modificabile:
-
-```powershell
-holywar --export-premades-json "my_premades.json"
-```
-
-## Avvio GUI
-
-```powershell
-python -m holywar.gui --deck-xlsx "E:\Script HW\Holy War.xlsx"
-```
-
-Oppure, dopo `pip install -e .[dev]`:
-
-```powershell
-holywar-gui --cards-json "holywar/data/cards.json"
-```
-
-Con premade custom:
-
-```powershell
-holywar-gui --cards-json "holywar/data/cards.json" --premades-json "my_premades.json"
-```
+Se vuoi usare deck premade custom, aggiungi `--premades-json "my_premades.json"` al comando.
 
 Controlli GUI principali:
 - Tasto destro su carta in mano: menu contestuale di gioco (Attacco/Difesa/target)
@@ -57,9 +29,9 @@ Controlli GUI principali:
 
 - Modalita `1v1 locale` e `vs AI`
 - Deck test deterministici per ogni religione (niente deck casuali)
-- Deck premade selezionabili per religione (CLI e GUI)
+- Deck premade selezionabili per religione nella GUI
 - Meccaniche core: pesca, ispirazione, mano max 8, campo attacco/difesa, attacchi, peccato, cimitero, scomunica, token
-- Effetti implementati per un set iniziale di carte
+- Effetti implementati carta per carta tramite script
 - Salvataggio/caricamento partita in JSON
 - Log partita esportabile in file testo
 - Test automatici con `pytest`
@@ -68,8 +40,8 @@ Controlli GUI principali:
 
 - `holywar/effects/library.py`: dispatcher leggero
 - `holywar/effects/registry.py`: registry handler per carta (`register_play`, `register_enter`)
-- `holywar/effects/cards/...`: modulo per carta (Animismo/Norrena gia scaffoldati, un file per carta)
-- `holywar/effects/legacy_handlers.py`: fallback compatibilita con logica pre-refactor
+- `holywar/effects/card_scripts/cards/...`: script per carta, uno per file
+- `holywar/effects/cards/...`: moduli legacy ancora presenti solo per compatibilita interna
 
 ## Note
 
