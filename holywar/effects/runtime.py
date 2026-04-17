@@ -11,6 +11,9 @@ from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.effects import runtime_ported
 from holywar.effects.registry import NOT_HANDLED, get_activate, get_enter, get_play
 from holywar.scripting_api import RuleEventContext
+from holywar.core.state import CardInstance
+from holywar.data.importer import load_cards_json
+from holywar.data.models import CardDefinition
 
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
@@ -658,9 +661,9 @@ class RuntimeCardManager:
             def _handler(ctx: RuleEventContext, _te=te, _owner=owner_idx, _source=source_uid, _event_name=event_name):
                 if _event_name not in allow_source_off_field and not self._is_uid_on_field(ctx.engine, _source):
                     return
-                if _te.trigger.event == "on_my_turn_start" and ctx.player_idx != _owner:
+                if _te.trigger.event in {"on_my_turn_start", "on_my_turn_end"} and ctx.player_idx != _owner:
                     return
-                if _te.trigger.event == "on_opponent_turn_start" and ctx.player_idx != _owner:
+                if _te.trigger.event in {"on_opponent_turn_start", "on_opponent_turn_end"} and ctx.player_idx != _owner:
                     return
                 if _te.trigger.event.startswith("on_this_card_"):
                     event_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))
@@ -843,6 +846,67 @@ class RuntimeCardManager:
         if target.max_targets is not None and target.max_targets >= 0:
             return out[: int(target.max_targets)]
         return out
+    
+    def _summon_generated_token(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        token_name: str,
+    ) -> str | None:
+        token_key = _norm(token_name)
+        cards_path = Path(__file__).resolve().parents[1] / "data" / "cards.json"
+        card_defs = load_cards_json(cards_path)
+
+        token_def = next((c for c in card_defs if _norm(c.name) == token_key), None)
+        if token_def is None:
+            engine.state.log(f"Token non trovato in cards.json: {token_name}.")
+            return None
+
+        player = engine.state.players[owner_idx]
+
+        slot = engine._first_open(player.attack)
+        zone = "attack"
+        if slot is None:
+            slot = engine._first_open(player.defense)
+            zone = "defense"
+        if slot is None:
+            engine.state.log(f"{player.name} non ha spazio per evocare {token_name}.")
+            return None
+
+        max_num = 0
+        for uid in engine.state.instances:
+            if uid.startswith("c"):
+                try:
+                    max_num = max(max_num, int(uid[1:]))
+                except ValueError:
+                    pass
+        new_uid = f"c{max_num + 1:05d}"
+
+        token_copy = CardDefinition.from_dict(token_def.to_dict())
+        engine.state.instances[new_uid] = CardInstance(
+            uid=new_uid,
+            definition=token_copy,
+            owner=owner_idx,
+            current_faith=token_copy.faith,
+        )
+
+        if zone == "attack":
+            player.attack[slot] = new_uid
+        else:
+            player.defense[slot] = new_uid
+
+        inst = engine.state.instances[new_uid]
+        inst.exhausted = False
+
+        engine.state.log(f"{player.name} evoca il token {inst.definition.name} in {zone} {slot + 1}.")
+        engine._emit_event("on_enter_field", owner_idx, card=new_uid, from_zone="generated")
+        engine._emit_event("on_token_summoned", owner_idx, token=new_uid, summoner=owner_idx)
+
+        enter_msg = self.resolve_enter(engine, owner_idx, new_uid)
+        if enter_msg:
+            engine.state.log(str(enter_msg))
+
+        return new_uid
 
     def _apply_effect(
         self,
@@ -1019,15 +1083,24 @@ class RuntimeCardManager:
                 engine.move_deck_card_to_hand(owner_idx, top_uid)
             else:
                 engine.rng.shuffle(player.deck)
-            return
+
         if action == "pay_sin_or_destroy_self":
             cost = max(0, int(effect.amount))
             player = engine.state.players[owner_idx]
-            if player.sin >= cost:
-                player.sin -= cost
+            source_inst = engine.state.instances.get(source_uid)
+            source_name = source_inst.definition.name if source_inst is not None else source_uid
+
+            if player.sin + cost < 100:
+                engine.gain_sin(owner_idx, cost)
+                engine.state.log(f"{source_name}: {player.name} accumula {cost} Peccato.")
             else:
+                engine.state.log(
+                    f"{source_name}: {player.name} non può accumulare {cost} Peccato senza perdere e la carta viene distrutta."
+                )
                 engine.send_to_graveyard(owner_idx, source_uid)
+
             return
+
         if action == "tikal_tick":
             player = engine.state.players[owner_idx]
             if not player.deck:
@@ -1040,6 +1113,7 @@ class RuntimeCardManager:
                 player.deck.pop()
                 player.deck.insert(0, top_uid)
             return
+        
         if action == "mill_cards":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             player = engine.state.players[target]
@@ -1180,6 +1254,30 @@ class RuntimeCardManager:
             if enter_msg:
                 engine.state.log(str(enter_msg))
             return
+        
+        if action == "summon_token":
+            token_name = str(effect.card_name or "").strip()
+            if not token_name:
+                engine.state.log("summon_token: card_name vuoto.")
+                return
+
+            source_inst = engine.state.instances.get(source_uid)
+            source_name = source_inst.definition.name if source_inst is not None else source_uid
+
+            per_turn_key = f"spirito_esercito_dorato_used:{owner_idx}:{source_uid}:{engine.state.turn_number}"
+            if engine.state.flags.get(per_turn_key):
+                engine.state.log(f"{source_name}: effetto già usato in questo turno.")
+                return
+
+            summoned_uid = self._summon_generated_token(engine, owner_idx, token_name)
+            if summoned_uid is None:
+                engine.state.log(f"{source_name}: evocazione del token fallita.")
+                return
+
+            engine.state.flags[per_turn_key] = True
+            engine.state.log(f"{source_name}: token evocato con successo ({token_name}).")
+            return
+
         if action == "move_to_deck_bottom":
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)

@@ -16,6 +16,20 @@ PREMADE_DECKS: dict[str, dict] = {
             ("Sacri Vasi", 1), ("Perdono", 2), ("Cura", 3), ("Moribondo", 3), ("Seguace", 3),
         ],
     },
+    "test_AH_PUCH": {
+        "religion": "Animismo",
+        "name": "TEST PLAYER",
+        "cards": [
+            ("Spirito dell'Esercito Dorato", 20)
+        ],
+    },
+    "test_nemico": {
+        "religion": "Animismo",
+        "name": "TEST NEMICO",
+        "cards": [
+            ("Albero Fortunato", 3)
+        ],
+    },
     "cristianesimo_via_martirio": {
         "religion": "Cristianesimo",
         "name": "La Via del Martirio",

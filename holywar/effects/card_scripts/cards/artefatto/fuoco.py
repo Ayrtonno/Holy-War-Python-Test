@@ -8,7 +8,7 @@ SCRIPT = {
     "on_activate_mode": "auto",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_turn_end", "frequency": "each_turn"},
+            "trigger": {"event": "on_my_turn_end", "frequency": "each_turn"},
             "target": {
                 "type": "all_saints_on_field",
                 "card_filter": {"card_type_in": ["santo"], "crosses_gte": 4},
