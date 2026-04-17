@@ -33,6 +33,7 @@ SUPPORTED_CONDITION_KEYS = {
     "source_on_field",
     "my_saints_gte",
     "my_saints_lte",
+    "my_saints_lt_opponent",
     "opponent_saints_gte",
     "opponent_saints_lte",
     "my_inspiration_gte",
@@ -55,6 +56,7 @@ SUPPORTED_CONDITION_KEYS = {
     "selected_target_startswith",
     "event_card_name_is",
     "target_is_damaged",
+
 }
 
 EFFECT_ACTION_ALIASES = {
@@ -112,6 +114,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "store_target_strength",
     "add_temporary_inspiration_from_flag",
     "summon_target_to_field",
+    "remove_sin_equal_to_target_strength",
 }
 
 
@@ -185,6 +188,7 @@ class CardScript:
     on_activate_mode: str = "auto"
     play_owner: str = "me"
     play_targeting: str = "auto"
+    play_requirements: dict[str, Any] = field(default_factory=dict)
     activate_targeting: str = "auto"
     attack_targeting: str = "auto"
     battle_survival_mode: str = "none"
@@ -348,6 +352,7 @@ class RuntimeCardManager:
                     if spec.get("sigilli_strength_bonus_amount") is not None
                     else None
                 ),
+                play_requirements=dict(spec.get("play_requirements", {}) or {}),
                 triggered_effects=trig_specs,
                 on_play_actions=on_play_actions,
                 on_enter_actions=on_enter_actions,
@@ -485,6 +490,23 @@ class RuntimeCardManager:
 
     def migrated_count(self) -> int:
         return len(self._scripts)
+    
+    def can_play(self, engine: GameEngine, player_idx: int, uid: str) -> tuple[bool, str | None]:
+        self.ensure_all_cards_migrated(engine)
+        inst = engine.state.instances[uid]
+        script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+
+        if not script.play_requirements:
+            return (True, None)
+
+        ok = self._eval_condition_node(
+            RuleEventContext(engine=engine, event="can_play", player_idx=player_idx, payload={"card": uid}),
+            player_idx,
+            script.play_requirements,
+        )
+        if ok:
+            return (True, None)
+        return (False, "Non puoi giocare questa carta nelle condizioni attuali.")
 
     def resolve_play(self, engine: GameEngine, player_idx: int, uid: str, target: str | None) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -1099,6 +1121,32 @@ class RuntimeCardManager:
                 break
 
             engine.state.flags[flag_name] = value
+            return
+        
+        if action == "remove_sin_equal_to_target_strength":
+            target_player = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target_player]
+
+            amount = 0
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+
+                base = int(inst.definition.strength or 0)
+                bonus = 0
+
+                for tag in list(inst.blessed) + list(inst.cursed):
+                    if isinstance(tag, str) and tag.startswith("buff_str:"):
+                        try:
+                            bonus += int(tag.split(":", 1)[1])
+                        except ValueError:
+                            pass
+
+                amount = max(0, base + bonus)
+                break
+
+            player.sin = max(0, int(player.sin) - amount)
             return
 
         if action == "reset_faith_to_base":
@@ -1962,13 +2010,17 @@ class RuntimeCardManager:
             if not selected_target.startswith(prefix):
                 return False
 
+        opp = 1 - owner_idx
         my_saints_gte = condition.get("my_saints_gte")
         if my_saints_gte is not None and len(ctx.engine.all_saints_on_field(owner_idx)) < int(my_saints_gte):
             return False
         my_saints_lte = condition.get("my_saints_lte")
         if my_saints_lte is not None and len(ctx.engine.all_saints_on_field(owner_idx)) > int(my_saints_lte):
             return False
-        opp = 1 - owner_idx
+        my_saints_lt_opponent = condition.get("my_saints_lt_opponent")
+        if my_saints_lt_opponent:
+            if len(ctx.engine.all_saints_on_field(owner_idx)) >= len(ctx.engine.all_saints_on_field(opp)):
+                return False
         opp_saints_gte = condition.get("opponent_saints_gte")
         if opp_saints_gte is not None and len(ctx.engine.all_saints_on_field(opp)) < int(opp_saints_gte):
             return False

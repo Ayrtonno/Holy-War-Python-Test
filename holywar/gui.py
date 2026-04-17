@@ -406,6 +406,7 @@ class HolyWarGUI(tk.Tk):
     def _card_target_hints(self, card_uid: str | None) -> tuple[bool, bool]:
         if self.engine is None or card_uid is None:
             return (False, False)
+
         mode = self._play_targeting_mode(card_uid)
         if mode == "own_saint":
             return (True, False)
@@ -413,6 +414,21 @@ class HolyWarGUI(tk.Tk):
             return (False, True)
         if mode == "board_card":
             return (True, True)
+
+        # Supporto ai target guided sul campo
+        target = self._first_play_target_spec(card_uid)
+        if target is not None:
+            zones = [z.lower().strip() for z in (target.zones or []) if str(z).strip()]
+            if not zones:
+                zones = [str(target.zone or "field").strip().lower()]
+
+            if "field" in zones:
+                owner_key = str(target.owner or "me").strip().lower()
+                if owner_key in {"me", "owner", "controller"}:
+                    return (True, False)
+                if owner_key in {"opponent", "enemy"}:
+                    return (False, True)
+
         return (False, False)
 
     def _resolve_highlight_widget(

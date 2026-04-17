@@ -687,6 +687,9 @@ class GameEngine:
         if card is None:
             return ActionResult(False, "Indice mano non valido.")
         ctype = _norm(card.definition.card_type)
+        can_play, reason = runtime_cards.can_play(self, player_idx, player.hand[hand_index])
+        if not can_play:
+            return ActionResult(False, reason or "Non puoi giocare questa carta.")
         place_owner_idx = player_idx
         zone: str | None = None
         slot = -1
