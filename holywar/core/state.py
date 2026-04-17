@@ -63,6 +63,7 @@ class PlayerState:
     building: str | None
     sin: int = 0
     inspiration: int = TURN_INSPIRATION
+    temporary_inspiration: int = 0
 
     @classmethod
     def empty(cls, name: str) -> "PlayerState":
@@ -93,6 +94,7 @@ class PlayerState:
             "building": self.building,
             "sin": self.sin,
             "inspiration": self.inspiration,
+            "temporary_inspiration": self.temporary_inspiration,
         }
 
     @classmethod
@@ -110,6 +112,7 @@ class PlayerState:
             building=data.get("building"),
             sin=int(data.get("sin", 0)),
             inspiration=int(data.get("inspiration", TURN_INSPIRATION)),
+            temporary_inspiration=int(data.get("temporary_inspiration", 0)),
         )
 
 

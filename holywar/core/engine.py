@@ -762,9 +762,16 @@ class GameEngine:
                 cost *= 2
             if self._has_building(1 - player_idx, "Sfinge"):
                 cost *= 2
-            if player.inspiration < cost:
+            available_inspiration = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
+            if available_inspiration < cost:
                 return ActionResult(False, "Ispirazione insufficiente.")
-            player.inspiration -= cost
+
+            temp = int(getattr(player, "temporary_inspiration", 0))
+            use_temp = min(temp, cost)
+            player.temporary_inspiration = temp - use_temp
+            remaining_cost = cost - use_temp
+            player.inspiration -= remaining_cost
+
             spent = self.state.flags.setdefault("spent_inspiration_turn", {"0": 0, "1": 0})
             spent[str(player_idx)] = int(spent.get(str(player_idx), 0)) + cost
 

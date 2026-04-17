@@ -108,6 +108,10 @@ SUPPORTED_EFFECT_ACTIONS = {
     "swap_attack_defense",
     "increase_faith_per_opponent_saints",
     "increase_faith_if_damaged",
+    "add_temporary_inspiration",
+    "store_target_strength",
+    "add_temporary_inspiration_from_flag",
+    "summon_target_to_field",
 }
 
 
@@ -156,6 +160,7 @@ class EffectSpec:
     usage_limit_per_turn: int | None = None
     target_player: str | None = None
     card_name: str | None = None
+    flag: str | None = None
 
 
 @dataclass(slots=True)
@@ -254,6 +259,7 @@ class RuntimeCardManager:
                 ),
                 target_player=str(raw.get("target_player")) if raw.get("target_player") is not None else None,
                 card_name=str(raw.get("card_name")) if raw.get("card_name") is not None else None,
+                flag=raw.get("flag"),
             )
 
         def _parse_target(raw: dict[str, Any]) -> TargetSpec:
@@ -520,9 +526,11 @@ class RuntimeCardManager:
                 flags["_runtime_effect_source"] = previous_source
             flags.pop("_runtime_source_card", None)
             flags.pop("_runtime_selected_target", None)
+            flags.pop("_runtime_action_index", None)
 
     def _run_play_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
-        for action in actions:
+        for i, action in enumerate(actions):
+            engine.state.flags["_runtime_action_index"] = str(i)
             if action.condition and not self._eval_condition_node(
                 RuleEventContext(engine=engine, event="on_play", player_idx=owner_idx, payload={"card": source_uid}),
                 owner_idx,
@@ -531,6 +539,7 @@ class RuntimeCardManager:
                 continue
             targets = self._resolve_targets(engine, owner_idx, action.target)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
+        engine.state.flags.pop("_runtime_action_index", None)
 
     def resolve_enter(self, engine: GameEngine, player_idx: int, uid: str) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -762,6 +771,24 @@ class RuntimeCardManager:
             if uid in (p.attack + p.defense + p.artifacts) or p.building == uid:
                 return True
         return False
+    
+    def _selected_target_raw_for_current_action(self, engine: GameEngine) -> str:
+        raw = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+        if not raw.startswith("seq:"):
+            return raw
+
+        action_idx = str(engine.state.flags.get("_runtime_action_index", "")).strip()
+        if not action_idx:
+            return ""
+
+        body = raw[len("seq:"):]
+        for chunk in body.split(";;"):
+            if "=" not in chunk:
+                continue
+            idx, value = chunk.split("=", 1)
+            if idx.strip() == action_idx:
+                return value.strip()
+        return ""
 
     def _resolve_targets(self, engine: GameEngine, owner_idx: int, target: TargetSpec) -> list[str]:
         pool: list[str] = []
@@ -791,7 +818,7 @@ class RuntimeCardManager:
             if source_uid:
                 pool.append(source_uid)
         elif ttype == "selected_target":
-            raw_selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
                 selected = raw_selected.split(",", 1)[0].strip()
                 if selected.startswith("buff:"):
@@ -812,7 +839,7 @@ class RuntimeCardManager:
                                 pool.append(uid)
 
         elif ttype == "selected_targets":
-            raw_selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
                 parts = [part.strip() for part in raw_selected.split(",") if part.strip()]
                 p = engine.state.players[owner_idx]
@@ -967,6 +994,113 @@ class RuntimeCardManager:
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
             return
+        
+        if action == "add_temporary_inspiration":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            player.temporary_inspiration = max(
+                0,
+                int(getattr(player, "temporary_inspiration", 0)) + int(effect.amount)
+            )
+            return
+        
+        if action == "store_target_strength":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            value = 0
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+
+                base = int(inst.definition.strength or 0)
+                bonus = 0
+
+                for tag in list(inst.blessed) + list(inst.cursed):
+                    if isinstance(tag, str) and tag.startswith("buff_str:"):
+                        try:
+                            bonus += int(tag.split(":", 1)[1])
+                        except ValueError:
+                            pass
+
+                value = max(0, base + bonus)
+                break
+
+            engine.state.flags[flag_name] = value
+            return
+        
+        if action == "add_temporary_inspiration_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = int(raw_value)
+            except (TypeError, ValueError):
+                amount = 0
+
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            player.temporary_inspiration = max(
+                0,
+                int(getattr(player, "temporary_inspiration", 0)) + amount
+            )
+
+            engine.state.flags.pop(flag_name, None)
+            return
+        
+        if action == "gain_inspiration_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = int(raw_value)
+            except (TypeError, ValueError):
+                amount = 0
+
+            if amount <= 0:
+                engine.state.flags.pop(flag_name, None)
+                return
+
+            # Adatta questo campo al nome reale che usi per l'ispirazione extra nel turno
+            current = int(engine.state.flags.get("_extra_inspiration_this_turn", 0))
+            engine.state.flags["_extra_inspiration_this_turn"] = current + amount
+
+            engine.state.flags.pop(flag_name, None)
+            return
+        
+        if action == "store_target_strength":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            value = 0
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+
+                base = inst.definition.strength or 0
+                bonus = 0
+
+                for tag in list(inst.blessed) + list(inst.cursed):
+                    if isinstance(tag, str) and tag.startswith("buff_str:"):
+                        try:
+                            bonus += int(tag.split(":", 1)[1])
+                        except ValueError:
+                            pass
+
+                value = base + bonus
+                break
+
+            engine.state.flags[flag_name] = value
+            return
+
         if action == "reset_faith_to_base":
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)
@@ -988,6 +1122,72 @@ class RuntimeCardManager:
                     amount=0,
                 )
             return
+        
+        if action == "summon_target_to_field":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+
+                owner = inst.owner
+                player = engine.state.players[owner]
+                ctype = _norm(inst.definition.card_type)
+
+                if t_uid in player.hand:
+                    player.hand.remove(t_uid)
+                elif t_uid in player.deck:
+                    player.deck.remove(t_uid)
+                elif t_uid in player.graveyard:
+                    player.graveyard.remove(t_uid)
+                elif t_uid in player.excommunicated:
+                    player.excommunicated.remove(t_uid)
+                elif t_uid in player.attack:
+                    player.attack[player.attack.index(t_uid)] = None
+                elif t_uid in player.defense:
+                    player.defense[player.defense.index(t_uid)] = None
+                elif t_uid in player.artifacts:
+                    player.artifacts[player.artifacts.index(t_uid)] = None
+                elif player.building == t_uid:
+                    player.building = None
+
+                placed = False
+
+                if ctype == _norm("artefatto"):
+                    blocked = min(state.ARTIFACT_SLOTS - 1, engine._count_artifact(1 - owner, "Gggnag'ljep"))
+                    usable_slots = list(range(state.ARTIFACT_SLOTS - blocked))
+                    if usable_slots:
+                        slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
+                        if slot is None:
+                            slot = usable_slots[-1]
+                            replaced = player.artifacts[slot]
+                            if replaced:
+                                engine.send_to_graveyard(owner, replaced)
+                        player.artifacts[slot] = t_uid
+                        placed = True
+
+                elif ctype == _norm("edificio"):
+                    if player.building is None:
+                        player.building = t_uid
+                        placed = True
+
+                else:
+                    slot = engine._first_open(player.attack)
+                    zone = "attack"
+                    if slot is None:
+                        slot = engine._first_open(player.defense)
+                        zone = "defense"
+                    if slot is not None and engine.place_card_from_uid(owner, t_uid, zone, slot):
+                        placed = True
+
+                if not placed:
+                    if t_uid not in player.deck:
+                        player.deck.insert(0, t_uid)
+                    continue
+
+                inst.exhausted = False
+                engine._emit_event("on_enter_field", owner, card=t_uid, from_zone="deck")
+            return
+
         if action == "return_to_hand":
             for uid in targets:
                 inst = engine.state.instances.get(uid)
@@ -1511,7 +1711,20 @@ class RuntimeCardManager:
         if action == "pay_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
-            player.inspiration = max(0, int(player.inspiration) - max(0, int(effect.amount)))
+
+            cost = max(0, int(effect.amount))
+            temp = max(0, int(getattr(player, "temporary_inspiration", 0)))
+            normal = max(0, int(player.inspiration))
+
+            use_temp = min(temp, cost)
+            temp -= use_temp
+            cost -= use_temp
+
+            if cost > 0:
+                normal = max(0, normal - cost)
+
+            player.temporary_inspiration = temp
+            player.inspiration = normal
             return
 
     @staticmethod
@@ -1763,14 +1976,22 @@ class RuntimeCardManager:
         if opp_saints_lte is not None and len(ctx.engine.all_saints_on_field(opp)) > int(opp_saints_lte):
             return False
 
+        my_player = ctx.engine.state.players[owner_idx]
+        opp_player = ctx.engine.state.players[opp]
+
+        my_total_inspiration = int(my_player.inspiration) + int(getattr(my_player, "temporary_inspiration", 0))
+        opp_total_inspiration = int(opp_player.inspiration) + int(getattr(opp_player, "temporary_inspiration", 0))
+
         my_insp_gte = condition.get("my_inspiration_gte")
-        if my_insp_gte is not None and int(ctx.engine.state.players[owner_idx].inspiration) < int(my_insp_gte):
+        if my_insp_gte is not None and my_total_inspiration < int(my_insp_gte):
             return False
+
         my_insp_lte = condition.get("my_inspiration_lte")
-        if my_insp_lte is not None and int(ctx.engine.state.players[owner_idx].inspiration) > int(my_insp_lte):
+        if my_insp_lte is not None and my_total_inspiration > int(my_insp_lte):
             return False
+
         opp_insp_gte = condition.get("opponent_inspiration_gte")
-        if opp_insp_gte is not None and int(ctx.engine.state.players[opp].inspiration) < int(opp_insp_gte):
+        if opp_insp_gte is not None and opp_total_inspiration < int(opp_insp_gte):
             return False
         my_sin_gte = condition.get("my_sin_gte")
         if my_sin_gte is not None and int(ctx.engine.state.players[owner_idx].sin) < int(my_sin_gte):

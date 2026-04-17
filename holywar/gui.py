@@ -284,26 +284,30 @@ class HolyWarGUI(tk.Tk):
 
         return {}
     
-    def _first_play_target_spec(self, uid: str):
+    def _manual_play_target_actions(self, uid: str):
         raw = self._raw_card_script(uid)
-        if not raw:
-            return None
+        script = self._card_script(uid)
+        if not raw or script is None:
+            return []
 
         raw_actions = raw.get("on_play_actions", [])
-        if not raw_actions:
-            return None
-
+        out = []
         for i, raw_action in enumerate(raw_actions):
+            if i >= len(script.on_play_actions):
+                break
             if "target" not in raw_action:
                 continue
-            script = self._card_script(uid)
-            if script is None:
-                return None
-            if i >= len(script.on_play_actions):
-                return None
-            return script.on_play_actions[i].target
+            t = script.on_play_actions[i].target
+            ttype = str(t.type or "").strip().lower()
+            if ttype in {"selected_target", "selected_targets"}:
+                out.append((i, t))
+        return out
 
-        return None
+    def _first_play_target_spec(self, uid: str):
+        actions = self._manual_play_target_actions(uid)
+        if not actions:
+            return None
+        return actions[0][1]
 
     def _play_targeting_mode(self, uid: str) -> str:
         script = self._card_script(uid)
@@ -881,7 +885,7 @@ class HolyWarGUI(tk.Tk):
             self.status_var.set(f"Partita terminata. Vince {winner}")
         else:
             status = (
-                f"{own.name}: Peccato {own.sin}/100 | Ispirazione {own.inspiration} | Mano {len(own.hand)} | Deck {len(own.deck)}"
+                f"{own.name}: Peccato {own.sin}/100 | Ispirazione {int(own.inspiration) + int(getattr(own, 'temporary_inspiration', 0))} | Mano {len(own.hand)} | Deck {len(own.deck)}"
             )
             if self.chain_active:
                 prio = st.players[self.chain_priority_idx].name
@@ -893,7 +897,8 @@ class HolyWarGUI(tk.Tk):
             return
         self.resource_name_labels[panel_idx].configure(text=player.name)
         self.resource_sin_labels[panel_idx].configure(text=f"{player.sin}/100")
-        self.resource_insp_labels[panel_idx].configure(text=str(player.inspiration))
+        total_inspiration = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
+        self.resource_insp_labels[panel_idx].configure(text=str(total_inspiration))
         self.resource_hand_labels[panel_idx].configure(text=f"Mano {len(player.hand)}")
         self.resource_deck_labels[panel_idx].configure(text=f"Deck {len(player.deck)}")
         self.resource_sin_bars[panel_idx]["value"] = max(0, min(100, player.sin))
@@ -1347,6 +1352,95 @@ class HolyWarGUI(tk.Tk):
                         seen.add(c_uid)
 
         return out
+    
+    def _guided_target_candidates_for_spec(self, uid: str, target) -> list[str]:
+        if self.engine is None:
+            return []
+
+        engine = self.engine
+        own_idx = self.current_human_idx() or 0
+        own = engine.state.players[own_idx]
+        opp = engine.state.players[1 - own_idx]
+        out: list[str] = []
+
+        owner_key = str(target.owner or "me").strip().lower()
+        player = own if owner_key in {"me", "owner", "controller"} else opp
+
+        zones = [z.lower().strip() for z in (target.zones or []) if str(z).strip()]
+        if not zones:
+            zones = [str(target.zone or "field").strip().lower()]
+
+        type_filter = {x.lower().strip() for x in target.card_filter.card_type_in}
+        name_contains = target.card_filter.name_contains.lower().strip() if target.card_filter.name_contains else None
+        name_not_contains = target.card_filter.name_not_contains.lower().strip() if target.card_filter.name_not_contains else None
+        crosses_gte = target.card_filter.crosses_gte
+        crosses_lte = target.card_filter.crosses_lte
+        source_uid = uid
+
+        def matches(inst_uid: str) -> bool:
+            inst = engine.state.instances[inst_uid]
+            ctype = inst.definition.card_type.lower().strip()
+            name = inst.definition.name.lower().strip()
+
+            if target.card_filter.exclude_event_card and inst_uid == source_uid:
+                return False
+            if type_filter and ctype not in type_filter:
+                return False
+            if name_contains and name_contains not in name:
+                return False
+            if name_not_contains and name_not_contains in name:
+                return False
+
+            crosses = getattr(inst.definition, "crosses", None)
+            if crosses_gte is not None and (crosses is None or crosses < crosses_gte):
+                return False
+            if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
+                return False
+            return True
+
+        seen: set[str] = set()
+
+        for zone in zones:
+            if zone == "field":
+                for i in range(3):
+                    a_uid = player.attack[i]
+                    if a_uid is not None and matches(a_uid):
+                        token = f"a{i+1}"
+                        if token not in seen:
+                            out.append(token)
+                            seen.add(token)
+                    d_uid = player.defense[i]
+                    if d_uid is not None and matches(d_uid):
+                        token = f"d{i+1}"
+                        if token not in seen:
+                            out.append(token)
+                            seen.add(token)
+
+            elif zone == "graveyard":
+                for c_uid in player.graveyard:
+                    if matches(c_uid) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+            elif zone == "excommunicated":
+                for c_uid in player.excommunicated:
+                    if matches(c_uid) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+            elif zone == "hand":
+                for c_uid in player.hand:
+                    if matches(c_uid) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+            elif zone in {"deck", "relicario"}:
+                for c_uid in player.deck:
+                    if matches(c_uid) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+        return out
 
     def _board_activation_candidates(self, player_idx: int) -> list[str]:
         if self.engine is None:
@@ -1639,6 +1733,71 @@ class HolyWarGUI(tk.Tk):
         if canceled or not selected:
             return (True, None)
         return (False, selected.strip().lower())
+    
+    def _collect_on_play_action_targets(self, uid: str) -> tuple[bool, str | None]:
+        if self.engine is None:
+            return (True, None)
+
+        own_idx = self.current_human_idx() or 0
+        manual_actions = self._manual_play_target_actions(uid)
+        if not manual_actions:
+            return (False, None)
+
+        picked_parts: list[str] = []
+
+        for action_idx, target_spec in manual_actions:
+            candidates = self._guided_target_candidates_for_spec(uid, target_spec)
+
+            min_targets = target_spec.min_targets if target_spec.min_targets is not None else 1
+            if target_spec.max_targets_from:
+                max_targets = self._count_cards_from_rule(uid, target_spec.max_targets_from)
+            else:
+                max_targets = target_spec.max_targets if target_spec.max_targets is not None else 1
+
+            allow_none = (min_targets == 0)
+            multi = str(target_spec.type or "").strip().lower() == "selected_targets" or max_targets != 1
+
+            if not candidates:
+                if allow_none:
+                    picked_parts.append(f"{action_idx}=")
+                    continue
+                messagebox.showwarning("Selezione Bersaglio", "Nessun bersaglio valido disponibile per questa parte dell'effetto.")
+                return (True, None)
+
+            choices = [(self._format_guided_candidate(c, own_idx), c) for c in candidates]
+            all_board = all(self._is_board_token(c) for c in candidates)
+
+            if all_board:
+                canceled, selected = self._open_board_target_picker(
+                    title="Selezione Bersaglio",
+                    prompt="Clicca sul campo i bersagli validi; riclicca per deselezionare.",
+                    candidates=candidates,
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=allow_none,
+                    card_uid=uid,
+                )
+            else:
+                self._set_slot_highlights(candidates, card_uid=uid)
+                canceled, selected = self._open_target_picker(
+                    title="Selezione Bersaglio",
+                    prompt="Seleziona i bersagli validi dalla lista.",
+                    choices=choices,
+                    allow_multi=multi,
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=allow_none,
+                    allow_manual=False,
+                )
+                self._clear_slot_highlights()
+
+            if canceled:
+                return (True, None)
+
+            picked_parts.append(f"{action_idx}={selected or ''}")
+
+        payload = "seq:" + ";;".join(picked_parts)
+        return (False, payload)
 
     def ask_guided_quick_target(self, uid: str) -> None:
         if self._is_monsone_card(uid):
@@ -1647,6 +1806,15 @@ class HolyWarGUI(tk.Tk):
                 return
             self.play_uid(uid, target)
             return
+
+        manual_actions = self._manual_play_target_actions(uid)
+        if len(manual_actions) > 1:
+            canceled, payload = self._collect_on_play_action_targets(uid)
+            if canceled:
+                return
+            self.play_uid(uid, payload)
+            return
+
         if not self._card_requires_target(uid):
             self.play_uid(uid, None)
             return
