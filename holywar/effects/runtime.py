@@ -140,9 +140,11 @@ class TargetSpec:
     type: str
     card_filter: CardFilterSpec = field(default_factory=CardFilterSpec)
     zone: str = "field"
+    zones: list[str] = field(default_factory=list)
     owner: str = "me"
     min_targets: int | None = None
     max_targets: int | None = None
+    max_targets_from: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -268,9 +270,11 @@ class RuntimeCardManager:
                     drawn_this_turn_only=bool(filt.get("drawn_this_turn_only", False)),
                 ),
                 zone=str(raw.get("zone", "field")),
+                zones=list(raw.get("zones", []) or []),
                 owner=str(raw.get("owner", "me")),
                 min_targets=(int(raw["min_targets"]) if raw.get("min_targets") is not None else None),
                 max_targets=(int(raw["max_targets"]) if raw.get("max_targets") is not None else None),
+                max_targets_from=(dict(raw["max_targets_from"]) if raw.get("max_targets_from") is not None else None),
             )
 
         trig_specs: list[TriggeredEffectSpec] = []
@@ -963,6 +967,27 @@ class RuntimeCardManager:
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
             return
+        if action == "reset_faith_to_base":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                if inst.current_faith is None:
+                    continue
+
+                base_faith = inst.definition.faith
+                if base_faith is None:
+                    continue
+
+                inst.current_faith = base_faith
+
+                engine._emit_event(
+                    "on_faith_modified",
+                    inst.owner,
+                    card=t_uid,
+                    amount=0,
+                )
+            return
         if action == "return_to_hand":
             for uid in targets:
                 inst = engine.state.instances.get(uid)
@@ -1293,20 +1318,31 @@ class RuntimeCardManager:
                 engine.state.log(str(enter_msg))
             return
         if action == "summon_named_card":
-            card_name = _norm(effect.card_name or "")
-            if not card_name:
+            selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            selected_uid = selected if selected in engine.state.instances else None
+            card_name = _norm(effect.card_name or selected)
+
+            if not card_name and selected_uid is None:
                 return
+
             player = engine.state.players[owner_idx]
             chosen_uid = None
             chosen_from_zone = None
+
             for pool_name in ("hand", "deck", "graveyard", "white_deck", "excommunicated"):
                 pool = getattr(player, pool_name)
                 for uid in list(pool):
-                    if _norm(engine.state.instances[uid].definition.name) == card_name:
-                        chosen_uid = uid
-                        chosen_from_zone = pool_name
-                        pool.remove(uid)
-                        break
+                    if selected_uid is not None:
+                        if uid != selected_uid:
+                            continue
+                    else:
+                        if _norm(engine.state.instances[uid].definition.name) != card_name:
+                            continue
+
+                    chosen_uid = uid
+                    chosen_from_zone = pool_name
+                    pool.remove(uid)
+                    break
                 if chosen_uid:
                     break
             if chosen_uid is None:

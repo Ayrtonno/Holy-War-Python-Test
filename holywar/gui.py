@@ -1096,7 +1096,22 @@ class HolyWarGUI(tk.Tk):
         self.card_detail_text.configure(state="disabled")
 
     def _card_allows_multi_target(self, uid: str) -> bool:
-        return self._play_targeting_mode(uid) == "multi"
+        mode = self._play_targeting_mode(uid)
+
+        # Compatibilità con il vecchio sistema
+        if mode == "multi":
+            return True
+
+        # Nuovo sistema guidato: guarda il target vero della carta
+        target = self._first_play_target_spec(uid)
+        if target is None:
+            return False
+
+        if target.type == "selected_targets":
+            return True
+
+        max_targets = target.max_targets if target.max_targets is not None else 1
+        return max_targets != 1
 
     def _card_requires_target(self, uid: str) -> bool:
         mode = self._play_targeting_mode(uid)
@@ -1118,6 +1133,67 @@ class HolyWarGUI(tk.Tk):
             return target is not None
 
         return False
+    
+    def _count_cards_from_rule(self, uid: str, rule: dict) -> int:
+        if self.engine is None:
+            return 0
+
+        own_idx = self.current_human_idx() or 0
+        st = self.engine.state
+        own = st.players[own_idx]
+        opp = st.players[1 - own_idx]
+
+        spec = rule.get("count_cards_controlled_by_owner")
+        if not spec:
+            return 0
+
+        owner_key = str(spec.get("owner", "me")).strip().lower()
+        zone = str(spec.get("zone", "field")).strip().lower()
+        filt = spec.get("card_filter", {}) or {}
+
+        player = own if owner_key in {"me", "owner", "controller"} else opp
+
+        card_type_in = {x.lower().strip() for x in filt.get("card_type_in", [])}
+        name_contains = filt.get("name_contains")
+        name_not_contains = filt.get("name_not_contains")
+        crosses_gte = filt.get("crosses_gte")
+        crosses_lte = filt.get("crosses_lte")
+
+        if zone == "field":
+            pool = [x for x in list(player.attack) + list(player.defense) if x is not None]
+        elif zone == "graveyard":
+            pool = list(player.graveyard)
+        elif zone == "hand":
+            pool = list(player.hand)
+        elif zone in {"deck", "relicario"}:
+            pool = list(player.deck)
+        else:
+            pool = []
+
+        total = 0
+        for c_uid in pool:
+            inst = st.instances.get(c_uid)
+            if inst is None:
+                continue
+
+            name = inst.definition.name.lower().strip()
+            ctype = inst.definition.card_type.lower().strip()
+            crosses = getattr(inst.definition, "crosses", None)
+
+            if card_type_in and ctype not in card_type_in:
+                continue
+            if name_contains and name_contains.lower().strip() not in name:
+                continue
+            if name_not_contains and name_not_contains.lower().strip() in name:
+                continue
+            if crosses_gte is not None and (crosses is None or crosses < int(crosses_gte)):
+                continue
+            if crosses_lte is not None and (crosses is None or crosses > int(crosses_lte)):
+                continue
+
+            total += 1
+
+        return total
 
     def _target_selection_limits(self, uid: str) -> tuple[int, int | None]:
         mode = self._play_targeting_mode(uid)
@@ -1126,7 +1202,12 @@ class HolyWarGUI(tk.Tk):
         target = self._first_play_target_spec(uid)
         if target is not None:
             min_targets = target.min_targets if target.min_targets is not None else 1
-            max_targets = target.max_targets if target.max_targets is not None else 1
+
+            if target.max_targets_from:
+                max_targets = self._count_cards_from_rule(uid, target.max_targets_from)
+            else:
+                max_targets = target.max_targets if target.max_targets is not None else 1
+
             return (min_targets, max_targets)
 
         # Compatibilità con i mode vecchi
@@ -1187,50 +1268,85 @@ class HolyWarGUI(tk.Tk):
         owner_key = str(target.owner or "me").strip().lower()
         player = own if owner_key in {"me", "owner", "controller"} else opp
 
-        zone = str(target.zone or "field").strip().lower()
+        zones = [z.lower().strip() for z in (target.zones or []) if str(z).strip()]
+        if not zones:
+            zones = [str(target.zone or "field").strip().lower()]
+
         type_filter = {x.lower().strip() for x in target.card_filter.card_type_in}
+        name_contains = target.card_filter.name_contains.lower().strip() if target.card_filter.name_contains else None
+        name_not_contains = target.card_filter.name_not_contains.lower().strip() if target.card_filter.name_not_contains else None
+        crosses_gte = target.card_filter.crosses_gte
+        crosses_lte = target.card_filter.crosses_lte
 
-        if zone == "field":
-            for i in range(3):
-                a_uid = player.attack[i]
-                if a_uid is not None:
-                    inst = engine.state.instances[a_uid]
-                    ctype = inst.definition.card_type.lower().strip()
-                    if not type_filter or ctype in type_filter:
-                        out.append(f"a{i+1}" if player is own else f"a{i+1}")
-                d_uid = player.defense[i]
-                if d_uid is not None:
-                    inst = engine.state.instances[d_uid]
-                    ctype = inst.definition.card_type.lower().strip()
-                    if not type_filter or ctype in type_filter:
-                        out.append(f"d{i+1}" if player is own else f"d{i+1}")
-            return out
+        def matches(inst) -> bool:
+            ctype = inst.definition.card_type.lower().strip()
+            name = inst.definition.name.lower().strip()
+            crosses = getattr(inst.definition, "crosses", None)
 
-        if zone == "graveyard":
-            for c_uid in player.graveyard:
-                inst = engine.state.instances[c_uid]
-                ctype = inst.definition.card_type.lower().strip()
-                if not type_filter or ctype in type_filter:
-                    out.append(c_uid)
-            return out
+            if type_filter and ctype not in type_filter:
+                return False
+            if name_contains and name_contains not in name:
+                return False
+            if name_not_contains and name_not_contains in name:
+                return False
+            if crosses_gte is not None and (crosses is None or crosses < crosses_gte):
+                return False
+            if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
+                return False
+            return True
 
-        if zone == "hand":
-            for c_uid in player.hand:
-                inst = engine.state.instances[c_uid]
-                ctype = inst.definition.card_type.lower().strip()
-                if not type_filter or ctype in type_filter:
-                    out.append(c_uid)
-            return out
+        seen: set[str] = set()
 
-        if zone in {"deck", "relicario"}:
-            for c_uid in player.deck:
-                inst = engine.state.instances[c_uid]
-                ctype = inst.definition.card_type.lower().strip()
-                if not type_filter or ctype in type_filter:
-                    out.append(c_uid)
-            return out
+        for zone in zones:
+            if zone == "field":
+                for i in range(3):
+                    a_uid = player.attack[i]
+                    if a_uid is not None:
+                        inst = engine.state.instances[a_uid]
+                        if matches(inst):
+                            token = f"a{i+1}"
+                            if token not in seen:
+                                out.append(token)
+                                seen.add(token)
 
-        return []
+                    d_uid = player.defense[i]
+                    if d_uid is not None:
+                        inst = engine.state.instances[d_uid]
+                        if matches(inst):
+                            token = f"d{i+1}"
+                            if token not in seen:
+                                out.append(token)
+                                seen.add(token)
+
+            elif zone == "graveyard":
+                for c_uid in player.graveyard:
+                    inst = engine.state.instances[c_uid]
+                    if matches(inst) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+            elif zone == "excommunicated":
+                for c_uid in player.excommunicated:
+                    inst = engine.state.instances[c_uid]
+                    if matches(inst) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+            elif zone == "hand":
+                for c_uid in player.hand:
+                    inst = engine.state.instances[c_uid]
+                    if matches(inst) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+            elif zone in {"deck", "relicario"}:
+                for c_uid in player.deck:
+                    inst = engine.state.instances[c_uid]
+                    if matches(inst) and c_uid not in seen:
+                        out.append(c_uid)
+                        seen.add(c_uid)
+
+        return out
 
     def _board_activation_candidates(self, player_idx: int) -> list[str]:
         if self.engine is None:
