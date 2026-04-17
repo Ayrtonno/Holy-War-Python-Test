@@ -10,7 +10,8 @@ from holywar.ai.simple_ai import choose_action
 from holywar.cli import ensure_cards
 from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
-from holywar.effects.runtime import runtime_cards
+from holywar.effects.runtime import runtime_cards, _norm
+from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.data.deck_builder import (
     available_premade_decks,
     available_religions,
@@ -266,6 +267,43 @@ class HolyWarGUI(tk.Tk):
             return None
         card_name = self.engine.state.instances[uid].definition.name
         return runtime_cards.get_script(card_name)
+    
+    def _raw_card_script(self, uid: str) -> dict:
+        if self.engine is None:
+            return {}
+
+        inst = self.engine.state.instances.get(uid)
+        if inst is None:
+            return {}
+
+        wanted = _norm(inst.definition.name)
+
+        for card_name, spec in iter_card_scripts():
+            if _norm(card_name) == wanted:
+                return spec or {}
+
+        return {}
+    
+    def _first_play_target_spec(self, uid: str):
+        raw = self._raw_card_script(uid)
+        if not raw:
+            return None
+
+        raw_actions = raw.get("on_play_actions", [])
+        if not raw_actions:
+            return None
+
+        for i, raw_action in enumerate(raw_actions):
+            if "target" not in raw_action:
+                continue
+            script = self._card_script(uid)
+            if script is None:
+                return None
+            if i >= len(script.on_play_actions):
+                return None
+            return script.on_play_actions[i].target
+
+        return None
 
     def _play_targeting_mode(self, uid: str) -> str:
         script = self._card_script(uid)
@@ -1062,17 +1100,45 @@ class HolyWarGUI(tk.Tk):
 
     def _card_requires_target(self, uid: str) -> bool:
         mode = self._play_targeting_mode(uid)
-        return mode in {"own_saint", "opponent_saint", "relicario_artifact", "manual", "multi", "monsone"}
+
+        if mode in {
+            "own_saint",
+            "opponent_saint",
+            "relicario_artifact",
+            "own_graveyard_saint",
+            "manual",
+            "multi",
+            "monsone",
+            "guided",
+        }:
+            return True
+
+        if mode in {"none", "", None, "auto"}:
+            target = self._first_play_target_spec(uid)
+            return target is not None
+
+        return False
 
     def _target_selection_limits(self, uid: str) -> tuple[int, int | None]:
         mode = self._play_targeting_mode(uid)
+
+        # Nuovo sistema: solo se esiste davvero un target nello script
+        target = self._first_play_target_spec(uid)
+        if target is not None:
+            min_targets = target.min_targets if target.min_targets is not None else 1
+            max_targets = target.max_targets if target.max_targets is not None else 1
+            return (min_targets, max_targets)
+
+        # Compatibilità con i mode vecchi
         if mode == "multi":
             return (1, None)
-        if mode in {"own_saint", "opponent_saint", "relicario_artifact", "manual"}:
+        if mode in {"own_saint", "opponent_saint", "relicario_artifact", "own_graveyard_saint", "manual"}:
             return (1, 1)
         if mode == "monsone":
             return (0, 3)
-        return (0, 1)
+
+        # Carte senza target, tipo Concentrazione
+        return (0, 0)
 
     def _is_monsone_card(self, uid: str) -> bool:
         return self._play_targeting_mode(uid) == "monsone"
@@ -1080,11 +1146,21 @@ class HolyWarGUI(tk.Tk):
     def _guided_target_candidates(self, uid: str) -> list[str]:
         if self.engine is None:
             return []
+
         engine = self.engine
         own_idx = self.current_human_idx() or 0
         own = engine.state.players[own_idx]
+        opp = engine.state.players[1 - own_idx]
         mode = self._play_targeting_mode(uid)
         out: list[str] = []
+
+        # Compatibilità con i mode vecchi
+        if mode == "own_graveyard_saint":
+            for c_uid in own.graveyard:
+                inst = self.engine.state.instances[c_uid]
+                if inst.definition.card_type.lower().strip() == "santo":
+                    out.append(c_uid)
+            return out
 
         if mode == "own_saint":
             for i in range(3):
@@ -1103,9 +1179,57 @@ class HolyWarGUI(tk.Tk):
         if mode == "manual":
             return []
 
-        # No structured manual target metadata: no guided candidates.
-        if mode not in {"multi", "monsone"}:
+        # Nuovo targeting guidato data-driven
+        target = self._first_play_target_spec(uid)
+        if target is None:
             return []
+
+        owner_key = str(target.owner or "me").strip().lower()
+        player = own if owner_key in {"me", "owner", "controller"} else opp
+
+        zone = str(target.zone or "field").strip().lower()
+        type_filter = {x.lower().strip() for x in target.card_filter.card_type_in}
+
+        if zone == "field":
+            for i in range(3):
+                a_uid = player.attack[i]
+                if a_uid is not None:
+                    inst = engine.state.instances[a_uid]
+                    ctype = inst.definition.card_type.lower().strip()
+                    if not type_filter or ctype in type_filter:
+                        out.append(f"a{i+1}" if player is own else f"a{i+1}")
+                d_uid = player.defense[i]
+                if d_uid is not None:
+                    inst = engine.state.instances[d_uid]
+                    ctype = inst.definition.card_type.lower().strip()
+                    if not type_filter or ctype in type_filter:
+                        out.append(f"d{i+1}" if player is own else f"d{i+1}")
+            return out
+
+        if zone == "graveyard":
+            for c_uid in player.graveyard:
+                inst = engine.state.instances[c_uid]
+                ctype = inst.definition.card_type.lower().strip()
+                if not type_filter or ctype in type_filter:
+                    out.append(c_uid)
+            return out
+
+        if zone == "hand":
+            for c_uid in player.hand:
+                inst = engine.state.instances[c_uid]
+                ctype = inst.definition.card_type.lower().strip()
+                if not type_filter or ctype in type_filter:
+                    out.append(c_uid)
+            return out
+
+        if zone in {"deck", "relicario"}:
+            for c_uid in player.deck:
+                inst = engine.state.instances[c_uid]
+                ctype = inst.definition.card_type.lower().strip()
+                if not type_filter or ctype in type_filter:
+                    out.append(c_uid)
+            return out
+
         return []
 
     def _board_activation_candidates(self, player_idx: int) -> list[str]:
@@ -1152,6 +1276,11 @@ class HolyWarGUI(tk.Tk):
             if pref == "excom":
                 return f"Scomunicate | {name}"
             return f"{pref} | {name}"
+
+        if token in st.instances:
+            inst = st.instances[token]
+            return f"{inst.definition.name} ({inst.definition.card_type})"
+
         return token
 
     def _open_target_picker(

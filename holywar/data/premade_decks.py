@@ -16,11 +16,11 @@ PREMADE_DECKS: dict[str, dict] = {
             ("Sacri Vasi", 1), ("Perdono", 2), ("Cura", 3), ("Moribondo", 3), ("Seguace", 3),
         ],
     },
-    "test_AH_PUCH": {
+    "test_giocatore": {
         "religion": "Animismo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Spirito dell'Esercito Dorato", 20)
+            ("Cura Rapida", 20), ("Albero Fortunato", 20), ("Concentrazione", 20)
         ],
     },
     "test_nemico": {

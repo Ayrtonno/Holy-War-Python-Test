@@ -6,16 +6,19 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
+    "play_targeting": "guided",
     "triggered_effects": [],
     "on_play_actions": [
         {
             "target": {
-                "type": "select_card",
+                "type": "selected_targets",
                 "zone": "field",
-                "owner": "any",
+                "owner": "me",
                 "card_filter": {
                     "card_type_in": ["santo"],
                 },
+                "min_targets": 0,
+                "max_targets": 1,
             },
             "effect": {
                 "action": "increase_faith",

@@ -59,6 +59,21 @@ class GameEngine:
 
     def rules_api(self, controller_idx: int) -> RuleAPI:
         return RuleAPI(self, controller_idx)
+    
+    def _reset_card_runtime_state(self, uid: str) -> None:
+        if uid not in self.state.instances:
+            return
+        inst = self.state.instances[uid]
+
+        # Ripristina Fede iniziale stampata sulla carta
+        inst.current_faith = inst.definition.faith if inst.definition.faith is not None else None
+
+        # Rimuove ogni buff/debuff/marker runtime
+        inst.blessed = []
+        inst.cursed = []
+
+        # La carta fuori dal campo non deve conservare stati di utilizzo
+        inst.exhausted = False
 
     def _emit_event(self, event: str, actor_idx: int, **payload) -> None:
         self.rules_api(actor_idx).emit(event, actor_idx=actor_idx, **payload)
@@ -1144,6 +1159,7 @@ class GameEngine:
         player = self.state.players[board_owner_idx]
         from_zone = from_zone_override or self._locate_uid_zone(board_owner_idx, uid)
         grave_target_idx = owner_idx
+
         for tag in list(card.blessed):
             if tag.startswith("grave_to_owner:"):
                 try:
@@ -1151,12 +1167,21 @@ class GameEngine:
                 except ValueError:
                     grave_target_idx = owner_idx
                 card.blessed.remove(tag)
+
+        leaving_field = from_zone in {"attack", "defense", "artifact", "building"}
+
         if _norm(card.definition.card_type) == "token" and token_to_white:
             if uid not in self.state.players[grave_target_idx].white_deck:
                 self.state.players[grave_target_idx].white_deck.insert(0, uid)
+
         if uid not in self.state.players[grave_target_idx].graveyard:
             self.state.players[grave_target_idx].graveyard.append(uid)
+
         self._remove_from_board(player, uid)
+
+        if leaving_field:
+            self._reset_card_runtime_state(uid)
+
         self._emit_event(
             "on_card_sent_to_graveyard",
             owner_idx,
@@ -1164,7 +1189,7 @@ class GameEngine:
             from_zone=from_zone,
             owner=grave_target_idx,
         )
-        if from_zone in {"attack", "defense", "artifact", "building"}:
+        if leaving_field:
             self._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="graveyard")
 
     def excommunicate_card(self, owner_idx: int, uid: str, from_zone_override: str | None = None) -> None:
@@ -1173,9 +1198,17 @@ class GameEngine:
             board_owner_idx = owner_idx
         player = self.state.players[board_owner_idx]
         from_zone = from_zone_override or self._locate_uid_zone(board_owner_idx, uid)
+
+        leaving_field = from_zone in {"attack", "defense", "artifact", "building"}
+
         if uid not in player.excommunicated:
             player.excommunicated.append(uid)
+
         self._remove_from_board(player, uid)
+
+        if leaving_field:
+            self._reset_card_runtime_state(uid)
+
         self._emit_event(
             "on_card_excommunicated",
             owner_idx,
@@ -1183,7 +1216,7 @@ class GameEngine:
             from_zone=from_zone,
             owner=owner_idx,
         )
-        if from_zone in {"attack", "defense", "artifact", "building"}:
+        if leaving_field:
             self._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="excommunicated")
 
     def absolve_card_to_graveyard(self, owner_idx: int, uid: str) -> None:
@@ -1420,17 +1453,28 @@ class GameEngine:
         player = self.state.players[owner_idx]
         if len(player.hand) >= MAX_HAND:
             return False
+
+        was_on_field = False
+
         if uid in player.attack:
             idx = player.attack.index(uid)
             player.attack[idx] = None
+            was_on_field = True
         if uid in player.defense:
             idx = player.defense.index(uid)
             player.defense[idx] = None
+            was_on_field = True
         if uid in player.artifacts:
             idx = player.artifacts.index(uid)
             player.artifacts[idx] = None
+            was_on_field = True
         if player.building == uid:
             player.building = None
+            was_on_field = True
+
+        if was_on_field:
+            self._reset_card_runtime_state(uid)
+
         if uid not in player.hand:
             player.hand.append(uid)
         return True

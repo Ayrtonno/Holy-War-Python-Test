@@ -141,6 +141,7 @@ class TargetSpec:
     card_filter: CardFilterSpec = field(default_factory=CardFilterSpec)
     zone: str = "field"
     owner: str = "me"
+    min_targets: int | None = None
     max_targets: int | None = None
 
 
@@ -268,6 +269,7 @@ class RuntimeCardManager:
                 ),
                 zone=str(raw.get("zone", "field")),
                 owner=str(raw.get("owner", "me")),
+                min_targets=(int(raw["min_targets"]) if raw.get("min_targets") is not None else None),
                 max_targets=(int(raw["max_targets"]) if raw.get("max_targets") is not None else None),
             )
 
@@ -785,8 +787,9 @@ class RuntimeCardManager:
             if source_uid:
                 pool.append(source_uid)
         elif ttype == "selected_target":
-            selected = str(engine.state.flags.get("_runtime_selected_target", ""))
-            if selected:
+            raw_selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            if raw_selected:
+                selected = raw_selected.split(",", 1)[0].strip()
                 if selected.startswith("buff:"):
                     selected = selected.split(":", 1)[1]
                 if selected in engine.state.instances:
@@ -795,6 +798,28 @@ class RuntimeCardManager:
                     zone, slot = engine._parse_zone_target(selected)
                     if zone is not None:
                         p = engine.state.players[owner_idx]
+                        if zone == "attack" and 0 <= slot < len(p.attack):
+                            uid = p.attack[slot]
+                            if uid:
+                                pool.append(uid)
+                        elif zone == "defense" and 0 <= slot < len(p.defense):
+                            uid = p.defense[slot]
+                            if uid:
+                                pool.append(uid)
+
+        elif ttype == "selected_targets":
+            raw_selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            if raw_selected:
+                parts = [part.strip() for part in raw_selected.split(",") if part.strip()]
+                p = engine.state.players[owner_idx]
+                for selected in parts:
+                    if selected.startswith("buff:"):
+                        selected = selected.split(":", 1)[1]
+                    if selected in engine.state.instances:
+                        pool.append(selected)
+                        continue
+                    zone, slot = engine._parse_zone_target(selected)
+                    if zone is not None:
                         if zone == "attack" and 0 <= slot < len(p.attack):
                             uid = p.attack[slot]
                             if uid:
@@ -949,6 +974,60 @@ class RuntimeCardManager:
                     continue
                 self._effect_usage_consume(engine, owner_idx, source_uid, effect)
                 engine._emit_event("on_this_card_leaves_field", owner, card=uid, destination="hand")
+            return
+        if action == "send_to_graveyard":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+
+                owner = inst.owner
+                player = engine.state.players[owner]
+
+                # Caso: carta in mano → SCARTO
+                if t_uid in player.hand:
+                    player.hand.remove(t_uid)
+                    if t_uid not in player.graveyard:
+                        player.graveyard.append(t_uid)
+
+                    engine._emit_event(
+                        "on_card_discarded",
+                        owner,
+                        card=t_uid,
+                        from_hand_to_graveyard=True,
+                    )
+
+                    engine._emit_event(
+                        "on_card_sent_to_graveyard",
+                        owner,
+                        card=t_uid,
+                        from_zone="hand",
+                        owner=owner,
+                    )
+                    continue
+
+                # Caso: carta nel deck
+                if t_uid in player.deck:
+                    player.deck.remove(t_uid)
+                    if t_uid not in player.graveyard:
+                        player.graveyard.append(t_uid)
+
+                    engine._emit_event(
+                        "on_card_sent_to_graveyard",
+                        owner,
+                        card=t_uid,
+                        from_zone="relicario",
+                        owner=owner,
+                    )
+                    continue
+
+                # Caso: già nel cimitero
+                if t_uid in player.graveyard:
+                    continue
+
+                # Caso: carta sul campo → usa funzione già esistente
+                engine.send_to_graveyard(owner, t_uid)
+
             return
         if action == "double_strength":
             for t_uid in targets:
@@ -1219,16 +1298,16 @@ class RuntimeCardManager:
                 return
             player = engine.state.players[owner_idx]
             chosen_uid = None
+            chosen_from_zone = None
             for pool_name in ("hand", "deck", "graveyard", "white_deck", "excommunicated"):
-                pool = getattr(player, pool_name, None)
-                if pool is None:
-                    continue
-                for c_uid in list(pool):
-                    if _norm(engine.state.instances[c_uid].definition.name) == card_name:
-                        chosen_uid = c_uid
-                        pool.remove(c_uid)
+                pool = getattr(player, pool_name)
+                for uid in list(pool):
+                    if _norm(engine.state.instances[uid].definition.name) == card_name:
+                        chosen_uid = uid
+                        chosen_from_zone = pool_name
+                        pool.remove(uid)
                         break
-                if chosen_uid is not None:
+                if chosen_uid:
                     break
             if chosen_uid is None:
                 return
@@ -1244,8 +1323,13 @@ class RuntimeCardManager:
             inst = engine.state.instances[chosen_uid]
             inst.exhausted = False
             engine.state.log(f"{player.name} evoca {inst.definition.name}.")
-            engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone="summon")
-            engine._emit_event("on_summoned_from_hand", owner_idx, card=chosen_uid)
+            actual_from_zone = chosen_from_zone or "summon"
+            engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone=actual_from_zone)
+
+            if actual_from_zone == "graveyard":
+                engine._emit_event("on_summoned_from_graveyard", owner_idx, card=chosen_uid)
+            elif actual_from_zone == "hand":
+                engine._emit_event("on_summoned_from_hand", owner_idx, card=chosen_uid)
             if _norm(inst.definition.card_type) == _norm("token"):
                 engine._emit_event("on_token_summoned", owner_idx, token=chosen_uid, summoner=owner_idx)
             else:
