@@ -65,14 +65,14 @@ class GameEngine:
             return
         inst = self.state.instances[uid]
 
-        # Ripristina Fede iniziale stampata sulla carta
+        # Restore the printed Faith value when the card leaves the field.
         inst.current_faith = inst.definition.faith if inst.definition.faith is not None else None
 
-        # Rimuove ogni buff/debuff/marker runtime
+        # Clear temporary buffs, debuffs, and runtime-only markers.
         inst.blessed = []
         inst.cursed = []
 
-        # La carta fuori dal campo non deve conservare stati di utilizzo
+        # Cards outside the field should not keep per-turn usage state.
         inst.exhausted = False
 
     def _emit_event(self, event: str, actor_idx: int, **payload) -> None:
@@ -679,37 +679,33 @@ class GameEngine:
             return None
         return self.state.instances[player.hand[hand_index]]
 
-    def play_card(self, player_idx: int, hand_index: int, target: str | None = None) -> ActionResult:
+    # Validates whether the card can be played in the requested zone and context.
+    # Extracted from play_card.
+    def _validate_play_constraints(
+        self,
+        player_idx: int,
+        card: CardInstance,
+        target: str | None,
+    ) -> tuple[bool, str, int, str | None, int]:
         player = self.state.players[player_idx]
-        if player_idx != self.state.active_player:
-            return ActionResult(False, "Puoi giocare solo nel tuo turno (tranne Benedizioni/Maledizioni in risposta).")
-        card = self.card_from_hand(player_idx, hand_index)
-        if card is None:
-            return ActionResult(False, "Indice mano non valido.")
         ctype = _norm(card.definition.card_type)
-        can_play, reason = runtime_cards.can_play(self, player_idx, player.hand[hand_index])
-        if not can_play:
-            return ActionResult(False, reason or "Non puoi giocare questa carta.")
         place_owner_idx = player_idx
         zone: str | None = None
         slot = -1
-        sacrificed_faith_for_brigante = 0
 
-        # Validate play constraints before spending inspiration or removing card from hand.
         if ctype in SAINT_TYPES:
             if _norm(runtime_cards.get_play_owner(card.definition.name)) in {"opponent", "enemy", "other"}:
                 place_owner_idx = 1 - player_idx
             if _norm(card.definition.name) == _norm("Vulcano"):
-                return ActionResult(False, "Vulcano puo essere evocato solo tramite Terremoto: Magnitudo 10.")
-            if _norm(card.definition.name) == _norm("Brigante"):
-                if not self.all_saints_on_field(player_idx):
-                    return ActionResult(False, "Per giocare Brigante devi sacrificare un tuo santo sul terreno.")
+                return False, "Vulcano puo essere evocato solo tramite Terremoto: Magnitudo 10.", place_owner_idx, zone, slot
+            if _norm(card.definition.name) == _norm("Brigante") and not self.all_saints_on_field(player_idx):
+                return False, "Per giocare Brigante devi sacrificare un tuo santo sul terreno.", place_owner_idx, zone, slot
             zone, slot = self._parse_zone_target(target)
             if zone not in {"attack", "defense"}:
-                return ActionResult(False, "Per un Santo/Token indica zona: a1..a3 o d1..d3")
+                return False, "Per un Santo/Token indica zona: a1..a3 o d1..d3", place_owner_idx, zone, slot
             current = getattr(self.state.players[place_owner_idx], zone)[slot]
             if current is not None:
-                return ActionResult(False, "Slot occupato.")
+                return False, "Slot occupato.", place_owner_idx, zone, slot
         elif ctype == "artefatto":
             if _norm(card.definition.name) == _norm("Mjolnir"):
                 req_idx = next(
@@ -721,10 +717,10 @@ class GameEngine:
                     None,
                 )
                 if req_idx is None:
-                    return ActionResult(False, "Per giocare Mjolnir devi mandare Járngreipr dal terreno al cimitero.")
+                    return False, "Per giocare Mjolnir devi mandare Járngreipr dal terreno al cimitero.", place_owner_idx, zone, slot
         elif ctype == "edificio":
             if player.building:
-                return ActionResult(False, "Hai gia un Edificio. Va distrutto prima di giocarne un altro.")
+                return False, "Hai gia un Edificio. Va distrutto prima di giocarne un altro.", place_owner_idx, zone, slot
             if _norm(card.definition.name) == _norm("Sfinge"):
                 needed = {_norm("Piramide: Cheope"), _norm("Piramide: Chefren"), _norm("Piramide: Micerino")}
                 present = {
@@ -733,144 +729,241 @@ class GameEngine:
                     if a_uid is not None
                 }
                 if not needed.issubset(present):
-                    return ActionResult(False, "Per giocare Sfinge servono Cheope, Chefren e Micerino sul campo.")
+                    return False, "Per giocare Sfinge servono Cheope, Chefren e Micerino sul campo.", place_owner_idx, zone, slot
 
-        if ctype not in QUICK_TYPES:
-            cost = card.definition.faith or 0
-            name_key = _norm(card.definition.name)
-            if ctype in SAINT_TYPES:
-                if name_key == _norm("Atum"):
+        return True, "", place_owner_idx, zone, slot
+
+    # Computes the final Inspiration cost after all card-specific modifiers.
+    # Extracted from play_card
+    def _calculate_play_cost(self, player_idx: int, hand_index: int, card: CardInstance) -> int:
+        player = self.state.players[player_idx]
+        ctype = _norm(card.definition.card_type)
+        cost = card.definition.faith or 0
+        name_key = _norm(card.definition.name)
+
+        if ctype in SAINT_TYPES:
+            if name_key == _norm("Atum"):
+                cost = 0
+            if name_key == _norm("Ra"):
+                if any(_norm(self.state.instances[s_uid].definition.name) == _norm("Nun") for s_uid in self.all_saints_on_field(player_idx)):
                     cost = 0
-                if name_key == _norm("Ra"):
-                    if any(_norm(self.state.instances[s_uid].definition.name) == _norm("Nun") for s_uid in self.all_saints_on_field(player_idx)):
-                        cost = 0
-                if name_key == _norm("Impostore") and not any(self.all_saints_on_field(player_idx)):
-                    cost = 0
-                if name_key == _norm("Geb"):
-                    has_building_in_hand = any(
-                        _norm(self.state.instances[h_uid].definition.card_type) == "edificio"
-                        for i, h_uid in enumerate(player.hand)
-                        if i != hand_index
-                    )
-                    if has_building_in_hand:
-                        cost = max(0, cost - 1)
-                atum_on_field = any(
-                    _norm(self.state.instances[s_uid].definition.name) == _norm("Atum")
-                    for s_uid in self.all_saints_on_field(player_idx)
+            if name_key == _norm("Impostore") and not self.all_saints_on_field(player_idx):
+                cost = 0
+            if name_key == _norm("Geb"):
+                has_building_in_hand = any(
+                    _norm(self.state.instances[h_uid].definition.card_type) == "edificio"
+                    for i, h_uid in enumerate(player.hand)
+                    if i != hand_index
                 )
-                if atum_on_field and name_key != _norm("Atum"):
-                    cost = max(0, (cost + 1) // 2)
-            double_turns = self.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0})
-            if int(double_turns.get(str(player_idx), 0)) > 0:
-                cost *= 2
-            if self._has_building(1 - player_idx, "Sfinge"):
-                cost *= 2
-            available_inspiration = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
-            if available_inspiration < cost:
-                return ActionResult(False, "Ispirazione insufficiente.")
+                if has_building_in_hand:
+                    cost = max(0, cost - 1)
+            atum_on_field = any(
+                _norm(self.state.instances[s_uid].definition.name) == _norm("Atum")
+                for s_uid in self.all_saints_on_field(player_idx)
+            )
+            if atum_on_field and name_key != _norm("Atum"):
+                cost = max(0, (cost + 1) // 2)
 
-            temp = int(getattr(player, "temporary_inspiration", 0))
-            use_temp = min(temp, cost)
-            player.temporary_inspiration = temp - use_temp
-            remaining_cost = cost - use_temp
-            player.inspiration -= remaining_cost
+        double_turns = self.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0})
+        if int(double_turns.get(str(player_idx), 0)) > 0:
+            cost *= 2
+        if self._has_building(1 - player_idx, "Sfinge"):
+            cost *= 2
+        return cost
 
-            spent = self.state.flags.setdefault("spent_inspiration_turn", {"0": 0, "1": 0})
-            spent[str(player_idx)] = int(spent.get(str(player_idx), 0)) + cost
+    # Applies the computed cost using temporary Inspiration before the regular pool.
+    # Extracted from play_card
+    def _spend_inspiration_for_cost(self, player_idx: int, cost: int) -> ActionResult | None:
+        player = self.state.players[player_idx]
+        available_inspiration = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
+        if available_inspiration < cost:
+            return ActionResult(False, "Ispirazione insufficiente.")
 
-        uid = player.hand.pop(hand_index)
+        temp = int(getattr(player, "temporary_inspiration", 0))
+        use_temp = min(temp, cost)
+        player.temporary_inspiration = temp - use_temp
+        remaining_cost = cost - use_temp
+        player.inspiration -= remaining_cost
+
+        spent = self.state.flags.setdefault("spent_inspiration_turn", {"0": 0, "1": 0})
+        spent[str(player_idx)] = int(spent.get(str(player_idx), 0)) + cost
+        return None
+
+    # Emits the shared play events that every card uses when leaving the hand.
+    # Extracted from play_card
+    def _emit_play_events(self, player_idx: int, uid: str, ctype: str, target: str | None) -> None:
         self._emit_event("on_card_played", player_idx, card=uid, card_type=ctype, target=target)
         if ctype == "benedizione":
             self._emit_event("on_blessing_played", player_idx, card=uid, target=target)
         elif ctype == "maledizione":
             self._emit_event("on_curse_played", player_idx, card=uid, target=target)
-        if ctype in SAINT_TYPES:
-            if _norm(card.definition.name) == _norm("Brigante"):
-                own_saints = self.all_saints_on_field(player_idx)
-                if own_saints:
-                    sacr_uid = own_saints[0]
-                    sacr = self.state.instances[sacr_uid]
-                    sacrificed_faith_for_brigante = max(0, sacr.definition.faith or 0)
-                    sacr.blessed.append("no_sin_on_death")
-                    self.destroy_saint_by_uid(self.state.instances[sacr_uid].owner, sacr_uid, cause="effect")
-            if zone == "attack":
-                self.state.players[place_owner_idx].attack[slot] = uid
-            elif zone == "defense":
-                self.state.players[place_owner_idx].defense[slot] = uid
-            else:
+
+    # Handles saint placement, summon side effects, and enter-the-field bonuses.
+    # Extracted from play_card
+    def _handle_saint_play(
+        self,
+        player_idx: int,
+        place_owner_idx: int,
+        uid: str,
+        zone: str | None,
+        slot: int,
+    ) -> ActionResult:
+        player = self.state.players[player_idx]
+        card = self.state.instances[uid]
+        sacrificed_faith_for_brigante = 0
+
+        if _norm(card.definition.name) == _norm("Brigante"):
+            own_saints = self.all_saints_on_field(player_idx)
+            if own_saints:
+                sacr_uid = own_saints[0]
+                sacr = self.state.instances[sacr_uid]
+                sacrificed_faith_for_brigante = max(0, sacr.definition.faith or 0)
+                sacr.blessed.append("no_sin_on_death")
+                self.destroy_saint_by_uid(self.state.instances[sacr_uid].owner, sacr_uid, cause="effect")
+
+        if zone == "attack":
+            self.state.players[place_owner_idx].attack[slot] = uid
+        elif zone == "defense":
+            self.state.players[place_owner_idx].defense[slot] = uid
+        else:
+            player.hand.append(uid)
+            return ActionResult(False, "Zona non valida per il posizionamento del santo.")
+
+        card.exhausted = False
+        if self._count_pyramids(player_idx) >= 2:
+            card.current_faith = (card.current_faith or 0) + max(0, card.definition.faith or 0)
+        if _norm(card.definition.name) == _norm("Brigante") and sacrificed_faith_for_brigante > 0:
+            card.current_faith = (card.current_faith or 0) + sacrificed_faith_for_brigante
+            card.blessed.append("no_sin_on_death")
+
+        zone_label = "Attacco" if zone == "attack" else "Difesa"
+        self.state.log(f"{player.name} posiziona {card.definition.name} in {zone_label} {slot + 1}.")
+        self._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
+        self._emit_event("on_summoned_from_hand", player_idx, card=uid)
+        if _norm(card.definition.card_type) == "token":
+            self._emit_event("on_token_summoned", player_idx, token=uid, summoner=player_idx)
+        else:
+            self._emit_event("on_opponent_saint_enters_field", 1 - player_idx, saint=uid)
+
+        enter_msg = resolve_enter_effect(self, player_idx, uid)
+        if enter_msg:
+            self.state.log(enter_msg)
+        self._refresh_custode_sigilli_bonus(player_idx)
+        return ActionResult(True, "Carta giocata.")
+
+    # Handles artifact placement, replacement rules, and enter effects.
+    # Extracted from play_card
+    def _handle_artifact_play(self, player_idx: int, uid: str) -> ActionResult:
+        player = self.state.players[player_idx]
+        card = self.state.instances[uid]
+
+        if _norm(card.definition.name) == _norm("Mjolnir"):
+            req_idx = next(
+                (
+                    i
+                    for i, a_uid in enumerate(player.artifacts)
+                    if a_uid and _norm(self.state.instances[a_uid].definition.name) == _norm("Járngreipr")
+                ),
+                None,
+            )
+            if req_idx is None:
                 player.hand.append(uid)
-                return ActionResult(False, "Zona non valida per il posizionamento del santo.")
-            card.exhausted = False
-            if self._count_pyramids(player_idx) >= 2:
-                card.current_faith = (card.current_faith or 0) + max(0, card.definition.faith or 0)
-            if _norm(card.definition.name) == _norm("Brigante") and sacrificed_faith_for_brigante > 0:
-                card.current_faith = (card.current_faith or 0) + sacrificed_faith_for_brigante
-                card.blessed.append("no_sin_on_death")
-            zone_label = "Attacco" if zone == "attack" else "Difesa"
-            self.state.log(f"{player.name} posiziona {card.definition.name} in {zone_label} {slot + 1}.")
-            self._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
-            self._emit_event("on_summoned_from_hand", player_idx, card=uid)
-            if _norm(card.definition.card_type) == "token":
-                self._emit_event("on_token_summoned", player_idx, token=uid, summoner=player_idx)
-            else:
-                self._emit_event("on_opponent_saint_enters_field", 1 - player_idx, saint=uid)
-            enter_msg = resolve_enter_effect(self, player_idx, uid)
-            if enter_msg:
-                self.state.log(enter_msg)
-            self._refresh_custode_sigilli_bonus(player_idx)
-        elif ctype == "artefatto":
-            if _norm(card.definition.name) == _norm("Mjolnir"):
-                req_idx = next(
-                    (
-                        i
-                        for i, a_uid in enumerate(player.artifacts)
-                        if a_uid and _norm(self.state.instances[a_uid].definition.name) == _norm("Járngreipr")
-                    ),
-                    None,
-                )
-                if req_idx is None:
-                    player.hand.append(uid)
-                    return ActionResult(False, "Per giocare Mjolnir devi mandare JÃ¡rngreipr dal terreno al cimitero.")
-                req_uid = player.artifacts[req_idx]
-                if req_uid:
-                    self.send_to_graveyard(player_idx, req_uid)
-            blocked = min(ARTIFACT_SLOTS - 1, self._count_artifact(1 - player_idx, "Gggnag'ljep"))
-            usable_slots = list(range(ARTIFACT_SLOTS - blocked))
-            slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
-            if slot is None:
-                slot = usable_slots[-1]
-                replaced = player.artifacts[slot]
-                if replaced:
-                    self.send_to_graveyard(player_idx, replaced)
-            player.artifacts[slot] = uid
-            self.state.log(f"{player.name} posiziona Artefatto {card.definition.name}.")
-            self._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
-            enter_msg = resolve_enter_effect(self, player_idx, uid)
-            if enter_msg:
-                self.state.log(enter_msg)
-        elif ctype == "edificio":
-            player.building = uid
-            self.state.log(f"{player.name} posiziona Edificio {card.definition.name}.")
-            self._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
-            enter_msg = resolve_enter_effect(self, player_idx, uid)
-            if enter_msg:
-                self.state.log(enter_msg)
-        elif ctype in QUICK_TYPES:
-            if self._consume_counter_spell(player_idx):
-                self.send_to_graveyard(player_idx, uid)
-                self.state.log(f"{player.name} prova a usare {card.definition.name}, ma viene annullata da Barriera Magica.")
-                return ActionResult(True, "Attivazione annullata da Barriera Magica.")
-            resolved = resolve_card_effect(self, player_idx, uid, target)
+                return ActionResult(False, "Per giocare Mjolnir devi mandare JÃ¡rngreipr dal terreno al cimitero.")
+            req_uid = player.artifacts[req_idx]
+            if req_uid:
+                self.send_to_graveyard(player_idx, req_uid)
+
+        blocked = min(ARTIFACT_SLOTS - 1, self._count_artifact(1 - player_idx, "Gggnag'ljep"))
+        usable_slots = list(range(ARTIFACT_SLOTS - blocked))
+        slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
+        if slot is None:
+            slot = usable_slots[-1]
+            replaced = player.artifacts[slot]
+            if replaced:
+                self.send_to_graveyard(player_idx, replaced)
+        player.artifacts[slot] = uid
+
+        self.state.log(f"{player.name} posiziona Artefatto {card.definition.name}.")
+        self._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
+        enter_msg = resolve_enter_effect(self, player_idx, uid)
+        if enter_msg:
+            self.state.log(enter_msg)
+        return ActionResult(True, "Carta giocata.")
+
+    # Handles building placement and its immediate enter effect resolution.
+    # Extracted from play_card
+    def _handle_building_play(self, player_idx: int, uid: str) -> ActionResult:
+        player = self.state.players[player_idx]
+        card = self.state.instances[uid]
+        player.building = uid
+        self.state.log(f"{player.name} posiziona Edificio {card.definition.name}.")
+        self._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
+        enter_msg = resolve_enter_effect(self, player_idx, uid)
+        if enter_msg:
+            self.state.log(enter_msg)
+        return ActionResult(True, "Carta giocata.")
+
+    # Resolves quick cards from hand, including counter-spell cancellation and cleanup.
+    # Extracted from play_card
+    def _resolve_quick_play_from_hand(self, player_idx: int, uid: str, target: str | None) -> ActionResult:
+        player = self.state.players[player_idx]
+        card = self.state.instances[uid]
+        if self._consume_counter_spell(player_idx):
             self.send_to_graveyard(player_idx, uid)
-            self._cleanup_zero_faith_saints()
-            self.check_win_conditions()
-            return ActionResult(True, resolved)
+            self.state.log(f"{player.name} prova a usare {card.definition.name}, ma viene annullata da Barriera Magica.")
+            return ActionResult(True, "Attivazione annullata da Barriera Magica.")
+        resolved = resolve_card_effect(self, player_idx, uid, target)
+        self.send_to_graveyard(player_idx, uid)
+        self._cleanup_zero_faith_saints()
+        self.check_win_conditions()
+        return ActionResult(True, resolved)
+
+    def play_card(self, player_idx: int, hand_index: int, target: str | None = None) -> ActionResult:
+        player = self.state.players[player_idx]
+        if player_idx != self.state.active_player:
+            return ActionResult(False, "Puoi giocare solo nel tuo turno (tranne Benedizioni/Maledizioni in risposta).")
+
+        card = self.card_from_hand(player_idx, hand_index)
+        if card is None:
+            return ActionResult(False, "Indice mano non valido.")
+
+        ctype = _norm(card.definition.card_type)
+        can_play, reason = runtime_cards.can_play(self, player_idx, player.hand[hand_index])
+        if not can_play:
+            return ActionResult(False, reason or "Non puoi giocare questa carta.")
+
+        is_valid, error_message, place_owner_idx, zone, slot = self._validate_play_constraints(player_idx, card, target)
+        if not is_valid:
+            return ActionResult(False, error_message)
+
+        if ctype not in QUICK_TYPES:
+            cost = self._calculate_play_cost(player_idx, hand_index, card)
+            spend_error = self._spend_inspiration_for_cost(player_idx, cost)
+            if spend_error is not None:
+                return spend_error
+
+        uid = player.hand.pop(hand_index)
+        self._emit_play_events(player_idx, uid, ctype, target)
+
+        if ctype in SAINT_TYPES:
+            result = self._handle_saint_play(player_idx, place_owner_idx, uid, zone, slot)
+        elif ctype == "artefatto":
+            result = self._handle_artifact_play(player_idx, uid)
+        elif ctype == "edificio":
+            result = self._handle_building_play(player_idx, uid)
+        elif ctype in QUICK_TYPES:
+            return self._resolve_quick_play_from_hand(player_idx, uid, target)
         else:
             self.send_to_graveyard(player_idx, uid)
             self.state.log(f"{player.name} usa {card.definition.name} senza effetto implementato.")
+            result = ActionResult(True, "Carta giocata.")
+
+        if not result.ok:
+            return result
+
         self._cleanup_zero_faith_saints()
         self.check_win_conditions()
-        return ActionResult(True, "Carta giocata.")
+        return result
 
     def activate_ability(self, player_idx: int, source: str, target: str | None = None) -> ActionResult:
         if player_idx != self.state.active_player:
@@ -903,15 +996,7 @@ class GameEngine:
         if ctype not in QUICK_TYPES and not is_moribondo:
             return ActionResult(False, "Solo Benedizione/Maledizione (o Moribondo) sono giocabili fuori turno.")
         uid = player.hand.pop(hand_index)
-        self._emit_event("on_card_played", player_idx, card=uid, card_type=ctype, target=target)
-        if ctype == "benedizione":
-            self._emit_event("on_blessing_played", player_idx, card=uid, target=target)
-        elif ctype == "maledizione":
-            self._emit_event("on_curse_played", player_idx, card=uid, target=target)
-        if ctype in QUICK_TYPES and self._consume_counter_spell(player_idx):
-            self.send_to_graveyard(player_idx, uid)
-            self.state.log(f"{player.name} prova a usare {card.definition.name}, ma viene annullata da Barriera Magica.")
-            return ActionResult(True, "Attivazione annullata da Barriera Magica.")
+        self._emit_play_events(player_idx, uid, ctype, target)
         if is_moribondo:
             target_card = self.resolve_target_saint(player_idx, target)
             if target_card is None:
@@ -925,11 +1010,7 @@ class GameEngine:
             self._cleanup_zero_faith_saints()
             self.check_win_conditions()
             return ActionResult(True, f"{player.name} scomunica Moribondo e protegge {target_card.definition.name}.")
-        resolved = resolve_card_effect(self, player_idx, uid, target)
-        self.send_to_graveyard(player_idx, uid)
-        self._cleanup_zero_faith_saints()
-        self.check_win_conditions()
-        return ActionResult(True, resolved)
+        return self._resolve_quick_play_from_hand(player_idx, uid, target)
 
     def move_attack_positions(self, player_idx: int, from_slot: int, to_slot: int) -> ActionResult:
         if player_idx != self.state.active_player:
@@ -940,31 +1021,22 @@ class GameEngine:
         player.attack[from_slot], player.attack[to_slot] = player.attack[to_slot], player.attack[from_slot]
         return ActionResult(True, "Santi in attacco scambiati.")
 
-    def attack(self, player_idx: int, from_slot: int, target_slot: int | None) -> ActionResult:
-        if self.state.phase == "preparation":
-            return ActionResult(False, "Durante il turno di preparazione non si puo attaccare.")
-        if int(self.state.flags.get("no_attacks_turn", -1)) == int(self.state.turn_number):
-            return ActionResult(False, "In questo turno gli attacchi sono bloccati da un effetto.")
-        if player_idx != self.state.active_player:
-            return ActionResult(False, "Puoi attaccare solo nel tuo turno.")
+    # Starts battle-phase bookkeeping when the first attack of the turn is declared.
+    # Extracted from attack
+    def _start_battle_phase_if_needed(self, player_idx: int) -> None:
         runtime_state = ensure_runtime_state(self)
         if not bool(runtime_state.get("battle_phase_started", False)):
             runtime_state["battle_phase_started"] = True
             set_phase(self, "battle")
             self._emit_event("on_battle_phase_start", player_idx, player=player_idx)
             refresh_player_flags(self)
+
+    # Validates the attacker-side rules that can stop combat before damage is assigned.
+    # Extracted from attack
+    def _validate_attack_preconditions(self, player_idx: int, defender_idx: int, attacker: CardInstance) -> ActionResult | None:
         attacker_player = self.state.players[player_idx]
-        defender_idx = 1 - player_idx
-        defender_player = self.state.players[defender_idx]
-        if not (0 <= from_slot < ATTACK_SLOTS):
-            return ActionResult(False, "Slot attacco non valido.")
-        attacker_uid = attacker_player.attack[from_slot]
-        if attacker_uid is None:
-            return ActionResult(False, "Nessun Santo in quello slot.")
-        attacker = self.state.instances[attacker_uid]
-        self._emit_event("on_attack_declared", player_idx, attacker=attacker_uid, target_slot=target_slot)
-        self._emit_event("on_this_card_attacks", player_idx, card=attacker_uid, target_slot=target_slot)
         attacker_name_key = _norm(attacker.definition.name)
+
         if self._has_artifact(defender_idx, "Geroglifici"):
             cv = attacker.definition.crosses
             try:
@@ -981,39 +1053,68 @@ class GameEngine:
             return ActionResult(False, f"{attacker.definition.name} non puo attaccare in questo turno.")
         if attacker.exhausted:
             return ActionResult(False, "Questo Santo ha gia attaccato nel turno corrente.")
+
         attack_count = self.state.flags.setdefault("attack_count", {"0": 0, "1": 0})
         if (self._has_artifact(player_idx, "Sabbie Mobili") or self._has_artifact(defender_idx, "Sabbie Mobili")) and int(
             attack_count.get(str(player_idx), 0)
         ) >= 1:
             return ActionResult(False, "Con Sabbie Mobili attiva puoi attaccare con un solo Santo per turno.")
+        return None
 
-        if all(slot is None for slot in defender_player.attack + defender_player.defense):
-            attacker.exhausted = True
-            attack_count[str(player_idx)] = int(attack_count.get(str(player_idx), 0)) + 1
-            if self._consume_attack_shield(defender_idx):
-                self.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
-                return ActionResult(True, "Attacco annullato da effetto di scudo.")
-            if attacker_name_key == _norm("Fenrir"):
-                attacker.definition.strength = (attacker.definition.strength or 0) + 1
-            if attacker_name_key == _norm("Jormungandr"):
-                attacker.current_faith = (attacker.current_faith or 0) + 1
-            base_strength = max(0, attacker.definition.strength or 0)
-            damage = self.get_effective_strength(attacker_uid)
-            defender_player.sin += damage
-            self._emit_event(
-                "on_this_card_deals_damage",
-                player_idx,
-                card=attacker_uid,
-                target_player=defender_idx,
-                amount=damage,
-            )
-            self.state.log(
-                f"{attacker_player.name} attacca con {attacker.definition.name} direttamente {defender_player.name} "
-                f"(Forza base {base_strength}, effettiva {damage}) (+{damage} Peccato)."
-            )
-            self._apply_fiamma_primordiale_after_attack(player_idx, defender_idx, attacker_uid)
-            self.check_win_conditions()
-            return ActionResult(True, f"Attacco diretto riuscito: +{damage} Peccato all'avversario.")
+    # Marks the attacker as committed and updates the per-turn attack counter.
+    # Extracted from attack
+    def _mark_attack_committed(self, player_idx: int, attacker: CardInstance) -> None:
+        attacker.exhausted = True
+        attack_count = self.state.flags.setdefault("attack_count", {"0": 0, "1": 0})
+        attack_count[str(player_idx)] = int(attack_count.get(str(player_idx), 0)) + 1
+
+    # Resolves the direct-attack case when the defender has no saints on the board.
+    # Extracted from attack
+    def _resolve_direct_attack(self, player_idx: int, defender_idx: int, attacker_uid: str, attacker: CardInstance) -> ActionResult:
+        attacker_player = self.state.players[player_idx]
+        defender_player = self.state.players[defender_idx]
+        attacker_name_key = _norm(attacker.definition.name)
+
+        self._mark_attack_committed(player_idx, attacker)
+        if self._consume_attack_shield(defender_idx):
+            self.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
+            return ActionResult(True, "Attacco annullato da effetto di scudo.")
+        if attacker_name_key == _norm("Fenrir"):
+            attacker.definition.strength = (attacker.definition.strength or 0) + 1
+        if attacker_name_key == _norm("Jormungandr"):
+            attacker.current_faith = (attacker.current_faith or 0) + 1
+
+        base_strength = max(0, attacker.definition.strength or 0)
+        damage = self.get_effective_strength(attacker_uid)
+        defender_player.sin += damage
+        self._emit_event(
+            "on_this_card_deals_damage",
+            player_idx,
+            card=attacker_uid,
+            target_player=defender_idx,
+            amount=damage,
+        )
+        self.state.log(
+            f"{attacker_player.name} attacca con {attacker.definition.name} direttamente {defender_player.name} "
+            f"(Forza base {base_strength}, effettiva {damage}) (+{damage} Peccato)."
+        )
+        self._apply_fiamma_primordiale_after_attack(player_idx, defender_idx, attacker_uid)
+        self.check_win_conditions()
+        return ActionResult(True, f"Attacco diretto riuscito: +{damage} Peccato all'avversario.")
+
+    # Resolves a targeted combat, including barriers, lethal damage, and retaliation rules.
+    # Extracted from attack
+    def _resolve_targeted_attack(
+        self,
+        player_idx: int,
+        defender_idx: int,
+        attacker_uid: str,
+        attacker: CardInstance,
+        target_slot: int | None,
+    ) -> ActionResult:
+        attacker_player = self.state.players[player_idx]
+        defender_player = self.state.players[defender_idx]
+        attacker_name_key = _norm(attacker.definition.name)
 
         if target_slot is None or not (0 <= target_slot < ATTACK_SLOTS):
             return ActionResult(False, "Indica bersaglio valido t1..t3.")
@@ -1038,8 +1139,7 @@ class GameEngine:
             if others:
                 return ActionResult(False, f"{defender_name} puo essere bersagliato solo se non ci sono altri santi in attacco.")
 
-        attacker.exhausted = True
-        attack_count[str(player_idx)] = int(attack_count.get(str(player_idx), 0)) + 1
+        self._mark_attack_committed(player_idx, attacker)
         if self._consume_attack_shield(defender_idx):
             self.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
             return ActionResult(True, "Attacco annullato da effetto di scudo.")
@@ -1097,7 +1197,12 @@ class GameEngine:
         lethal = (defender.current_faith or 0) <= 0
         if lethal:
             excommunicate = runtime_cards.get_battle_excommunicate_on_lethal(attacker.definition.name)
-            self.destroy_saint_by_uid(self.state.instances[defender_uid].owner, defender_uid, excommunicate=excommunicate, cause="battle")
+            self.destroy_saint_by_uid(
+                self.state.instances[defender_uid].owner,
+                defender_uid,
+                excommunicate=excommunicate,
+                cause="battle",
+            )
             self._emit_event("on_this_card_kills_in_battle", player_idx, card=attacker_uid, victim=defender_uid)
             if attacker_name_key == _norm("Golem di Pietra"):
                 attacker.current_faith = 4
@@ -1147,6 +1252,36 @@ class GameEngine:
         self._apply_fiamma_primordiale_after_attack(player_idx, defender_idx, attacker_uid)
         self.check_win_conditions()
         return ActionResult(True, f"Danno inflitto: {damage}.")
+
+    def attack(self, player_idx: int, from_slot: int, target_slot: int | None) -> ActionResult:
+        if self.state.phase == "preparation":
+            return ActionResult(False, "Durante il turno di preparazione non si puo attaccare.")
+        if int(self.state.flags.get("no_attacks_turn", -1)) == int(self.state.turn_number):
+            return ActionResult(False, "In questo turno gli attacchi sono bloccati da un effetto.")
+        if player_idx != self.state.active_player:
+            return ActionResult(False, "Puoi attaccare solo nel tuo turno.")
+
+        self._start_battle_phase_if_needed(player_idx)
+        attacker_player = self.state.players[player_idx]
+        defender_idx = 1 - player_idx
+        defender_player = self.state.players[defender_idx]
+        if not (0 <= from_slot < ATTACK_SLOTS):
+            return ActionResult(False, "Slot attacco non valido.")
+        attacker_uid = attacker_player.attack[from_slot]
+        if attacker_uid is None:
+            return ActionResult(False, "Nessun Santo in quello slot.")
+
+        attacker = self.state.instances[attacker_uid]
+        self._emit_event("on_attack_declared", player_idx, attacker=attacker_uid, target_slot=target_slot)
+        self._emit_event("on_this_card_attacks", player_idx, card=attacker_uid, target_slot=target_slot)
+
+        validation_error = self._validate_attack_preconditions(player_idx, defender_idx, attacker)
+        if validation_error is not None:
+            return validation_error
+
+        if all(slot is None for slot in defender_player.attack + defender_player.defense):
+            return self._resolve_direct_attack(player_idx, defender_idx, attacker_uid, attacker)
+        return self._resolve_targeted_attack(player_idx, defender_idx, attacker_uid, attacker, target_slot)
 
     def _kill_saint(self, owner_idx: int, attack_slot: int) -> None:
         player = self.state.players[owner_idx]
