@@ -56,7 +56,8 @@ SUPPORTED_CONDITION_KEYS = {
     "selected_target_startswith",
     "event_card_name_is",
     "target_is_damaged",
-
+    "controller_hand_size_lte",
+    "stored_card_matches",
 }
 
 EFFECT_ACTION_ALIASES = {
@@ -115,6 +116,10 @@ SUPPORTED_EFFECT_ACTIONS = {
     "add_temporary_inspiration_from_flag",
     "summon_target_to_field",
     "remove_sin_equal_to_target_strength",
+    "store_top_card_of_zone",
+    "move_stored_card_to_zone",
+    "move_source_to_zone",
+    "reveal_stored_card",
 }
 
 
@@ -165,6 +170,13 @@ class EffectSpec:
     target_player: str | None = None
     card_name: str | None = None
     flag: str | None = None
+
+    owner: str | None = None
+    zone: str | None = None
+    position: str | None = None
+    store_as: str | None = None
+    stored: str | None = None
+    to_zone: str | None = None
 
 
 @dataclass(slots=True)
@@ -248,6 +260,58 @@ class RuntimeCardManager:
     def register_script(self, script: CardScript) -> None:
         self._scripts[_norm(script.name)] = script
 
+    def resume_pending_play(self, engine: GameEngine) -> None:
+        flags = engine.state.flags
+
+        source_uid = str(flags.get("_runtime_resume_source", "")).strip()
+        if not source_uid:
+            return
+
+        owner_idx_raw = flags.get("_runtime_resume_owner")
+        if owner_idx_raw is None:
+            return
+
+        owner_idx = int(owner_idx_raw)
+
+        inst = engine.state.instances.get(source_uid)
+        if inst is None:
+            flags.pop("_runtime_resume_source", None)
+            flags.pop("_runtime_resume_owner", None)
+            flags.pop("_runtime_action_index_resume", None)
+            return
+
+        script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+        if not script.on_play_actions:
+            flags.pop("_runtime_resume_source", None)
+            flags.pop("_runtime_resume_owner", None)
+            flags.pop("_runtime_action_index_resume", None)
+            return
+
+        start_index = int(flags.get("_runtime_action_index_resume", 0))
+
+        previous_source = flags.get("_runtime_effect_source")
+        flags["_runtime_effect_source"] = source_uid
+        flags["_runtime_source_card"] = source_uid
+        try:
+            self._run_play_actions(
+                engine,
+                owner_idx,
+                source_uid,
+                script.on_play_actions,
+                start_index=start_index,
+            )
+        finally:
+            if previous_source is None:
+                flags.pop("_runtime_effect_source", None)
+            else:
+                flags["_runtime_effect_source"] = previous_source
+
+            if not flags.get("_runtime_waiting_for_reveal"):
+                flags.pop("_runtime_source_card", None)
+                flags.pop("_runtime_resume_source", None)
+                flags.pop("_runtime_resume_owner", None)
+                flags.pop("_runtime_action_index_resume", None)
+
     def register_script_from_dict(self, card_name: str, spec: dict[str, Any]) -> None:
         def _parse_effect(raw: dict[str, Any]) -> EffectSpec:
             return EffectSpec(
@@ -265,6 +329,12 @@ class RuntimeCardManager:
                 target_player=str(raw.get("target_player")) if raw.get("target_player") is not None else None,
                 card_name=str(raw.get("card_name")) if raw.get("card_name") is not None else None,
                 flag=raw.get("flag"),
+                owner=str(raw.get("owner")) if raw.get("owner") is not None else None,
+                zone=str(raw.get("zone")) if raw.get("zone") is not None else None,
+                position=str(raw.get("position")) if raw.get("position") is not None else None,
+                store_as=str(raw.get("store_as")) if raw.get("store_as") is not None else None,
+                stored=str(raw.get("stored")) if raw.get("stored") is not None else None,
+                to_zone=str(raw.get("to_zone")) if raw.get("to_zone") is not None else None,
             )
 
         def _parse_target(raw: dict[str, Any]) -> TargetSpec:
@@ -550,22 +620,49 @@ class RuntimeCardManager:
                 flags.pop("_runtime_effect_source", None)
             else:
                 flags["_runtime_effect_source"] = previous_source
-            flags.pop("_runtime_source_card", None)
-            flags.pop("_runtime_selected_target", None)
-            flags.pop("_runtime_action_index", None)
 
-    def _run_play_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
-        for i, action in enumerate(actions):
-            engine.state.flags["_runtime_action_index"] = str(i)
+            if not flags.get("_runtime_waiting_for_reveal"):
+                flags.pop("_runtime_source_card", None)
+                flags.pop("_runtime_selected_target", None)
+                flags.pop("_runtime_action_index", None)
+
+    def _run_play_actions(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        source_uid: str,
+        actions: list[ActionSpec],
+        start_index: int = 0,
+    ) -> None:
+        flags = engine.state.flags
+
+        for i in range(start_index, len(actions)):
+            if flags.get("_runtime_waiting_for_reveal"):
+                flags["_runtime_action_index_resume"] = str(i)
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                break
+
+            action = actions[i]
+            flags["_runtime_action_index"] = str(i)
+
             if action.condition and not self._eval_condition_node(
                 RuleEventContext(engine=engine, event="on_play", player_idx=owner_idx, payload={"card": source_uid}),
                 owner_idx,
                 action.condition,
             ):
                 continue
+
             targets = self._resolve_targets(engine, owner_idx, action.target)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
-        engine.state.flags.pop("_runtime_action_index", None)
+
+            if flags.get("_runtime_waiting_for_reveal"):
+                flags["_runtime_action_index_resume"] = str(i + 1)
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                break
+
+        flags.pop("_runtime_action_index", None)
 
     def resolve_enter(self, engine: GameEngine, player_idx: int, uid: str) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -906,12 +1003,12 @@ class RuntimeCardManager:
                 continue
             if type_filter and _norm(inst.definition.card_type) not in type_filter:
                 continue
-                if (
-                    target.card_filter.exclude_buildings_if_my_building_zone_occupied
-                    and engine.state.players[owner_idx].building is not None
-                    and _norm(inst.definition.card_type) == _norm("edificio")
-                ):
-                    continue
+            if (
+                target.card_filter.exclude_buildings_if_my_building_zone_occupied
+                and engine.state.players[owner_idx].building is not None
+                and _norm(inst.definition.card_type) == _norm("edificio")
+            ):
+                continue
             cross_txt = _norm(str(inst.definition.crosses or ""))
             if cross_txt in {"white", "croce bianca"}:
                 cross_val = 11
@@ -934,6 +1031,93 @@ class RuntimeCardManager:
         if target.max_targets is not None and target.max_targets >= 0:
             return out[: int(target.max_targets)]
         return out
+    
+    def _resolve_owner_scope(self, owner_idx: int, owner_key: str | None) -> int:
+        key = _norm(owner_key or "me")
+        return owner_idx if key in {"me", "owner", "controller"} else 1 - owner_idx
+
+    def _get_zone_cards(self, engine: GameEngine, owner_idx: int, zone_name: str) -> list[str]:
+        player = engine.state.players[owner_idx]
+        zone = _norm(zone_name)
+
+        if zone in {"deck", "relicario"}:
+            return list(player.deck)
+        if zone == "hand":
+            return list(player.hand)
+        if zone == "graveyard":
+            return list(player.graveyard)
+        if zone == "excommunicated":
+            return list(player.excommunicated)
+
+        out: list[str] = []
+        if zone == "field":
+            for uid in player.attack + player.defense + player.artifacts:
+                if uid:
+                    out.append(uid)
+            if player.building:
+                out.append(player.building)
+        return out
+
+    def _remove_uid_from_all_player_zones(self, engine: GameEngine, owner_idx: int, uid: str) -> bool:
+        player = engine.state.players[owner_idx]
+
+        if uid in player.hand:
+            player.hand.remove(uid)
+            return True
+        if uid in player.deck:
+            player.deck.remove(uid)
+            return True
+        if uid in player.graveyard:
+            player.graveyard.remove(uid)
+            return True
+        if uid in player.excommunicated:
+            player.excommunicated.remove(uid)
+            return True
+
+        for zone_list in (player.attack, player.defense, player.artifacts):
+            for i, slot_uid in enumerate(zone_list):
+                if slot_uid == uid:
+                    zone_list[i] = None
+                    return True
+
+        if player.building == uid:
+            player.building = None
+            return True
+
+        return False
+
+    def _move_uid_to_zone(self, engine: GameEngine, uid: str, to_zone: str, owner_idx: int) -> bool:
+        inst = engine.state.instances.get(uid)
+        if inst is None:
+            return False
+
+        real_owner = inst.owner
+        player = engine.state.players[real_owner]
+        zone = _norm(to_zone)
+
+        self._remove_uid_from_all_player_zones(engine, real_owner, uid)
+
+        if zone == "hand":
+            if uid not in player.hand:
+                player.hand.append(uid)
+            return True
+
+        if zone in {"deck", "relicario"}:
+            if uid not in player.deck:
+                player.deck.append(uid)
+            return True
+
+        if zone == "graveyard":
+            if uid not in player.graveyard:
+                player.graveyard.append(uid)
+            return True
+
+        if zone == "excommunicated":
+            if uid not in player.excommunicated:
+                player.excommunicated.append(uid)
+            return True
+
+        return False
     
     def _summon_generated_token(
         self,
@@ -1026,7 +1210,22 @@ class RuntimeCardManager:
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
             return
-        
+        if action == "reveal_stored_card":
+            store_name = str(effect.stored or "").strip()
+            if not store_name:
+                return
+
+            stored_uid = str(engine.state.flags.get(f"_runtime_store_{store_name}", "")).strip()
+            if not stored_uid:
+                return
+
+            # salva cosa deve essere mostrato alla GUI
+            engine.state.flags["_runtime_reveal_card"] = stored_uid
+
+            # blocca la risoluzione
+            engine.state.flags["_runtime_waiting_for_reveal"] = True
+
+            return
         if action == "add_temporary_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
@@ -1063,6 +1262,45 @@ class RuntimeCardManager:
             engine.state.flags[flag_name] = value
             return
         
+        if action == "store_top_card_of_zone":
+            store_name = str(effect.store_as or "").strip()
+            if not store_name:
+                return
+
+            scoped_owner = self._resolve_owner_scope(owner_idx, effect.owner or "me")
+            zone_name = str(effect.zone or "deck").strip()
+            position = _norm(effect.position or "top")
+
+            cards = self._get_zone_cards(engine, scoped_owner, zone_name)
+
+            picked_uid = ""
+            if cards:
+                picked_uid = cards[-1] if position == "top" else cards[0]
+
+            engine.state.flags[f"_runtime_store_{store_name}"] = picked_uid
+            return
+        
+        if action == "move_stored_card_to_zone":
+            store_name = str(effect.stored or "").strip()
+            to_zone = str(effect.to_zone or "").strip()
+            if not store_name or not to_zone:
+                return
+
+            stored_uid = str(engine.state.flags.get(f"_runtime_store_{store_name}", "")).strip()
+            if not stored_uid:
+                return
+
+            self._move_uid_to_zone(engine, stored_uid, to_zone, owner_idx)
+            return
+        
+        if action == "move_source_to_zone":
+            to_zone = str(effect.to_zone or "").strip()
+            if not source_uid or not to_zone:
+                return
+
+            self._move_uid_to_zone(engine, source_uid, to_zone, owner_idx)
+            return
+         
         if action == "add_temporary_inspiration_from_flag":
             flag_name = str(effect.flag or "").strip()
             if not flag_name:
@@ -1996,6 +2234,10 @@ class RuntimeCardManager:
             drawn = ctx.engine.state.flags.get("cards_drawn_this_turn", {})
             if len(drawn.get(str(owner_idx), [])) < int(drawn_this_turn_gte):
                 return False
+        hand_size_lte = condition.get("controller_hand_size_lte")
+        if hand_size_lte is not None:
+            if len(ctx.engine.state.players[owner_idx].hand) > int(hand_size_lte):
+                return False
         altare_sigilli_gte = condition.get("controller_altare_sigilli_gte")
         if altare_sigilli_gte is not None:
             if ctx.engine._get_altare_sigilli(owner_idx) < int(altare_sigilli_gte):
@@ -2018,6 +2260,33 @@ class RuntimeCardManager:
         if selected_target_startswith:
             prefix = _norm(str(selected_target_startswith))
             if not selected_target.startswith(prefix):
+                return False
+        stored_card_matches = condition.get("stored_card_matches")
+        if stored_card_matches:
+            store_name = str(stored_card_matches.get("stored", "")).strip()
+            if not store_name:
+                return False
+
+            stored_uid = str(ctx.engine.state.flags.get(f"_runtime_store_{store_name}", "")).strip()
+            if not stored_uid:
+                return False
+
+            inst = ctx.engine.state.instances.get(stored_uid)
+            if inst is None:
+                return False
+
+            filt = stored_card_matches.get("card_filter", {}) or {}
+
+            name_contains = _norm(str(filt.get("name_contains", "")))
+            if name_contains and name_contains not in _norm(inst.definition.name):
+                return False
+
+            name_not_contains = _norm(str(filt.get("name_not_contains", "")))
+            if name_not_contains and name_not_contains in _norm(inst.definition.name):
+                return False
+
+            type_filter = {_norm(v) for v in list(filt.get("card_type_in", []) or [])}
+            if type_filter and _norm(inst.definition.card_type) not in type_filter:
                 return False
 
         opp = 1 - owner_idx

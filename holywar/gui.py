@@ -48,6 +48,8 @@ class HolyWarGUI(tk.Tk):
         self.chain_priority_idx = 0
         self.chain_pass_count = 0
         self.religions = religions
+        self._reveal_prompt_open = False
+        self._reveal_prompt_last_uid = ""
         self._p1_deck_map: dict[str, str | None] = {}
         self._p2_deck_map: dict[str, str | None] = {}
         self.resource_name_labels: list[ttk.Label] = []
@@ -907,6 +909,50 @@ class HolyWarGUI(tk.Tk):
                 prio = st.players[self.chain_priority_idx].name
                 status += f" | CATENA: priorita {prio} (OK Catena = passa)"
             self.status_var.set(status)
+        
+        self.after_idle(self._maybe_show_runtime_reveal)
+
+    def _maybe_show_runtime_reveal(self) -> None:
+        if self.engine is None:
+            return
+        if self._reveal_prompt_open:
+            return
+
+        flags = self.engine.state.flags
+        waiting = bool(flags.get("_runtime_waiting_for_reveal"))
+        reveal_uid = str(flags.get("_runtime_reveal_card", "")).strip()
+
+        if not waiting or not reveal_uid:
+            self._reveal_prompt_last_uid = ""
+            return
+
+        if reveal_uid == self._reveal_prompt_last_uid:
+            return
+
+        inst = self.engine.state.instances.get(reveal_uid)
+        if inst is None:
+            flags["_runtime_waiting_for_reveal"] = False
+            flags.pop("_runtime_reveal_card", None)
+            self._reveal_prompt_last_uid = ""
+            return
+
+        self._reveal_prompt_open = True
+        self._reveal_prompt_last_uid = reveal_uid
+        try:
+            messagebox.showinfo(
+                "Carta rivelata",
+                f"Hai rivelato: {inst.definition.name}\n\nPremi OK per continuare la risoluzione dell'effetto."
+            )
+        finally:
+            self._reveal_prompt_open = False
+
+        flags["_runtime_waiting_for_reveal"] = False
+        flags.pop("_runtime_reveal_card", None)
+
+        runtime_cards.resume_pending_play(self.engine)
+
+        self._reveal_prompt_last_uid = ""
+        self.refresh()
 
     def _update_resource_panel(self, panel_idx: int, player) -> None:
         if panel_idx >= len(self.resource_name_labels):
