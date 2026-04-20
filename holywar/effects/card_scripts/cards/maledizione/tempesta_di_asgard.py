@@ -11,9 +11,7 @@ SCRIPT = {
         {
             "condition": {"controller_has_saint_with_name": "Thor"},
             "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "field",
-                "owner": "opponent",
+                "type": "all_saints_on_field",
                 "card_filter": {"card_type_in": ["santo", "token"]},
             },
             "effect": {"action": "decrease_faith", "amount": 4},
@@ -21,21 +19,10 @@ SCRIPT = {
         {
             "condition": {"not": {"controller_has_saint_with_name": "Thor"}},
             "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "field",
-                "owner": "opponent",
+                "type": "all_saints_on_field",
                 "card_filter": {"card_type_in": ["santo", "token"]},
             },
             "effect": {"action": "decrease_faith", "amount": 2},
         },
-        {
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "field",
-                "owner": "me",
-                "card_filter": {"card_type_in": ["santo", "token"]},
-            },
-            "effect": {"action": "decrease_faith", "amount": 2},
-        }
     ],
 }

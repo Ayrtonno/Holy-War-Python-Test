@@ -20,7 +20,7 @@ PREMADE_DECKS: dict[str, dict] = {
         "religion": "Animismo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Processione", 5), ("Albero Fortunato", 5), ("Radici", 5), ("Ritorno Catastrofico", 10),
+            ("Processione", 5), ("Thor", 10), ("Deriu-hebet", 10),
         ],
     },
     "test_nemico": {

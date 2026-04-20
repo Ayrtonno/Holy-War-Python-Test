@@ -8,6 +8,14 @@ SCRIPT = {
     "on_activate_mode": "auto",
     "triggered_effects": [
     ],
-    "on_play_actions": [],
+    "on_play_actions": [
+        {
+            "effect": {
+                "action" : "inflict_sin",
+                "amount": 10,
+                "target_player": "opponent",
+            },
+        },
+    ],
 }
 
