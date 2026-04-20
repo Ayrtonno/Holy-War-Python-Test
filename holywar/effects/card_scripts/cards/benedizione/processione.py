@@ -22,11 +22,17 @@ SCRIPT = {
             },
         },
         {
+            "effect": {
+                "action": "reveal_stored_card",
+                "stored": "processione_top",
+            },
+        },
+        {
             "condition": {
                 "stored_card_matches": {
                     "stored": "processione_top",
                     "card_filter": {
-                        "card_type_in": ["Santo"]
+                        "card_type_in": ["Santo"],
                     },
                 }
             },
@@ -41,7 +47,7 @@ SCRIPT = {
                 "stored_card_matches": {
                     "stored": "processione_top",
                     "card_filter": {
-                        "card_type_in": ["Santo"]
+                        "card_type_in": ["Santo"],
                     },
                 }
             },
@@ -56,7 +62,7 @@ SCRIPT = {
                     "stored_card_matches": {
                         "stored": "processione_top",
                         "card_filter": {
-                            "card_type_in": ["Santo"]
+                            "card_type_in": ["Santo"],
                         },
                     }
                 }
@@ -73,7 +79,7 @@ SCRIPT = {
                     "stored_card_matches": {
                         "stored": "processione_top",
                         "card_filter": {
-                            "card_type_in": ["Santo"]
+                            "card_type_in": ["Santo"],
                         },
                     }
                 }
