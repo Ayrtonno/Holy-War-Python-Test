@@ -253,16 +253,6 @@ class HolyWarGUI(tk.Tk):
         res = sim.activate_ability(player_idx, source, target)
         return bool(res.ok and self._is_effective_result_message(res.message))
 
-    def _trace_vulcano_gui(self, message: str, *, source_uid: str | None = None) -> None:
-        if self.engine is None:
-            return
-        uid = source_uid
-        if uid is not None:
-            inst = self.engine.state.instances.get(uid)
-            if inst is None or inst.definition.name.strip().lower() != "vulcano":
-                return
-        self.engine.state.log(f"[TRACE VULCANO GUI] {message}")
-
     def _can_play_target(self, player_idx: int, hand_idx: int, target: str | None, quick: bool = False) -> bool:
         sim = self._clone_engine()
         if sim is None:
@@ -286,6 +276,7 @@ class HolyWarGUI(tk.Tk):
             "impossibile",
             "devi selezionare",
             "scegli un artefatto",
+            "gia usata",
             "nessun effetto scriptato",
             "nessun effetto attivabile",
             "effetto registrato",
@@ -429,6 +420,10 @@ class HolyWarGUI(tk.Tk):
         uid = self.engine.resolve_board_uid(player_idx, source)
         if uid is None:
             return False
+        inst = self.engine.state.instances.get(uid)
+        if inst is not None:
+            if runtime_cards.is_activate_once_per_turn(inst.definition.name) and not self.engine.can_activate_once_per_turn(uid):
+                return False
         mode = self._activate_targeting_mode(uid)
         if mode == "yggdrasil":
             return True
@@ -2323,7 +2318,6 @@ class HolyWarGUI(tk.Tk):
         uid = self.engine.resolve_board_uid(own_idx, source)
         if uid is None:
             return
-        self._trace_vulcano_gui(f"right_click source={source} uid={uid}", source_uid=uid)
         menu = tk.Menu(self, tearoff=0)
         if source.startswith("a"):
             slot = int(source[1])
@@ -2343,10 +2337,6 @@ class HolyWarGUI(tk.Tk):
             if hl_tokens:
                 self._set_slot_highlights(hl_tokens, side_hint="enemy")
         has_activation = self._activation_has_any_valid_option(own_idx, source)
-        self._trace_vulcano_gui(
-            f"menu activation availability source={source} has_activation={has_activation}",
-            source_uid=uid,
-        )
         if has_activation:
             menu.add_command(label="Attiva abilita", command=lambda src=source: self.do_activate(src))
         else:
@@ -2380,13 +2370,9 @@ class HolyWarGUI(tk.Tk):
         if uid is None:
             messagebox.showwarning("Abilita non valida", "Sorgente non valida.")
             return
-        self._trace_vulcano_gui(f"do_activate start source={source} uid={uid}", source_uid=uid)
         mode = self._activate_targeting_mode(uid)
-        self._trace_vulcano_gui(f"activate mode={mode}", source_uid=uid)
         if mode == "none":
-            self._trace_vulcano_gui("calling activate_ability with target=None", source_uid=uid)
             res = self.engine.activate_ability(own_idx, source, None)
-            self._trace_vulcano_gui(f"activate_ability result ok={res.ok} msg={res.message!r}", source_uid=uid)
             if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
                 self._post_reveal_chain_actor = own_idx
                 self._maybe_show_runtime_reveal()
@@ -2419,11 +2405,8 @@ class HolyWarGUI(tk.Tk):
                 allow_manual=False,
             )
             if canceled or not target:
-                self._trace_vulcano_gui("manual picker canceled/empty target", source_uid=uid)
                 return
-            self._trace_vulcano_gui(f"manual picker target={target!r}", source_uid=uid)
             res = self.engine.activate_ability(own_idx, source, target)
-            self._trace_vulcano_gui(f"activate_ability result ok={res.ok} msg={res.message!r}", source_uid=uid)
             if res.ok:
                 self.start_chain(actor_idx=own_idx)
             if not res.ok:
@@ -2448,10 +2431,6 @@ class HolyWarGUI(tk.Tk):
                 for tok in valid_tokens
                 if self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
             ]
-            self._trace_vulcano_gui(
-                f"board mode options min={min_targets} max={max_targets} allow_no_target={allow_no_target} tokens={valid_tokens}",
-                source_uid=uid,
-            )
             if not valid_tokens and not allow_no_target:
                 messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
                 return
@@ -2468,11 +2447,8 @@ class HolyWarGUI(tk.Tk):
                 card_uid=uid,
             )
         if canceled:
-            self._trace_vulcano_gui("picker canceled", source_uid=uid)
             return
-        self._trace_vulcano_gui(f"calling activate_ability target={target!r}", source_uid=uid)
         res = self.engine.activate_ability(own_idx, source, target)
-        self._trace_vulcano_gui(f"activate_ability result ok={res.ok} msg={res.message!r}", source_uid=uid)
         if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
             self._post_reveal_chain_actor = own_idx
             self._maybe_show_runtime_reveal()

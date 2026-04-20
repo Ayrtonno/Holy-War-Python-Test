@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import random
 import unicodedata
-import inspect
 from pathlib import Path
 
 from holywar.core import card_play as card_play_ops
@@ -361,11 +360,6 @@ class GameEngine:
         if "silenced" in inst.cursed:
             return ActionResult(False, "Questa carta ha i suoi effetti annullati.")
         if runtime_cards.is_activate_once_per_turn(inst.definition.name) and not self.can_activate_once_per_turn(uid):
-            used = self.state.flags.setdefault("activated_turn", {})
-            used_turn = int(used.get(uid, -1))
-            self.state.log(
-                f"[TRACE VULCANO ENGINE] blocked once-per-turn source={uid} used_turn={used_turn} current_turn={self.state.turn_number}"
-            )
             return ActionResult(True, f"{inst.definition.name}: abilita gia usata in questo turno.")
         can_activate, reason = runtime_cards.can_activate(self, player_idx, uid, target=target)
         if not can_activate:
@@ -384,12 +378,6 @@ class GameEngine:
     def mark_activated_this_turn(self, uid: str) -> None:
         used = self.state.flags.setdefault("activated_turn", {})
         used[uid] = int(self.state.turn_number)
-        inst = self.state.instances.get(uid)
-        if inst is not None and _norm(inst.definition.name) == _norm("Vulcano"):
-            caller = inspect.stack()[1]
-            self.state.log(
-                f"[TRACE VULCANO ENGINE] mark_activated source={uid} turn={self.state.turn_number} caller={caller.function}@{Path(caller.filename).name}:{caller.lineno}"
-            )
 
     # Resolves a reactive blessing, curse, or special quick-play card.
     def quick_play(self, player_idx: int, hand_index: int, target: str | None = None) -> ActionResult:

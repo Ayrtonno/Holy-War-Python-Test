@@ -412,26 +412,6 @@ class RuntimeCardManager:
     def get_script(self, card_name: str) -> CardScript | None:
         return self._scripts.get(_norm(card_name))
 
-    def _is_vulcano_trace_enabled(self, engine: GameEngine, source_uid: str) -> bool:
-        if bool(engine.state.flags.get("_runtime_trace_vulcano", True)):
-            inst = engine.state.instances.get(source_uid)
-            if inst is not None and _norm(inst.definition.name) == _norm("Vulcano"):
-                return True
-        return False
-
-    def _debug_uid_label(self, engine: GameEngine, uid: str) -> str:
-        inst = engine.state.instances.get(uid)
-        if inst is None:
-            return f"{uid}<?>"
-        owner = int(inst.owner)
-        zone = engine._locate_uid_zone(owner, uid)
-        return f"{uid}<{inst.definition.name}|owner={owner}|zone={zone}>"
-
-    def _trace_vulcano(self, engine: GameEngine, source_uid: str, message: str) -> None:
-        if not self._is_vulcano_trace_enabled(engine, source_uid):
-            return
-        engine.state.log(f"[TRACE VULCANO] {message}")
-
     def get_play_targeting_mode(self, card_name: str) -> str:
         script = self.get_script(card_name)
         if script is None:
@@ -729,46 +709,24 @@ class RuntimeCardManager:
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = str(target or "")
         try:
-            self._trace_vulcano(
-                engine,
-                uid,
-                (
-                    f"resolve_activate start: source={self._debug_uid_label(engine, uid)} "
-                    f"mode={mode} target_raw={str(target)!r} activate_targeting={script.activate_targeting} "
-                    f"once_per_turn={script.activate_once_per_turn} actions={len(script.on_activate_actions)}"
-                ),
-            )
             is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"registry", "auto", "custom"}:
                 handler = get_activate(inst.definition.name)
                 if handler is not None:
-                    self._trace_vulcano(engine, uid, "registry handler found, invoking...")
                     out = handler(engine, player_idx, uid, target)
                     if out is not NOT_HANDLED:
-                        self._trace_vulcano(engine, uid, f"registry handler handled activation: out={out!r}")
                         return str(out)
-                    self._trace_vulcano(engine, uid, "registry handler returned NOT_HANDLED.")
             if mode in {"scripted", "custom"} and script.on_activate_actions:
-                self._trace_vulcano(engine, uid, "scripted activate path selected.")
                 self._run_activate_actions(engine, player_idx, uid, script.on_activate_actions)
                 if script.activate_once_per_turn and not flags.get("_runtime_waiting_for_reveal"):
                     engine.mark_activated_this_turn(uid)
-                    self._trace_vulcano(engine, uid, "marked activated_this_turn.")
                 return f"{inst.definition.name}: effetto attivato via script."
             if is_saint:
-                self._trace_vulcano(engine, uid, "saint fallback reached: no scripted activate actions.")
                 return f"{inst.definition.name}: nessun effetto scriptato."
             if mode in {"ported", "auto", "runtime"}:
-                self._trace_vulcano(engine, uid, "ported activate fallback path selected.")
                 return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
-            self._trace_vulcano(engine, uid, "default activate fallback path selected (ported).")
             return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
         finally:
-            self._trace_vulcano(
-                engine,
-                uid,
-                f"resolve_activate end: waiting_for_reveal={bool(flags.get('_runtime_waiting_for_reveal'))}",
-            )
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
             else:
@@ -786,44 +744,22 @@ class RuntimeCardManager:
     ) -> None:
         flags = engine.state.flags
         flags["_runtime_pending_mode"] = "activate"
-        self._trace_vulcano(
-            engine,
-            source_uid,
-            f"_run_activate_actions start: owner={owner_idx} start_index={start_index} actions={len(actions)} selected_raw={flags.get('_runtime_selected_target')!r}",
-        )
         for i in range(start_index, len(actions)):
             if flags.get("_runtime_waiting_for_reveal"):
-                self._trace_vulcano(engine, source_uid, f"pause before action[{i}] due to waiting_for_reveal.")
                 flags["_runtime_action_index_resume"] = str(i)
                 flags["_runtime_resume_source"] = source_uid
                 flags["_runtime_resume_owner"] = str(owner_idx)
                 break
             action = actions[i]
-            self._trace_vulcano(
-                engine,
-                source_uid,
-                (
-                    f"action[{i}] begin: effect={action.effect.action} target_type={action.target.type} "
-                    f"target_owner={action.target.owner} zone={action.target.zone} "
-                    f"min={action.target.min_targets} max={action.target.max_targets}"
-                ),
-            )
             if action.condition and not self._eval_condition_node(
                 RuleEventContext(engine=engine, event="on_activate", player_idx=owner_idx, payload={"card": source_uid}),
                 owner_idx,
                 action.condition,
             ):
-                self._trace_vulcano(engine, source_uid, f"action[{i}] skipped: condition=false {action.condition}")
                 continue
-            if action.condition:
-                self._trace_vulcano(engine, source_uid, f"action[{i}] condition=true {action.condition}")
             targets = self._resolve_targets(engine, owner_idx, action.target)
-            target_labels = [self._debug_uid_label(engine, t_uid) for t_uid in targets]
-            self._trace_vulcano(engine, source_uid, f"action[{i}] resolved targets={target_labels}")
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
-            self._trace_vulcano(engine, source_uid, f"action[{i}] effect applied.")
             if flags.get("_runtime_waiting_for_reveal"):
-                self._trace_vulcano(engine, source_uid, f"pause after action[{i}] due to reveal.")
                 flags["_runtime_action_index_resume"] = str(i + 1)
                 flags["_runtime_resume_source"] = source_uid
                 flags["_runtime_resume_owner"] = str(owner_idx)
@@ -831,11 +767,6 @@ class RuntimeCardManager:
 
         if not flags.get("_runtime_waiting_for_reveal"):
             flags.pop("_runtime_pending_mode", None)
-        self._trace_vulcano(
-            engine,
-            source_uid,
-            f"_run_activate_actions end: waiting_for_reveal={bool(flags.get('_runtime_waiting_for_reveal'))}",
-        )
 
     def resume_pending_effect(self, engine: GameEngine) -> None:
         flags = engine.state.flags
@@ -1628,11 +1559,6 @@ class RuntimeCardManager:
     ) -> None:
         action = _norm(effect.action)
         action = EFFECT_ACTION_ALIASES.get(action, action)
-        self._trace_vulcano(
-            engine,
-            source_uid,
-            f"_apply_effect: action={action} owner={owner_idx} targets={[self._debug_uid_label(engine, t) for t in targets]}",
-        )
         if action == "return_to_hand_once_per_turn":
             self._apply_return_to_hand_once_per_turn(engine, owner_idx, source_uid, targets)
             return
@@ -2180,21 +2106,8 @@ class RuntimeCardManager:
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
-                    self._trace_vulcano(engine, source_uid, f"destroy_card: target uid missing {t_uid}")
                     continue
-                before_zone = engine._locate_uid_zone(inst.owner, t_uid)
-                self._trace_vulcano(
-                    engine,
-                    source_uid,
-                    f"destroy_card: before target={self._debug_uid_label(engine, t_uid)}",
-                )
                 engine.destroy_any_card(inst.owner, t_uid)
-                after_zone = engine._locate_uid_zone(inst.owner, t_uid)
-                self._trace_vulcano(
-                    engine,
-                    source_uid,
-                    f"destroy_card: after uid={t_uid} zone {before_zone} -> {after_zone}",
-                )
             return
         if action == "excommunicate_card":
             for t_uid in targets:
