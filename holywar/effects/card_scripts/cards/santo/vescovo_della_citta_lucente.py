@@ -15,7 +15,10 @@ SCRIPT = {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
-                "card_filter": {"card_type_in": ["santo", "token"]},
+                "card_filter": {
+                    "card_type_in": ["santo", "token"],
+                    "exclude_event_card": True,
+                },
             },
             "effect": {"action": "increase_faith", "amount": 5},
         }

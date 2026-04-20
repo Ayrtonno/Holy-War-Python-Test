@@ -1058,12 +1058,16 @@ class RuntimeCardManager:
         needle = _norm(target.card_filter.name_contains or "")
         type_filter = {_norm(v) for v in target.card_filter.card_type_in}
         event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
+        source_uid = str(engine.state.flags.get("_runtime_source_card", ""))
         out: list[str] = []
         for uid in pool:
             if uid not in engine.state.instances:
                 continue
-            if target.card_filter.exclude_event_card and event_uid and uid == event_uid:
-                continue
+            if target.card_filter.exclude_event_card:
+                if event_uid and uid == event_uid:
+                    continue
+                if not event_uid and source_uid and uid == source_uid:
+                    continue
             inst = engine.state.instances[uid]
             if needle and needle not in _norm(inst.definition.name):
                 continue
