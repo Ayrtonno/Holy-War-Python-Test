@@ -687,7 +687,7 @@ class GameEngine:
         if card is None:
             return ActionResult(False, "Indice mano non valido.")
         ctype = _norm(card.definition.card_type)
-        can_play, reason = runtime_cards.can_play(self, player_idx, player.hand[hand_index])
+        can_play, reason = runtime_cards.can_play(self, player_idx, player.hand[hand_index], target=target)
         if not can_play:
             return ActionResult(False, reason or "Non puoi giocare questa carta.")
         place_owner_idx = player_idx
@@ -861,7 +861,16 @@ class GameEngine:
                 self.state.log(f"{player.name} prova a usare {card.definition.name}, ma viene annullata da Barriera Magica.")
                 return ActionResult(True, "Attivazione annullata da Barriera Magica.")
             resolved = resolve_card_effect(self, player_idx, uid, target)
-            self.send_to_graveyard(player_idx, uid)
+            # Some scripted quick cards move themselves to a different zone (hand/excommunicated/deck).
+            # In that case do not force an additional graveyard move.
+            owner_state = self.state.players[player_idx]
+            moved_elsewhere = (
+                uid in owner_state.hand
+                or uid in owner_state.excommunicated
+                or uid in owner_state.deck
+            )
+            if not moved_elsewhere:
+                self.send_to_graveyard(player_idx, uid)
             self._cleanup_zero_faith_saints()
             self.check_win_conditions()
             return ActionResult(True, resolved)
@@ -880,7 +889,16 @@ class GameEngine:
             return ActionResult(False, "Sorgente non valida. Usa a1..a3, d1..d3, r1..r4 o b.")
         if "silenced" in self.state.instances[uid].cursed:
             return ActionResult(False, "Questa carta ha i suoi effetti annullati.")
+        if runtime_cards.is_activate_once_per_turn(self.state.instances[uid].definition.name):
+            if not self.can_activate_once_per_turn(uid):
+                return ActionResult(False, "Questa abilita si puo attivare solo una volta per turno.")
+        can_activate, reason = runtime_cards.can_activate(self, player_idx, uid, target=target)
+        if not can_activate:
+            return ActionResult(False, reason or "Non puoi attivare questa abilita.")
         msg = resolve_activated_effect(self, player_idx, uid, target)
+        if runtime_cards.is_activate_once_per_turn(self.state.instances[uid].definition.name):
+            if not self.state.flags.get("_runtime_waiting_for_reveal"):
+                self.mark_activated_this_turn(uid)
         self._cleanup_zero_faith_saints()
         self.check_win_conditions()
         return ActionResult(True, msg)
@@ -902,6 +920,10 @@ class GameEngine:
         is_moribondo = _norm(card.definition.name) == _norm("Moribondo")
         if ctype not in QUICK_TYPES and not is_moribondo:
             return ActionResult(False, "Solo Benedizione/Maledizione (o Moribondo) sono giocabili fuori turno.")
+        if ctype in QUICK_TYPES:
+            can_play, reason = runtime_cards.can_play(self, player_idx, player.hand[hand_index], target=target)
+            if not can_play:
+                return ActionResult(False, reason or "Non puoi giocare questa carta.")
         uid = player.hand.pop(hand_index)
         self._emit_event("on_card_played", player_idx, card=uid, card_type=ctype, target=target)
         if ctype == "benedizione":

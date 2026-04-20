@@ -21,7 +21,13 @@ def _load_card_modules() -> None:
 
 def resolve_enter_effect(engine, player_idx: int, uid: str) -> str | None:
     _load_card_modules()
-    return str(runtime_cards.resolve_enter(engine, player_idx, uid))
+    out = runtime_cards.resolve_enter(engine, player_idx, uid)
+    if out is None:
+        return None
+    text = str(out).strip()
+    if not text or text.lower() == "none":
+        return None
+    return text
 
 
 def resolve_card_effect(engine, player_idx: int, uid: str, target: str | None) -> str:

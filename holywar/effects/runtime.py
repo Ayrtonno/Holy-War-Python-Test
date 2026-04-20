@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from holywar.core import state
+from holywar.core.state import MAX_HAND
 from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.effects import runtime_ported
 from holywar.effects.registry import NOT_HANDLED, get_activate, get_enter, get_play
@@ -90,9 +91,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "kah_ok_tick",
     "trombe_del_giudizio_tick",
     "av_drna_on_opponent_draw",
-    "deriu_hebet_tick",
     "pay_sin_or_destroy_self",
-    "tikal_tick",
     "mill_cards",
     "draw_cards",
     "inflict_sin",
@@ -117,9 +116,10 @@ SUPPORTED_EFFECT_ACTIONS = {
     "summon_target_to_field",
     "remove_sin_equal_to_target_strength",
     "store_top_card_of_zone",
+    "reveal_selected_target",
+    "reveal_stored_card",
     "move_stored_card_to_zone",
     "move_source_to_zone",
-    "reveal_stored_card",
 }
 
 
@@ -199,6 +199,7 @@ class CardScript:
     on_play_mode: str = "auto"
     on_enter_mode: str = "auto"
     on_activate_mode: str = "auto"
+    activate_once_per_turn: bool = False
     play_owner: str = "me"
     play_targeting: str = "auto"
     play_requirements: dict[str, Any] = field(default_factory=dict)
@@ -260,57 +261,9 @@ class RuntimeCardManager:
     def register_script(self, script: CardScript) -> None:
         self._scripts[_norm(script.name)] = script
 
-    def resume_pending_play(self, engine: GameEngine) -> None:
-        flags = engine.state.flags
-
-        source_uid = str(flags.get("_runtime_resume_source", "")).strip()
-        if not source_uid:
-            return
-
-        owner_idx_raw = flags.get("_runtime_resume_owner")
-        if owner_idx_raw is None:
-            return
-
-        owner_idx = int(owner_idx_raw)
-
-        inst = engine.state.instances.get(source_uid)
-        if inst is None:
-            flags.pop("_runtime_resume_source", None)
-            flags.pop("_runtime_resume_owner", None)
-            flags.pop("_runtime_action_index_resume", None)
-            return
-
-        script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
-        if not script.on_play_actions:
-            flags.pop("_runtime_resume_source", None)
-            flags.pop("_runtime_resume_owner", None)
-            flags.pop("_runtime_action_index_resume", None)
-            return
-
-        start_index = int(flags.get("_runtime_action_index_resume", 0))
-
-        previous_source = flags.get("_runtime_effect_source")
-        flags["_runtime_effect_source"] = source_uid
-        flags["_runtime_source_card"] = source_uid
-        try:
-            self._run_play_actions(
-                engine,
-                owner_idx,
-                source_uid,
-                script.on_play_actions,
-                start_index=start_index,
-            )
-        finally:
-            if previous_source is None:
-                flags.pop("_runtime_effect_source", None)
-            else:
-                flags["_runtime_effect_source"] = previous_source
-
-            if not flags.get("_runtime_waiting_for_reveal"):
-                flags.pop("_runtime_source_card", None)
-                flags.pop("_runtime_resume_source", None)
-                flags.pop("_runtime_resume_owner", None)
-                flags.pop("_runtime_action_index_resume", None)
+    def is_activate_once_per_turn(self, card_name: str) -> bool:
+        script = self._scripts.get(_norm(card_name))
+        return bool(script and script.activate_once_per_turn)
 
     def register_script_from_dict(self, card_name: str, spec: dict[str, Any]) -> None:
         def _parse_effect(raw: dict[str, Any]) -> EffectSpec:
@@ -394,6 +347,7 @@ class RuntimeCardManager:
                 on_play_mode=str(spec.get("on_play_mode", "auto")),
                 on_enter_mode=str(spec.get("on_enter_mode", "auto")),
                 on_activate_mode=str(spec.get("on_activate_mode", "auto")),
+                activate_once_per_turn=bool(spec.get("activate_once_per_turn", False)),
                 play_owner=str(spec.get("play_owner", "me")),
                 play_targeting=str(spec.get("play_targeting", "auto")),
                 activate_targeting=str(spec.get("activate_targeting", "auto")),
@@ -565,22 +519,61 @@ class RuntimeCardManager:
     def migrated_count(self) -> int:
         return len(self._scripts)
     
-    def can_play(self, engine: GameEngine, player_idx: int, uid: str) -> tuple[bool, str | None]:
+    def can_play(
+        self,
+        engine: GameEngine,
+        player_idx: int,
+        uid: str,
+        target: str | None = None,
+    ) -> tuple[bool, str | None]:
         self.ensure_all_cards_migrated(engine)
         inst = engine.state.instances[uid]
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
 
-        if not script.play_requirements:
-            return (True, None)
+        if script.play_requirements:
+            ok = self._eval_condition_node(
+                RuleEventContext(engine=engine, event="can_play", player_idx=player_idx, payload={"card": uid}),
+                player_idx,
+                script.play_requirements,
+            )
+            if not ok:
+                return (False, "Non puoi giocare questa carta nelle condizioni attuali.")
 
-        ok = self._eval_condition_node(
-            RuleEventContext(engine=engine, event="can_play", player_idx=player_idx, payload={"card": uid}),
-            player_idx,
-            script.play_requirements,
-        )
-        if ok:
+        if script.on_play_actions:
+            return self._validate_manual_target_actions(
+                engine=engine,
+                owner_idx=player_idx,
+                source_uid=uid,
+                actions=script.on_play_actions,
+                selected_target=target,
+                event_name="on_play",
+                empty_pool_message="Nessun bersaglio valido disponibile per questa carta.",
+                missing_selection_message="Devi selezionare almeno un bersaglio valido per giocare questa carta.",
+            )
+        return (True, None)
+
+    def can_activate(
+        self,
+        engine: GameEngine,
+        player_idx: int,
+        uid: str,
+        target: str | None = None,
+    ) -> tuple[bool, str | None]:
+        self.ensure_all_cards_migrated(engine)
+        inst = engine.state.instances[uid]
+        script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+        if not script.on_activate_actions:
             return (True, None)
-        return (False, "Non puoi giocare questa carta nelle condizioni attuali.")
+        return self._validate_manual_target_actions(
+            engine=engine,
+            owner_idx=player_idx,
+            source_uid=uid,
+            actions=script.on_activate_actions,
+            selected_target=target,
+            event_name="on_activate",
+            empty_pool_message="Nessun bersaglio valido disponibile per questa abilita.",
+            missing_selection_message="Devi selezionare almeno un bersaglio valido per attivare questa abilita.",
+        )
 
     def resolve_play(self, engine: GameEngine, player_idx: int, uid: str, target: str | None) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -635,6 +628,7 @@ class RuntimeCardManager:
         start_index: int = 0,
     ) -> None:
         flags = engine.state.flags
+        flags["_runtime_pending_mode"] = "play"
 
         for i in range(start_index, len(actions)):
             if flags.get("_runtime_waiting_for_reveal"):
@@ -663,6 +657,8 @@ class RuntimeCardManager:
                 break
 
         flags.pop("_runtime_action_index", None)
+        if not flags.get("_runtime_waiting_for_reveal"):
+            flags.pop("_runtime_pending_mode", None)
 
     def resolve_enter(self, engine: GameEngine, player_idx: int, uid: str) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -701,8 +697,9 @@ class RuntimeCardManager:
                 flags.pop("_runtime_effect_source", None)
             else:
                 flags["_runtime_effect_source"] = previous_source
-            flags.pop("_runtime_source_card", None)
-            flags.pop("_runtime_selected_target", None)
+            if not flags.get("_runtime_waiting_for_reveal"):
+                flags.pop("_runtime_source_card", None)
+                flags.pop("_runtime_selected_target", None)
 
     def resolve_activate(self, engine: GameEngine, player_idx: int, uid: str, target: str | None) -> object:
         self.ensure_all_cards_migrated(engine)
@@ -739,8 +736,23 @@ class RuntimeCardManager:
             flags.pop("_runtime_source_card", None)
             flags.pop("_runtime_selected_target", None)
 
-    def _run_activate_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
-        for action in actions:
+    def _run_activate_actions(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        source_uid: str,
+        actions: list[ActionSpec],
+        start_index: int = 0,
+    ) -> None:
+        flags = engine.state.flags
+        flags["_runtime_pending_mode"] = "activate"
+        for i in range(start_index, len(actions)):
+            if flags.get("_runtime_waiting_for_reveal"):
+                flags["_runtime_action_index_resume"] = str(i)
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                break
+            action = actions[i]
             if action.condition and not self._eval_condition_node(
                 RuleEventContext(engine=engine, event="on_activate", player_idx=owner_idx, payload={"card": source_uid}),
                 owner_idx,
@@ -749,6 +761,57 @@ class RuntimeCardManager:
                 continue
             targets = self._resolve_targets(engine, owner_idx, action.target)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
+            if flags.get("_runtime_waiting_for_reveal"):
+                flags["_runtime_action_index_resume"] = str(i + 1)
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                break
+
+        if not flags.get("_runtime_waiting_for_reveal"):
+            flags.pop("_runtime_pending_mode", None)
+
+    def resume_pending_effect(self, engine: GameEngine) -> None:
+        flags = engine.state.flags
+        source_uid = str(flags.get("_runtime_resume_source", "")).strip()
+        owner_idx_raw = flags.get("_runtime_resume_owner")
+        if not source_uid or owner_idx_raw is None:
+            return
+
+        inst = engine.state.instances.get(source_uid)
+        if inst is None:
+            flags.pop("_runtime_resume_source", None)
+            flags.pop("_runtime_resume_owner", None)
+            flags.pop("_runtime_action_index_resume", None)
+            flags.pop("_runtime_pending_mode", None)
+            return
+
+        owner_idx = int(owner_idx_raw)
+        script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+        start_index = int(flags.get("_runtime_action_index_resume", 0))
+        mode = str(flags.get("_runtime_pending_mode", "")).strip().lower()
+        previous_source = flags.get("_runtime_effect_source")
+
+        flags["_runtime_effect_source"] = source_uid
+        flags["_runtime_source_card"] = source_uid
+        try:
+            if mode == "play":
+                self._run_play_actions(engine, owner_idx, source_uid, script.on_play_actions, start_index=start_index)
+            elif mode == "activate":
+                self._run_activate_actions(engine, owner_idx, source_uid, script.on_activate_actions, start_index=start_index)
+        finally:
+            if previous_source is None:
+                flags.pop("_runtime_effect_source", None)
+            else:
+                flags["_runtime_effect_source"] = previous_source
+
+            if not flags.get("_runtime_waiting_for_reveal"):
+                if mode == "activate" and script.activate_once_per_turn:
+                    engine.mark_activated_this_turn(source_uid)
+                flags.pop("_runtime_source_card", None)
+                flags.pop("_runtime_resume_source", None)
+                flags.pop("_runtime_resume_owner", None)
+                flags.pop("_runtime_action_index_resume", None)
+                flags.pop("_runtime_pending_mode", None)
 
     def _run_enter_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
         for action in actions:
@@ -913,6 +976,165 @@ class RuntimeCardManager:
                 return value.strip()
         return ""
 
+    def _selected_target_uid_for_current_action(self, engine: GameEngine, owner_idx: int) -> str | None:
+        raw_selected = self._selected_target_raw_for_current_action(engine)
+        if not raw_selected:
+            return None
+        selected = raw_selected.split(",", 1)[0].strip()
+        if selected.startswith("buff:"):
+            selected = selected.split(":", 1)[1]
+        if selected in engine.state.instances:
+            return selected
+        if ":" in selected:
+            zone, name = selected.split(":", 1)
+            zone = _norm(zone)
+            name = name.strip()
+            if zone in {"deck", "relicario"}:
+                player = engine.state.players[owner_idx]
+                for uid in player.deck:
+                    if _norm(engine.state.instances[uid].definition.name) == _norm(name):
+                        return uid
+        zone, slot = engine._parse_zone_target(selected)
+        if zone is None:
+            return None
+        player = engine.state.players[owner_idx]
+        if zone == "attack" and 0 <= slot < len(player.attack):
+            return player.attack[slot]
+        if zone == "defense" and 0 <= slot < len(player.defense):
+            return player.defense[slot]
+        return None
+
+    def _required_min_targets_for_manual_target(self, target: TargetSpec) -> int:
+        configured = int(target.min_targets) if target.min_targets is not None else 1
+        return max(1, configured)
+
+    def _collect_selectable_targets_for_manual_target(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        target: TargetSpec,
+    ) -> list[str]:
+        real_owner = self._resolve_owner_scope(owner_idx, target.owner)
+        zones = [z for z in target.zones if str(z).strip()]
+        if not zones:
+            zones = [target.zone]
+
+        pool: list[str] = []
+        for zone_name in zones:
+            pool.extend(self._get_zone_cards(engine, real_owner, zone_name))
+        # Preserve order but avoid duplicates.
+        deduped_pool = list(dict.fromkeys(pool))
+        return self._filter_target_pool(engine, owner_idx, target, deduped_pool)
+
+    def _filter_target_pool(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        target: TargetSpec,
+        pool: list[str],
+    ) -> list[str]:
+        needle = _norm(target.card_filter.name_contains or "")
+        type_filter = {_norm(v) for v in target.card_filter.card_type_in}
+        event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
+        out: list[str] = []
+        for uid in pool:
+            if uid not in engine.state.instances:
+                continue
+            if target.card_filter.exclude_event_card and event_uid and uid == event_uid:
+                continue
+            inst = engine.state.instances[uid]
+            if needle and needle not in _norm(inst.definition.name):
+                continue
+            needle_not = _norm(target.card_filter.name_not_contains or "")
+            if needle_not and needle_not in _norm(inst.definition.name):
+                continue
+            if type_filter and _norm(inst.definition.card_type) not in type_filter:
+                continue
+            if (
+                target.card_filter.exclude_buildings_if_my_building_zone_occupied
+                and engine.state.players[owner_idx].building is not None
+                and _norm(inst.definition.card_type) == _norm("edificio")
+            ):
+                continue
+            cross_txt = _norm(str(inst.definition.crosses or ""))
+            if cross_txt in {"white", "croce bianca"}:
+                cross_val = 11
+            else:
+                try:
+                    cross_val = int(float(cross_txt)) if cross_txt else None
+                except ValueError:
+                    cross_val = None
+            if target.card_filter.crosses_gte is not None:
+                if cross_val is None or cross_val < int(target.card_filter.crosses_gte):
+                    continue
+            if target.card_filter.crosses_lte is not None:
+                if cross_val is None or cross_val > int(target.card_filter.crosses_lte):
+                    continue
+            if target.card_filter.drawn_this_turn_only:
+                drawn = engine.state.flags.get("cards_drawn_this_turn", {})
+                if uid not in set(drawn.get(str(owner_idx), [])):
+                    continue
+            out.append(uid)
+        return out
+
+    def _validate_manual_target_actions(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        source_uid: str,
+        actions: list[ActionSpec],
+        selected_target: str | None,
+        event_name: str,
+        empty_pool_message: str,
+        missing_selection_message: str,
+    ) -> tuple[bool, str | None]:
+        flags = engine.state.flags
+        previous_source = flags.get("_runtime_source_card")
+        previous_selected = flags.get("_runtime_selected_target")
+        previous_action_idx = flags.get("_runtime_action_index")
+
+        flags["_runtime_source_card"] = source_uid
+        flags["_runtime_selected_target"] = str(selected_target or "")
+        try:
+            for i, action in enumerate(actions):
+                ttype = _norm(action.target.type)
+                if ttype not in {"selected_target", "selected_targets"}:
+                    continue
+                flags["_runtime_action_index"] = str(i)
+                if action.condition and not self._eval_condition_node(
+                    RuleEventContext(engine=engine, event=event_name, player_idx=owner_idx, payload={"card": source_uid}),
+                    owner_idx,
+                    action.condition,
+                ):
+                    continue
+
+                required_min = self._required_min_targets_for_manual_target(action.target)
+                selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, action.target)
+                if len(selectable) < required_min:
+                    return (False, empty_pool_message)
+
+                raw_for_action = self._selected_target_raw_for_current_action(engine)
+                if not raw_for_action:
+                    return (False, missing_selection_message)
+
+                resolved = self._resolve_targets(engine, owner_idx, action.target)
+                if len(resolved) < required_min:
+                    return (False, missing_selection_message)
+            return (True, None)
+        finally:
+            if previous_source is None:
+                flags.pop("_runtime_source_card", None)
+            else:
+                flags["_runtime_source_card"] = previous_source
+            if previous_selected is None:
+                flags.pop("_runtime_selected_target", None)
+            else:
+                flags["_runtime_selected_target"] = previous_selected
+            if previous_action_idx is None:
+                flags.pop("_runtime_action_index", None)
+            else:
+                flags["_runtime_action_index"] = previous_action_idx
+
     def _resolve_targets(self, engine: GameEngine, owner_idx: int, target: TargetSpec) -> list[str]:
         pool: list[str] = []
         ttype = _norm(target.type)
@@ -949,17 +1171,35 @@ class RuntimeCardManager:
                 if selected in engine.state.instances:
                     pool.append(selected)
                 else:
-                    zone, slot = engine._parse_zone_target(selected)
-                    if zone is not None:
-                        p = engine.state.players[owner_idx]
-                        if zone == "attack" and 0 <= slot < len(p.attack):
-                            uid = p.attack[slot]
-                            if uid:
-                                pool.append(uid)
-                        elif zone == "defense" and 0 <= slot < len(p.defense):
-                            uid = p.defense[slot]
-                            if uid:
-                                pool.append(uid)
+                    found_uid = None
+                    if ":" in selected:
+                        zone_name, card_name = selected.split(":", 1)
+                        if _norm(zone_name) in {"deck", "relicario"}:
+                            p = engine.state.players[owner_idx]
+                            for uid in p.deck:
+                                if _norm(engine.state.instances[uid].definition.name) == _norm(card_name):
+                                    found_uid = uid
+                                    break
+                    if found_uid is not None:
+                        pool.append(found_uid)
+                    else:
+                        zone, slot = engine._parse_zone_target(selected)
+                        if zone is not None:
+                            p = engine.state.players[owner_idx]
+                            if zone == "attack" and 0 <= slot < len(p.attack):
+                                uid = p.attack[slot]
+                                if uid:
+                                    pool.append(uid)
+                            elif zone == "defense" and 0 <= slot < len(p.defense):
+                                uid = p.defense[slot]
+                                if uid:
+                                    pool.append(uid)
+                        if not pool:
+                            selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, target)
+                            for candidate_uid in selectable:
+                                if _norm(engine.state.instances[candidate_uid].definition.name) == _norm(selected):
+                                    pool.append(candidate_uid)
+                                    break
 
         elif ttype == "selected_targets":
             raw_selected = self._selected_target_raw_for_current_action(engine)
@@ -972,6 +1212,14 @@ class RuntimeCardManager:
                     if selected in engine.state.instances:
                         pool.append(selected)
                         continue
+                    if ":" in selected:
+                        zone_name, card_name = selected.split(":", 1)
+                        if _norm(zone_name) in {"deck", "relicario"}:
+                            for uid in p.deck:
+                                if _norm(engine.state.instances[uid].definition.name) == _norm(card_name):
+                                    pool.append(uid)
+                                    break
+                            continue
                     zone, slot = engine._parse_zone_target(selected)
                     if zone is not None:
                         if zone == "attack" and 0 <= slot < len(p.attack):
@@ -982,52 +1230,19 @@ class RuntimeCardManager:
                             uid = p.defense[slot]
                             if uid:
                                 pool.append(uid)
+                    if selected not in engine.state.instances:
+                        selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, target)
+                        for candidate_uid in selectable:
+                            if _norm(engine.state.instances[candidate_uid].definition.name) == _norm(selected):
+                                pool.append(candidate_uid)
+                                break
         elif ttype == "all_saints_on_field":
             pool.extend(engine.all_saints_on_field(0))
             pool.extend(engine.all_saints_on_field(1))
         else:
             return []
 
-        needle = _norm(target.card_filter.name_contains or "")
-        type_filter = {_norm(v) for v in target.card_filter.card_type_in}
-        event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
-        out: list[str] = []
-        for uid in pool:
-            if target.card_filter.exclude_event_card and event_uid and uid == event_uid:
-                continue
-            inst = engine.state.instances[uid]
-            if needle and needle not in _norm(inst.definition.name):
-                continue
-            needle_not = _norm(target.card_filter.name_not_contains or "")
-            if needle_not and needle_not in _norm(inst.definition.name):
-                continue
-            if type_filter and _norm(inst.definition.card_type) not in type_filter:
-                continue
-            if (
-                target.card_filter.exclude_buildings_if_my_building_zone_occupied
-                and engine.state.players[owner_idx].building is not None
-                and _norm(inst.definition.card_type) == _norm("edificio")
-            ):
-                continue
-            cross_txt = _norm(str(inst.definition.crosses or ""))
-            if cross_txt in {"white", "croce bianca"}:
-                cross_val = 11
-            else:
-                try:
-                    cross_val = int(float(cross_txt)) if cross_txt else None
-                except ValueError:
-                    cross_val = None
-            if target.card_filter.crosses_gte is not None:
-                if cross_val is None or cross_val < int(target.card_filter.crosses_gte):
-                    continue
-            if target.card_filter.crosses_lte is not None:
-                if cross_val is None or cross_val > int(target.card_filter.crosses_lte):
-                    continue
-            if target.card_filter.drawn_this_turn_only:
-                drawn = engine.state.flags.get("cards_drawn_this_turn", {})
-                if uid not in set(drawn.get(str(owner_idx), [])):
-                    continue
-            out.append(uid)
+        out = self._filter_target_pool(engine, owner_idx, target, pool)
         if target.max_targets is not None and target.max_targets >= 0:
             return out[: int(target.max_targets)]
         return out
@@ -1056,6 +1271,15 @@ class RuntimeCardManager:
                     out.append(uid)
             if player.building:
                 out.append(player.building)
+            return out
+        if zone == "attack":
+            return [uid for uid in player.attack if uid]
+        if zone == "defense":
+            return [uid for uid in player.defense if uid]
+        if zone in {"artifact", "artifacts"}:
+            return [uid for uid in player.artifacts if uid]
+        if zone == "building":
+            return [player.building] if player.building else []
         return out
 
     def _remove_uid_from_all_player_zones(self, engine: GameEngine, owner_idx: int, uid: str) -> bool:
@@ -1095,11 +1319,22 @@ class RuntimeCardManager:
         player = engine.state.players[real_owner]
         zone = _norm(to_zone)
 
+        if zone == "hand":
+            if uid in player.hand:
+                return True
+            if len(player.hand) >= MAX_HAND:
+                return False
+            self._remove_uid_from_all_player_zones(engine, real_owner, uid)
+            player.hand.append(uid)
+            return True
+
         self._remove_uid_from_all_player_zones(engine, real_owner, uid)
 
-        if zone == "hand":
-            if uid not in player.hand:
-                player.hand.append(uid)
+        if zone in {"deck_bottom", "bottom_of_deck"}:
+            if uid not in player.deck:
+                player.deck.insert(0, uid)
+            else:
+                player.deck.insert(0, player.deck.pop(player.deck.index(uid)))
             return True
 
         if zone in {"deck", "relicario"}:
@@ -1219,12 +1454,15 @@ class RuntimeCardManager:
             if not stored_uid:
                 return
 
-            # salva cosa deve essere mostrato alla GUI
             engine.state.flags["_runtime_reveal_card"] = stored_uid
-
-            # blocca la risoluzione
             engine.state.flags["_runtime_waiting_for_reveal"] = True
-
+            return
+        if action == "reveal_selected_target":
+            selected_uid = self._selected_target_uid_for_current_action(engine, owner_idx)
+            if not selected_uid:
+                return
+            engine.state.flags["_runtime_reveal_card"] = selected_uid
+            engine.state.flags["_runtime_waiting_for_reveal"] = True
             return
         if action == "add_temporary_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -1673,17 +1911,6 @@ class RuntimeCardManager:
             if (inst.current_faith or 0) <= 0:
                 engine.send_to_graveyard(owner_idx, source_uid)
             return
-        if action == "deriu_hebet_tick":
-            player = engine.state.players[owner_idx]
-            if not player.deck:
-                return
-            top_uid = player.deck[-1]
-            ctype = _norm(engine.state.instances[top_uid].definition.card_type)
-            if ctype in {"benedizione", "maledizione"}:
-                engine.move_deck_card_to_hand(owner_idx, top_uid)
-            else:
-                engine.rng.shuffle(player.deck)
-
         if action == "pay_sin_or_destroy_self":
             cost = max(0, int(effect.amount))
             player = engine.state.players[owner_idx]
@@ -1701,19 +1928,6 @@ class RuntimeCardManager:
 
             return
 
-        if action == "tikal_tick":
-            player = engine.state.players[owner_idx]
-            if not player.deck:
-                return
-            top_uid = player.deck[-1]
-            ctype = _norm(engine.state.instances[top_uid].definition.card_type)
-            if ctype == "santo":
-                engine.move_deck_card_to_hand(owner_idx, top_uid)
-            else:
-                player.deck.pop()
-                player.deck.insert(0, top_uid)
-            return
-        
         if action == "mill_cards":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             player = engine.state.players[target]
@@ -1767,12 +1981,7 @@ class RuntimeCardManager:
                 if inst is None:
                     continue
                 owner = inst.owner
-                player = engine.state.players[owner]
-                moved = False
-                if t_uid in player.deck:
-                    moved = engine.move_deck_card_to_hand(owner, t_uid)
-                elif t_uid in player.graveyard:
-                    moved = engine.move_graveyard_card_to_hand(owner, t_uid)
+                moved = self._move_uid_to_zone(engine, t_uid, "hand", owner)
                 if moved:
                     engine.state.log(f"{inst.definition.name} viene aggiunta alla mano.")
             return
@@ -1917,6 +2126,10 @@ class RuntimeCardManager:
                     moved = True
                 elif t_uid in player.graveyard:
                     player.graveyard.remove(t_uid)
+                    player.deck.insert(0, t_uid)
+                    moved = True
+                elif t_uid in player.excommunicated:
+                    player.excommunicated.remove(t_uid)
                     player.deck.insert(0, t_uid)
                     moved = True
                 elif t_uid in player.attack:

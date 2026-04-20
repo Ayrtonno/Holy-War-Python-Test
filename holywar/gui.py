@@ -47,9 +47,10 @@ class HolyWarGUI(tk.Tk):
         self.chain_active = False
         self.chain_priority_idx = 0
         self.chain_pass_count = 0
-        self.religions = religions
         self._reveal_prompt_open = False
         self._reveal_prompt_last_uid = ""
+        self._post_reveal_chain_actor: int | None = None
+        self.religions = religions
         self._p1_deck_map: dict[str, str | None] = {}
         self._p2_deck_map: dict[str, str | None] = {}
         self.resource_name_labels: list[ttk.Label] = []
@@ -669,6 +670,9 @@ class HolyWarGUI(tk.Tk):
         self.chain_active = False
         self.chain_priority_idx = 0
         self.chain_pass_count = 0
+        self._reveal_prompt_open = False
+        self._reveal_prompt_last_uid = ""
+        self._post_reveal_chain_actor = None
         self.status_var.set("Partita avviata")
         self.refresh()
         self.begin_turn_if_needed()
@@ -909,13 +913,10 @@ class HolyWarGUI(tk.Tk):
                 prio = st.players[self.chain_priority_idx].name
                 status += f" | CATENA: priorita {prio} (OK Catena = passa)"
             self.status_var.set(status)
-        
         self.after_idle(self._maybe_show_runtime_reveal)
 
     def _maybe_show_runtime_reveal(self) -> None:
-        if self.engine is None:
-            return
-        if self._reveal_prompt_open:
+        if self.engine is None or self._reveal_prompt_open:
             return
 
         flags = self.engine.state.flags
@@ -941,18 +942,22 @@ class HolyWarGUI(tk.Tk):
         try:
             messagebox.showinfo(
                 "Carta rivelata",
-                f"Hai rivelato: {inst.definition.name}\n\nPremi OK per continuare la risoluzione dell'effetto."
+                f"Hai rivelato: {inst.definition.name}\n\nPremi OK per continuare la risoluzione dell'effetto.",
             )
         finally:
             self._reveal_prompt_open = False
 
         flags["_runtime_waiting_for_reveal"] = False
         flags.pop("_runtime_reveal_card", None)
+        runtime_cards.resume_pending_effect(self.engine)
 
-        runtime_cards.resume_pending_play(self.engine)
-
+        pending_actor = self._post_reveal_chain_actor
+        self._post_reveal_chain_actor = None
         self._reveal_prompt_last_uid = ""
+
         self.refresh()
+        if pending_actor is not None:
+            self.start_chain(actor_idx=pending_actor)
 
     def _update_resource_panel(self, panel_idx: int, player) -> None:
         if panel_idx >= len(self.resource_name_labels):
@@ -1186,7 +1191,6 @@ class HolyWarGUI(tk.Tk):
         if mode in {
             "own_saint",
             "opponent_saint",
-            "relicario_artifact",
             "own_graveyard_saint",
             "manual",
             "multi",
@@ -1280,7 +1284,7 @@ class HolyWarGUI(tk.Tk):
         # Compatibilità con i mode vecchi
         if mode == "multi":
             return (1, None)
-        if mode in {"own_saint", "opponent_saint", "relicario_artifact", "own_graveyard_saint", "manual"}:
+        if mode in {"own_saint", "opponent_saint", "own_graveyard_saint", "manual"}:
             return (1, 1)
         if mode == "monsone":
             return (0, 3)
@@ -1317,12 +1321,6 @@ class HolyWarGUI(tk.Tk):
                 if own.defense[i] is not None:
                     out.append(f"d{i+1}")
             return out
-
-        if mode == "relicario_artifact":
-            for c_uid in own.deck:
-                if self.engine.state.instances[c_uid].definition.card_type.lower().strip() == "artefatto":
-                    out.append(f"deck:{self.engine.state.instances[c_uid].definition.name}")
-            return list(dict.fromkeys(out))
 
         if mode == "manual":
             return []
@@ -2059,6 +2057,20 @@ class HolyWarGUI(tk.Tk):
             messagebox.showwarning("Abilita non valida", "Sorgente non valida.")
             return
         mode = self._activate_targeting_mode(uid)
+        if mode == "none":
+            res = self.engine.activate_ability(own_idx, source, None)
+            if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                self._post_reveal_chain_actor = own_idx
+                self._maybe_show_runtime_reveal()
+                self.begin_turn_if_needed()
+                return
+            if res.ok:
+                self.start_chain(actor_idx=own_idx)
+            if not res.ok:
+                messagebox.showwarning("Abilita non valida", res.message)
+            self.refresh()
+            self.begin_turn_if_needed()
+            return
         if mode == "manual":
             hand_choices: list[tuple[str, str]] = []
             for h_uid in self.engine.state.players[own_idx].hand:
@@ -2131,6 +2143,11 @@ class HolyWarGUI(tk.Tk):
         if canceled:
             return
         res = self.engine.activate_ability(own_idx, source, target)
+        if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+            self._post_reveal_chain_actor = own_idx
+            self._maybe_show_runtime_reveal()
+            self.begin_turn_if_needed()
+            return
         if res.ok:
             self.start_chain(actor_idx=own_idx)
         if not res.ok:

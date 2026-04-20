@@ -680,34 +680,6 @@ def resolve_card_effect(engine: "GameEngine", player_idx: int, uid: str, target:
         state.log(f"{player.name} usa Cura Rapida su {names}: +{amount} Fede a ciascuno.")
         return "Cura Rapida risolta."
 
-    if name_key == _norm("Ricerca Archeologica"):
-        desired_raw = (target or "").strip()
-        if ":" in desired_raw:
-            pref, raw_name = desired_raw.split(":", 1)
-            desired = _norm(raw_name if _norm(pref) == "deck" else desired_raw)
-        else:
-            desired = _norm(desired_raw)
-        artifact_uids = [d_uid for d_uid in player.deck if _norm(state.instances[d_uid].definition.card_type) == "artefatto"]
-        if not artifact_uids:
-            return "Ricerca Archeologica: nessun artefatto nel reliquiario."
-        chosen_uid = None
-        if desired:
-            for d_uid in artifact_uids:
-                if _norm(state.instances[d_uid].definition.name) == desired:
-                    chosen_uid = d_uid
-                    break
-            if chosen_uid is None:
-                return "Ricerca Archeologica: artefatto richiesto non trovato nel reliquiario."
-        else:
-            if len(artifact_uids) == 1:
-                chosen_uid = artifact_uids[0]
-            else:
-                return "Ricerca Archeologica: scegli un artefatto del reliquiario."
-        if not engine.move_deck_card_to_hand(player_idx, chosen_uid):
-            return "Ricerca Archeologica: impossibile aggiungere carta alla mano."
-        engine.rng.shuffle(player.deck)
-        state.log(f"{player.name} usa Ricerca Archeologica e aggiunge {state.instances[chosen_uid].definition.name}.")
-        return "Ricerca Archeologica risolta."
 
     if name_key == _norm("Concentrazione"):
         drawn = engine.draw_cards(player_idx, 2)
@@ -725,17 +697,6 @@ def resolve_card_effect(engine: "GameEngine", player_idx: int, uid: str, target:
         engine.gain_sin(0, 15)
         engine.gain_sin(1, 15)
         return "Furia di Llakhnal risolta: entrambi i giocatori +15 Peccato."
-
-    if name_key == _norm("Risveglio di Ph-Dak'Gaph"):
-        moved = 0
-        for c_uid in list(player.excommunicated):
-            if moved >= 5 or len(player.hand) >= 8:
-                break
-            player.excommunicated.remove(c_uid)
-            player.hand.append(c_uid)
-            moved += 1
-        engine.reduce_sin(player_idx, 10)
-        return f"Risveglio di Ph-Dak'Gaph risolta: {moved} carte scomunicate in mano, -10 Peccato."
 
     if name_key in {_norm("Proibizione Cristiana"), _norm("Proibizione Egizia"), _norm("Proibizione di Ph")}:
         target_card = engine.resolve_target_saint(opponent_idx, target)

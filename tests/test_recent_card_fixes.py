@@ -91,7 +91,7 @@ def test_ricerca_archeologica_accepts_deck_prefixed_target() -> None:
     assert "A2" in hand_names
 
 
-def test_ricerca_archeologica_without_target_requires_choice_if_multiple_artifacts() -> None:
+def test_ricerca_archeologica_without_target_fails_even_if_artifacts_exist() -> None:
     cards = [
         CardDefinition("A1", "Artefatto", "1", 1, None, "", "NEU-1"),
         CardDefinition("A2", "Artefatto", "1", 1, None, "", "NEU-1"),
@@ -104,11 +104,11 @@ def test_ricerca_archeologica_without_target_requires_choice_if_multiple_artifac
         engine.start_turn()
     q = _force_card_in_hand(engine, 0, "Ricerca Archeologica")
     out = engine.play_card(0, q, None)
-    assert out.ok
-    assert "scegli un artefatto" in out.message.lower()
+    assert not out.ok
+    assert "selezionare almeno un bersaglio valido" in out.message.lower()
 
 
-def test_ricerca_archeologica_autopicks_if_only_one_artifact() -> None:
+def test_ricerca_archeologica_requires_explicit_target_even_if_only_one_artifact() -> None:
     cards = [
         CardDefinition("A1", "Artefatto", "1", 1, None, "", "NEU-1"),
         CardDefinition("S1", "Santo", "2", 5, 1, "", "NEU-1"),
@@ -130,10 +130,217 @@ def test_ricerca_archeologica_autopicks_if_only_one_artifact() -> None:
     ]
     q = _force_card_in_hand(engine, 0, "Ricerca Archeologica")
     out = engine.play_card(0, q, None)
+    assert not out.ok
+    assert "selezionare almeno un bersaglio valido" in out.message.lower()
+
+
+def test_risveglio_di_ph_dak_gaph_cannot_be_played_without_excommunicated_targets() -> None:
+    cards = [
+        CardDefinition("Risveglio di Ph-Dak'Gaph", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "PHD-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "PHD-1", "PHD-1", seed=122)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx = _force_card_in_hand(engine, 0, "Risveglio di Ph-Dak'Gaph")
+    out = engine.play_card(0, idx, None)
+    assert not out.ok
+    assert "nessun bersaglio valido disponibile" in out.message.lower()
+
+
+def test_ricerca_archeologica_is_scripted_with_shuffle() -> None:
+    script = runtime_cards.get_script("Ricerca Archeologica")
+    assert script is not None
+    first_target = script.on_play_actions[0].target
+    assert first_target.type == "selected_target"
+    assert first_target.zone == "relicario"
+    assert first_target.owner == "me"
+    assert first_target.card_filter.card_type_in == ["artefatto"]
+    assert first_target.min_targets == 1
+    assert first_target.max_targets == 1
+    assert [a.effect.action for a in script.on_play_actions] == [
+        "move_to_hand",
+        "shuffle_deck",
+    ]
+
+    cards = [
+        CardDefinition("A1", "Artefatto", "1", 1, None, "", "NEU-1"),
+        CardDefinition("A2", "Artefatto", "1", 1, None, "", "NEU-1"),
+        CardDefinition("Ricerca Archeologica", "Benedizione", "1", None, None, "Cerca un artefatto nel reliquiario.", "NEU-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NEU-1", "NEU-1", seed=10)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    q = _force_card_in_hand(engine, 0, "Ricerca Archeologica")
+    out = engine.play_card(0, q, "deck:A2")
     assert out.ok
     hand_names = [engine.state.instances[uid].definition.name for uid in engine.state.players[0].hand]
-    assert "A1" in hand_names
+    assert "A2" in hand_names
 
+
+def test_risveglio_di_ph_dak_gaph_recovers_up_to_five_and_excommunicates_itself() -> None:
+    script = runtime_cards.get_script("Risveglio di Ph-Dak'Gaph")
+    assert script is not None
+    assert [a.effect.action for a in script.on_play_actions] == [
+        "move_to_hand",
+        "remove_sin",
+        "move_source_to_zone",
+    ]
+
+    cards = [
+        CardDefinition("Risveglio di Ph-Dak'Gaph", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Ex1", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Ex2", "Maledizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Ex3", "Artefatto", "1", 1, None, "", "PHD-1"),
+        CardDefinition("Ex4", "Santo", "1", 1, 1, "", "PHD-1"),
+        CardDefinition("Ex5", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Ex6", "Maledizione", "1", None, None, "", "PHD-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "PHD-1", "PHD-1", seed=121)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    ris_idx = _force_card_in_hand(engine, 0, "Risveglio di Ph-Dak'Gaph")
+    ris_uid = p0.hand[ris_idx]
+    for uid in list(p0.hand):
+        if uid == ris_uid:
+            continue
+        p0.hand.remove(uid)
+        p0.deck.append(uid)
+    ris_idx = p0.hand.index(ris_uid)
+
+    ex_names = {"Ex1", "Ex2", "Ex3", "Ex4", "Ex5", "Ex6"}
+    ex_uids: list[str] = []
+    for uid in list(p0.deck):
+        if engine.state.instances[uid].definition.name in ex_names:
+            p0.deck.remove(uid)
+            p0.excommunicated.append(uid)
+            ex_uids.append(uid)
+        if len(ex_uids) == 6:
+            break
+    assert len(ex_uids) == 6
+
+    chosen = ex_uids[:5]
+    keep = ex_uids[5]
+    p0.sin = 20
+
+    out = engine.play_card(0, ris_idx, ",".join(chosen))
+    assert out.ok
+
+    for uid in chosen:
+        assert uid in p0.hand
+        assert uid not in p0.excommunicated
+    assert keep in p0.excommunicated
+    assert p0.sin == 10
+    assert ris_uid in p0.excommunicated
+    assert ris_uid not in p0.graveyard
+
+
+def test_rito_della_ri_manifestazione_is_scripted_and_moves_excommunicated_to_relicario() -> None:
+    script = runtime_cards.get_script("Rito della Ri-Manifestazione")
+    assert script is not None
+    assert [a.effect.action for a in script.on_play_actions] == [
+        "move_to_relicario",
+        "shuffle_deck",
+        "draw_cards",
+    ]
+    tgt = script.on_play_actions[0].target
+    assert tgt.type == "selected_targets"
+    assert tgt.zone == "excommunicated"
+    assert tgt.owner == "me"
+    assert tgt.min_targets == 1
+    assert tgt.max_targets == 3
+
+    cards = [
+        CardDefinition("Rito della Ri-Manifestazione", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Ex1", "Santo", "1", 1, 1, "", "PHD-1"),
+        CardDefinition("Ex2", "Artefatto", "1", 1, None, "", "PHD-1"),
+        CardDefinition("Ex3", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Ex4", "Maledizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "PHD-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "PHD-1", "PHD-1", seed=123)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    idx = _force_card_in_hand(engine, 0, "Rito della Ri-Manifestazione")
+    rito_uid = p0.hand[idx]
+    for uid in list(p0.hand):
+        if uid == rito_uid:
+            continue
+        p0.hand.remove(uid)
+        p0.deck.append(uid)
+    idx = p0.hand.index(rito_uid)
+
+    ex_names = {"Ex1", "Ex2", "Ex3", "Ex4"}
+    ex_uids: list[str] = []
+    for uid in list(p0.deck):
+        if engine.state.instances[uid].definition.name in ex_names:
+            p0.deck.remove(uid)
+            p0.excommunicated.append(uid)
+            ex_uids.append(uid)
+    assert len(ex_uids) >= 4
+
+    chosen = ex_uids[:3]
+    before_hand = len(p0.hand)
+    out = engine.play_card(0, idx, ",".join(chosen))
+    assert out.ok
+    # No Av'drna/Ph'drna controlled: no extra draw.
+    assert len(p0.hand) == before_hand - 1
+
+    for uid in chosen:
+        assert uid not in p0.excommunicated
+        assert uid in p0.deck
+    assert ex_uids[3] in p0.excommunicated
+
+
+def test_rito_della_ri_manifestazione_draws_if_controller_has_avdrna_or_phdrna() -> None:
+    cards = [
+        CardDefinition("Rito della Ri-Manifestazione", "Benedizione", "1", None, None, "", "PHD-1"),
+        CardDefinition("Av'drna", "Edificio", "1", 2, None, "", "PHD-1"),
+        CardDefinition("Ex1", "Santo", "1", 1, 1, "", "PHD-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "PHD-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "PHD-1", "PHD-1", seed=124)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    av_idx = _force_card_in_hand(engine, 0, "Av'drna")
+    assert engine.play_card(0, av_idx, None).ok
+
+    rito_idx = _force_card_in_hand(engine, 0, "Rito della Ri-Manifestazione")
+    rito_uid = p0.hand[rito_idx]
+    for uid in list(p0.hand):
+        if uid == rito_uid:
+            continue
+        p0.hand.remove(uid)
+        p0.deck.append(uid)
+    rito_idx = p0.hand.index(rito_uid)
+
+    ex_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "Ex1")
+    p0.deck.remove(ex_uid)
+    p0.excommunicated.append(ex_uid)
+
+    before_hand = len(p0.hand)
+    out = engine.play_card(0, rito_idx, ex_uid)
+    assert out.ok
+    # Controlled Av'drna: card draw compensates the spent quick card.
+    assert len(p0.hand) == before_hand
+    assert ex_uid not in p0.excommunicated
+    assert ex_uid in p0.deck or ex_uid in p0.hand
 
 def test_ya_ner_summons_token_at_turn_start() -> None:
     cards = [
@@ -375,7 +582,7 @@ def test_monsone_discards_hand_then_deck_and_returns_selected_cards_to_owner_dec
 def test_tempesta_is_marked_as_no_target_by_script_metadata() -> None:
     assert runtime_cards.get_play_targeting_mode("Tempesta") == "none"
     assert runtime_cards.get_play_targeting_mode("Figli di Odino") == "own_saint"
-    assert runtime_cards.get_play_targeting_mode("Ricerca Archeologica") == "relicario_artifact"
+    assert runtime_cards.get_play_targeting_mode("Ricerca Archeologica") == "auto"
     assert runtime_cards.get_play_targeting_mode("Monsone") == "monsone"
     assert runtime_cards.get_play_targeting_mode("Brigante") == "none"
     assert runtime_cards.get_play_targeting_mode("Papa") == "none"
@@ -1004,6 +1211,136 @@ def test_ptah_can_return_a_drawn_card_to_relicario() -> None:
     runtime_cards._apply_effect(engine, 0, ptah_uid, targets, runtime_cards.get_script("Ptah").triggered_effects[0].effect)  # noqa: SLF001
     assert drawn_uid in p0.deck
     assert drawn_uid not in p0.hand
+
+
+def test_tikal_is_scripted_with_deck_bottom_and_moves_top_cards_correctly() -> None:
+    script = runtime_cards.get_script("Tikal")
+    assert script is not None
+    assert script.activate_targeting == "none"
+    assert script.activate_once_per_turn is True
+    assert [a.effect.action for a in script.on_activate_actions] == [
+        "store_top_card_of_zone",
+        "reveal_stored_card",
+        "move_stored_card_to_zone",
+        "move_stored_card_to_zone",
+    ]
+
+    saint_cards = [
+        CardDefinition("Tikal", "Edificio", "1", 1, None, "", "MAY-1"),
+        CardDefinition("TopSaint", "Santo", "1", 1, 1, "", "MAY-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "MAY-1"),
+    ]
+    engine = GameEngine.create_new(saint_cards, "P1", "P2", "MAY-1", "MAY-1", seed=118)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+    tikal_idx = _force_card_in_hand(engine, 0, "Tikal")
+    assert engine.play_card(0, tikal_idx, None).ok
+    top_saint_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "TopSaint")
+    p0.deck = [top_saint_uid]
+    assert engine.activate_ability(0, "b", None).ok
+    assert top_saint_uid in p0.hand
+    assert top_saint_uid not in p0.deck
+    assert not engine.activate_ability(0, "b", None).ok
+
+    spell_cards = [
+        CardDefinition("Tikal", "Edificio", "1", 1, None, "", "MAY-1"),
+        CardDefinition("TopSpell", "Benedizione", "1", None, None, "", "MAY-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "MAY-1"),
+    ]
+    engine = GameEngine.create_new(spell_cards, "P1", "P2", "MAY-1", "MAY-1", seed=119)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+    tikal_idx = _force_card_in_hand(engine, 0, "Tikal")
+    assert engine.play_card(0, tikal_idx, None).ok
+    top_spell_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "TopSpell")
+    filler_uid = next(uid for uid in p0.deck if uid != top_spell_uid)
+    p0.deck = [filler_uid, top_spell_uid]
+    assert engine.activate_ability(0, "b", None).ok
+    assert top_spell_uid not in p0.hand
+    assert p0.deck[0] == top_spell_uid
+
+    cap_cards = [
+        CardDefinition("Tikal", "Edificio", "1", 1, None, "", "MAY-1"),
+        CardDefinition("TopSaint", "Santo", "1", 1, 1, "", "MAY-1"),
+        CardDefinition("Fill1", "Santo", "1", 1, 1, "", "MAY-1"),
+        CardDefinition("Fill2", "Santo", "1", 1, 1, "", "MAY-1"),
+        CardDefinition("Fill3", "Santo", "1", 1, 1, "", "MAY-1"),
+        CardDefinition("Fill4", "Santo", "1", 1, 1, "", "MAY-1"),
+    ]
+    engine = GameEngine.create_new(cap_cards, "P1", "P2", "MAY-1", "MAY-1", seed=120)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+    tikal_idx = _force_card_in_hand(engine, 0, "Tikal")
+    assert engine.play_card(0, tikal_idx, None).ok
+    top_saint_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "TopSaint")
+    extra_uids = [uid for uid in p0.deck if uid != top_saint_uid][:3]
+    for uid in extra_uids:
+        p0.deck.remove(uid)
+        p0.hand.append(uid)
+    p0.deck = [top_saint_uid]
+    assert len(p0.hand) == 8
+    assert engine.activate_ability(0, "b", None).ok
+    assert len(p0.hand) == 8
+    assert top_saint_uid in p0.deck
+
+
+def test_deriu_hebet_is_scripted_with_shuffle_and_draws_blessings() -> None:
+    script = runtime_cards.get_script("Deriu-hebet")
+    assert script is not None
+    assert script.activate_targeting == "none"
+    assert script.activate_once_per_turn is True
+    assert [a.effect.action for a in script.on_activate_actions] == [
+        "store_top_card_of_zone",
+        "reveal_stored_card",
+        "move_stored_card_to_zone",
+        "shuffle_deck",
+    ]
+
+    cards = [
+        CardDefinition("Deriu-hebet", "Santo", "1", 3, 1, "", "EGI-1"),
+        CardDefinition("BlessX", "Benedizione", "1", None, None, "", "EGI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "EGI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "EGI-1", "EGI-1", seed=119)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+    deriu_idx = _force_card_in_hand(engine, 0, "Deriu-hebet")
+    assert engine.play_card(0, deriu_idx, "a1").ok
+
+    bless_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "BlessX")
+    p0.deck = [bless_uid]
+    assert engine.activate_ability(0, "a1", None).ok
+    assert bless_uid in p0.hand
+    assert bless_uid not in p0.deck
+    assert not engine.activate_ability(0, "a1", None).ok
+
+
+def test_playing_radici_does_not_log_literal_none() -> None:
+    cards = [
+        CardDefinition("Radici", "Artefatto", "1", 1, None, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=125)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx = _force_card_in_hand(engine, 0, "Radici")
+    out = engine.play_card(0, idx, None)
+    assert out.ok
+    assert all(str(line).strip().lower() != "none" for line in engine.state.logs)
 
 
 def test_veggente_searches_sigillo_and_uses_altar_script() -> None:

@@ -21,7 +21,7 @@ SCRIPT = {
                 "store_as": "processione_top",
             },
         },
-        {
+                {
             "effect": {
                 "action": "reveal_stored_card",
                 "stored": "processione_top",
