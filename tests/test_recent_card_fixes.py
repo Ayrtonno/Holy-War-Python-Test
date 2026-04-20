@@ -1567,6 +1567,42 @@ def test_deriu_hebet_is_scripted_with_shuffle_and_draws_blessings() -> None:
     assert not engine.activate_ability(0, "a1", None).ok
 
 
+def test_sif_is_scripted_activate_once_per_turn_and_buffs_own_saint() -> None:
+    script = runtime_cards.get_script("Sif")
+    assert script is not None
+    assert script.on_activate_mode == "scripted"
+    assert script.activate_once_per_turn is True
+    assert script.activate_targeting == "board_card"
+    assert [a.effect.action for a in script.on_activate_actions] == ["increase_faith"]
+
+    cards = [
+        CardDefinition("Sif", "Santo", "4", 4, 2, "", "NOR-1"),
+        CardDefinition("Thor", "Santo", "4", 6, 3, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=130)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    sif_idx = _force_card_in_hand(engine, 0, "Sif")
+    assert engine.play_card(0, sif_idx, "a1").ok
+    thor_idx = _force_card_in_hand(engine, 0, "Thor")
+    assert engine.play_card(0, thor_idx, "a2").ok
+
+    thor_uid = p0.attack[1]
+    assert thor_uid is not None
+    before_faith = engine.state.instances[thor_uid].current_faith
+
+    out1 = engine.activate_ability(0, "a1", "a2")
+    out2 = engine.activate_ability(0, "a1", "a2")
+    assert out1.ok
+    assert out2.ok
+    assert "gia usata" in out2.message.lower()
+    assert engine.state.instances[thor_uid].current_faith == (before_faith or 0) + 4
+
+
 def test_playing_radici_does_not_log_literal_none() -> None:
     cards = [
         CardDefinition("Radici", "Artefatto", "1", 1, None, "", "ANI-1"),
