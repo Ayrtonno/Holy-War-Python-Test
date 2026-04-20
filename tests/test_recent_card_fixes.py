@@ -508,6 +508,80 @@ def test_ritorno_catastrofico_cannot_be_played_without_own_saint_on_field() -> N
     assert "nessun bersaglio valido disponibile" in out.message.lower()
 
 
+def test_terremoto_magnitudo_10_is_scripted_with_vulcano_summon_and_self_excommunication() -> None:
+    script = runtime_cards.get_script("Terremoto: Magnitudo 10")
+    assert script is not None
+    assert [a.effect.action for a in script.on_play_actions] == [
+        "inflict_sin_to_target_owners",
+        "send_to_graveyard",
+        "summon_card_from_hand",
+        "move_source_to_zone",
+    ]
+
+
+def test_terremoto_magnitudo_10_destroys_artifacts_buildings_adds_sin_and_summons_vulcano() -> None:
+    cards = [
+        CardDefinition("Terremoto: Magnitudo 10", "Maledizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Vulcano", "Santo", "10", 25, 15, "", "ANI-1"),
+        CardDefinition("P1Art", "Artefatto", "1", 1, None, "", "ANI-1"),
+        CardDefinition("P1Bld", "Edificio", "1", 2, None, "", "ANI-1"),
+        CardDefinition("P2Art", "Artefatto", "1", 1, None, "", "ANI-1"),
+        CardDefinition("P2Bld", "Edificio", "1", 2, None, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=132)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+
+    mag_idx = _force_card_in_hand(engine, 0, "Terremoto: Magnitudo 10")
+    mag_uid = p0.hand[mag_idx]
+    vulcano_idx = _force_card_in_hand(engine, 0, "Vulcano")
+    vulcano_uid = p0.hand[vulcano_idx]
+
+    p1_art = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "P1Art")
+    p0.deck.remove(p1_art)
+    p0.artifacts[0] = p1_art
+    p1_bld = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "P1Bld")
+    p0.deck.remove(p1_bld)
+    p0.building = p1_bld
+
+    p2_art = next(uid for uid in p1.deck if engine.state.instances[uid].definition.name == "P2Art")
+    p1.deck.remove(p2_art)
+    p1.artifacts[0] = p2_art
+    p2_bld = next(uid for uid in p1.deck if engine.state.instances[uid].definition.name == "P2Bld")
+    p1.deck.remove(p2_bld)
+    p1.building = p2_bld
+
+    p0.sin = 0
+    p1.sin = 0
+    mag_idx = p0.hand.index(mag_uid)
+    out = engine.play_card(0, mag_idx, None)
+    assert out.ok
+
+    assert p0.sin == 4
+    assert p1.sin == 4
+
+    assert p1_art in p0.graveyard
+    assert p1_bld in p0.graveyard
+    assert p2_art in p1.graveyard
+    assert p2_bld in p1.graveyard
+    assert p0.artifacts[0] is None
+    assert p0.building is None
+    assert p1.artifacts[0] is None
+    assert p1.building is None
+
+    assert vulcano_uid not in p0.hand
+    assert vulcano_uid in p0.attack or vulcano_uid in p0.defense
+
+    assert mag_uid in p0.excommunicated
+    assert mag_uid not in p0.graveyard
+
+
 def test_ya_ner_summons_token_at_turn_start() -> None:
     cards = [
         CardDefinition("Ya-ner", "Santo", "3", 5, 2, "", "PHD-1"),

@@ -20,14 +20,14 @@ PREMADE_DECKS: dict[str, dict] = {
         "religion": "Animismo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Voragine", 5), ("Thor", 10), ("Uragano", 10),
+            ("Voragine", 5), ("Vulcano", 10), ("Terremoto: Magnitudo 10", 10),
         ],
     },
     "test_nemico": {
         "religion": "Animismo",
         "name": "TEST NEMICO",
         "cards": [
-            ("Albero Fortunato", 3)
+            ("Vescovo della Città Buia", 10), ("vescovo della Città Lucente", 10), ("deriu-hebet", 10),
         ],
     },
     "cristianesimo_via_martirio": {

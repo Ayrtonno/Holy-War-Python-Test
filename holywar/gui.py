@@ -26,6 +26,14 @@ class HolyWarGUI(tk.Tk):
         self.title("Holy War - Duel Board")
         self.geometry("1280x860")
         self.minsize(1180, 760)
+        try:
+            # Avvio in finestra massimizzata (fullscreen windowed).
+            self.state("zoomed")
+        except tk.TclError:
+            try:
+                self.attributes("-zoomed", True)
+            except tk.TclError:
+                pass
         self.cards = cards
         self.seed = seed
         self.ai_delay_ms = max(0, int(ai_delay * 1000))
@@ -61,6 +69,14 @@ class HolyWarGUI(tk.Tk):
         self.resource_sin_bars: list[ttk.Progressbar] = []
         self._slot_highlights: list[tuple[tk.Widget, dict[str, str]]] = []
         self._build_ui()
+
+    def _center_toplevel(self, win: tk.Toplevel, width: int, height: int) -> None:
+        win.update_idletasks()
+        screen_w = win.winfo_screenwidth()
+        screen_h = win.winfo_screenheight()
+        x = max(0, (screen_w - width) // 2)
+        y = max(0, (screen_h - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
 
     def _build_ui(self) -> None:
         top = ttk.Frame(self)
@@ -237,6 +253,16 @@ class HolyWarGUI(tk.Tk):
         res = sim.activate_ability(player_idx, source, target)
         return bool(res.ok and self._is_effective_result_message(res.message))
 
+    def _trace_vulcano_gui(self, message: str, *, source_uid: str | None = None) -> None:
+        if self.engine is None:
+            return
+        uid = source_uid
+        if uid is not None:
+            inst = self.engine.state.instances.get(uid)
+            if inst is None or inst.definition.name.strip().lower() != "vulcano":
+                return
+        self.engine.state.log(f"[TRACE VULCANO GUI] {message}")
+
     def _can_play_target(self, player_idx: int, hand_idx: int, target: str | None, quick: bool = False) -> bool:
         sim = self._clone_engine()
         if sim is None:
@@ -269,6 +295,21 @@ class HolyWarGUI(tk.Tk):
 
     def _candidate_slot_tokens(self) -> list[str]:
         return ["a1", "a2", "a3", "d1", "d2", "d3", "r1", "r2", "r3", "r4", "b"]
+    
+    def _split_board_token(self, token: str) -> tuple[str | None, str]:
+        raw = str(token or "").strip()
+        if ":" not in raw:
+            return (None, raw)
+
+        side, base = raw.split(":", 1)
+        side_key = side.strip().lower()
+        base = base.strip()
+
+        if side_key in {"s", "self", "me", "own", "owner", "controller"}:
+            return ("own", base)
+        if side_key in {"o", "opp", "enemy", "opponent", "other"}:
+            return ("enemy", base)
+        return (None, raw)
 
     def _card_script(self, uid: str):
         if self.engine is None:
@@ -406,14 +447,16 @@ class HolyWarGUI(tk.Tk):
         self._slot_highlights.clear()
 
     def _is_board_token(self, token: str) -> bool:
-        if token == "b":
+        _side, base = self._split_board_token(token)
+
+        if base == "b":
             return True
-        if len(token) != 2 or not token[1].isdigit():
+        if len(base) != 2 or not base[1].isdigit():
             return False
-        if token[0] in {"a", "d"}:
-            return 1 <= int(token[1]) <= 3
-        if token[0] == "r":
-            return 1 <= int(token[1]) <= 4
+        if base[0] in {"a", "d"}:
+            return 1 <= int(base[1]) <= 3
+        if base[0] == "r":
+            return 1 <= int(base[1]) <= 4
         return False
 
     def _card_target_hints(self, card_uid: str | None) -> tuple[bool, bool]:
@@ -459,9 +502,21 @@ class HolyWarGUI(tk.Tk):
         enemy_idx = 1 - own_idx
         own = self.engine.state.players[own_idx]
         enemy = self.engine.state.players[enemy_idx]
+        raw_token = str(token or "").strip().lower()
+        explicit_side: str | None = None
+        if ":" in raw_token:
+            side, code = raw_token.split(":", 1)
+            if side in {"s", "self", "me", "own", "owner", "controller"}:
+                explicit_side = "own"
+                token = code
+            elif side in {"o", "opp", "enemy", "opponent", "other"}:
+                explicit_side = "enemy"
+                token = code
         if side_hint not in {"auto", "own", "enemy"}:
             side_hint = "auto"
         wants_own, wants_opp = self._card_target_hints(card_uid)
+        if explicit_side is not None:
+            side_hint = explicit_side
         if side_hint == "auto":
             if wants_own and not wants_opp:
                 side_hint = "own"
@@ -522,11 +577,28 @@ class HolyWarGUI(tk.Tk):
             return None
         if token.startswith("r") and len(token) == 2 and token[1].isdigit():
             i = int(token[1]) - 1
-            if 0 <= i < 4:
+            if not (0 <= i < 4):
+                return None
+            if side_hint == "own":
+                return self.own_artifacts[i] if own.artifacts[i] is not None else None
+            if side_hint == "enemy":
                 return self.enemy_artifacts[i] if enemy.artifacts[i] is not None else None
+            if enemy.artifacts[i] is not None:
+                return self.enemy_artifacts[i]
+            if own.artifacts[i] is not None:
+                return self.own_artifacts[i]
             return None
+
         if token == "b":
-            return self.enemy_building if enemy.building is not None else None
+            if side_hint == "own":
+                return self.own_building if own.building is not None else None
+            if side_hint == "enemy":
+                return self.enemy_building if enemy.building is not None else None
+            if enemy.building is not None:
+                return self.enemy_building
+            if own.building is not None:
+                return self.own_building
+            return None
         return None
 
     def _set_slot_highlights(
@@ -575,73 +647,167 @@ class HolyWarGUI(tk.Tk):
         *,
         title: str,
         prompt: str,
-        candidates: list[str],
-        min_targets: int,
-        max_targets: int | None,
-        allow_none: bool,
+        candidates: list[str] | None = None,
+        choices: list[tuple[str, str]] | None = None,
+        allow_multi: bool = False,
+        min_targets: int = 0,
+        max_targets: int | None = None,
+        allow_none: bool = True,
+        allow_manual: bool = False,
         card_uid: str | None = None,
+        side_hint: str = "auto",
     ) -> tuple[bool, str | None]:
         if self.engine is None:
             return (True, None)
+
         own_idx = self.current_human_idx() or 0
-        valid_tokens: list[str] = []
-        for token in candidates:
-            if not self._is_board_token(token):
+
+        if choices is None:
+            choices = []
+            for token in (candidates or []):
+                choices.append((self._format_guided_candidate(token, own_idx), token))
+
+        normalized_choices: list[tuple[str, str]] = []
+        seen_tokens: set[str] = set()
+        for label, token in choices:
+            token = str(token).strip()
+            if not token or token in seen_tokens:
                 continue
-            if self._resolve_highlight_widget(token, own_idx=own_idx, card_uid=card_uid) is not None:
-                valid_tokens.append(token)
-        if not valid_tokens:
+            normalized_choices.append((label, token))
+            seen_tokens.add(token)
+
+        if not normalized_choices and not allow_manual and not allow_none:
             return (True, None)
 
-        selected: list[str] = []
+        board_tokens: list[str] = []
+        for _label, token in normalized_choices:
+            if self._resolve_highlight_widget(token, own_idx=own_idx, side_hint=side_hint, card_uid=card_uid) is not None:
+                board_tokens.append(token)
+
+        selected_tokens: list[str] = []
         result: dict[str, str | None] = {"value": ""}
         bindings: list[tuple[tk.Widget, str]] = []
 
         win = tk.Toplevel(self)
         win.title(title)
-        win.geometry("520x260")
+        self._center_toplevel(win, 700, 560)
         win.transient(self)
-        ttk.Label(win, text=prompt, wraplength=490).pack(anchor="w", padx=8, pady=(8, 4))
+
+        ttk.Label(win, text=prompt, wraplength=660).pack(anchor="w", padx=8, pady=(8, 4))
+
+        if allow_multi:
+            lim = ""
+            if min_targets > 0 and max_targets is not None and min_targets == max_targets:
+                lim = f" (seleziona esattamente {min_targets})"
+            elif max_targets is not None:
+                lim = f" (min {min_targets}, max {max_targets})"
+            ttk.Label(
+                win,
+                text=f"Puoi selezionare dalla lista o cliccando sul campo{lim}.",
+            ).pack(anchor="w", padx=8, pady=(0, 4))
+        else:
+            ttk.Label(
+                win,
+                text="Puoi selezionare dalla lista o cliccando sul campo.",
+            ).pack(anchor="w", padx=8, pady=(0, 4))
+
         counter_var = tk.StringVar(value="")
         selected_var = tk.StringVar(value="Nessun bersaglio selezionato.")
         ttk.Label(win, textvariable=counter_var).pack(anchor="w", padx=8)
-        ttk.Label(win, textvariable=selected_var, wraplength=490).pack(anchor="w", padx=8, pady=(4, 8))
+        ttk.Label(win, textvariable=selected_var, wraplength=660).pack(anchor="w", padx=8, pady=(4, 8))
+
+        lb = tk.Listbox(win, selectmode=("multiple" if allow_multi else "browse"))
+        lb.pack(fill="both", expand=True, padx=8, pady=6)
+
+        for label, _token in normalized_choices:
+            lb.insert(tk.END, label)
+
+        token_to_index = {token: i for i, (_label, token) in enumerate(normalized_choices)}
+
+        manual_var = tk.StringVar(value="")
+        if allow_manual:
+            row = ttk.Frame(win)
+            row.pack(fill="x", padx=8, pady=(0, 4))
+            ttk.Label(row, text="Valore manuale (opzionale):").pack(side="left")
+            ttk.Entry(row, textvariable=manual_var).pack(side="left", fill="x", expand=True, padx=6)
+
         btn_bar = ttk.Frame(win)
         btn_bar.pack(fill="x", padx=8, pady=8)
-        btn_ok = ttk.Button(btn_bar, text="Conferma")
+        btn_ok = ttk.Button(btn_bar, text="OK")
         btn_ok.pack(side="left")
 
         def _selection_ok() -> bool:
-            count = len(selected)
-            upper = max_targets if max_targets is not None else 9999
+            raw_manual = manual_var.get().strip() if allow_manual else ""
+            if raw_manual:
+                return True
+            count = len(selected_tokens)
+            upper = max_targets if max_targets is not None else (9999 if allow_multi else 1)
             return min_targets <= count <= upper
 
+        def _sync_listbox() -> None:
+            lb.selection_clear(0, tk.END)
+            for token in selected_tokens:
+                idx = token_to_index.get(token)
+                if idx is not None:
+                    lb.selection_set(idx)
+
         def _refresh_state() -> None:
-            upper_txt = str(max_targets) if max_targets is not None else "n"
-            counter_var.set(f"Selezionati {len(selected)} bersagli (min {min_targets}, max {upper_txt})")
-            if selected:
-                labels = [self._format_guided_candidate(tok, own_idx) for tok in selected]
+            upper_txt = str(max_targets) if max_targets is not None else ("n" if allow_multi else "1")
+            counter_var.set(f"Selezionati {len(selected_tokens)} bersagli (min {min_targets}, max {upper_txt})")
+
+            if selected_tokens:
+                labels = [self._format_guided_candidate(tok, own_idx) for tok in selected_tokens]
                 selected_var.set("Selezione: " + " | ".join(labels))
             else:
                 selected_var.set("Nessun bersaglio selezionato.")
-            btn_ok.configure(state=("normal" if _selection_ok() else "disabled"))
-            self._set_slot_highlights(valid_tokens, selected_targets=selected, card_uid=card_uid)
 
-        def _toggle(token: str):
-            if token in selected:
-                selected.remove(token)
+            _sync_listbox()
+            self._set_slot_highlights(board_tokens, selected_targets=selected_tokens, card_uid=card_uid, side_hint=side_hint)
+            btn_ok.configure(state=("normal" if _selection_ok() else "disabled"))
+
+        def _set_single(token: str) -> None:
+            selected_tokens.clear()
+            selected_tokens.append(token)
+            _refresh_state()
+
+        def _toggle_token(token: str):
+            if allow_multi:
+                if token in selected_tokens:
+                    selected_tokens.remove(token)
+                else:
+                    if max_targets is not None and len(selected_tokens) >= max_targets:
+                        return "break"
+                    selected_tokens.append(token)
             else:
-                if max_targets is not None and len(selected) >= max_targets:
+                if token in selected_tokens:
+                    selected_tokens.clear()
+                else:
+                    _set_single(token)
                     return "break"
-                selected.append(token)
             _refresh_state()
             return "break"
 
-        for token in valid_tokens:
-            widget = self._resolve_highlight_widget(token, own_idx=own_idx, card_uid=card_uid)
+        def _on_listbox_select(_event=None):
+            idxs = list(lb.curselection())
+            tokens = [normalized_choices[i][1] for i in idxs]
+
+            if not allow_multi and len(tokens) > 1:
+                tokens = tokens[:1]
+
+            if max_targets is not None and len(tokens) > max_targets:
+                tokens = tokens[:max_targets]
+
+            selected_tokens.clear()
+            selected_tokens.extend(tokens)
+            _refresh_state()
+
+        lb.bind("<<ListboxSelect>>", _on_listbox_select)
+
+        for token in board_tokens:
+            widget = self._resolve_highlight_widget(token, own_idx=own_idx, side_hint=side_hint, card_uid=card_uid)
             if widget is None:
                 continue
-            func_id = widget.bind("<Button-1>", lambda e, t=token: _toggle(t), add="+")
+            func_id = widget.bind("<Button-1>", lambda e, t=token: _toggle_token(t), add="+")
             bindings.append((widget, func_id))
 
         def _cleanup() -> None:
@@ -652,10 +818,33 @@ class HolyWarGUI(tk.Tk):
                     pass
             self._clear_slot_highlights()
 
-        def _confirm() -> None:
-            if not _selection_ok():
+        def _ok() -> None:
+            raw_manual = manual_var.get().strip() if allow_manual else ""
+            if raw_manual:
+                result["value"] = raw_manual
+                _cleanup()
+                win.destroy()
                 return
-            result["value"] = ",".join(selected) if selected else None
+
+            if not _selection_ok():
+                if max_targets is not None and min_targets == max_targets:
+                    messagebox.showwarning("Selezione non valida", f"Devi selezionare esattamente {min_targets} bersagli.")
+                elif max_targets is not None:
+                    messagebox.showwarning("Selezione non valida", f"Seleziona tra {min_targets} e {max_targets} bersagli.")
+                else:
+                    messagebox.showwarning("Selezione non valida", f"Seleziona almeno {min_targets} bersagli.")
+                return
+
+            if not selected_tokens:
+                result["value"] = None if allow_none else ""
+            else:
+                result["value"] = ",".join(selected_tokens)
+
+            _cleanup()
+            win.destroy()
+
+        def _no_target() -> None:
+            result["value"] = None
             _cleanup()
             win.destroy()
 
@@ -664,10 +853,11 @@ class HolyWarGUI(tk.Tk):
             _cleanup()
             win.destroy()
 
-        btn_ok.configure(command=_confirm)
+        btn_ok.configure(command=_ok)
         if allow_none:
-            ttk.Button(btn_bar, text="Senza Target", command=lambda: (selected.clear(), _confirm())).pack(side="left", padx=6)
+            ttk.Button(btn_bar, text="Senza Target", command=_no_target).pack(side="left", padx=6)
         ttk.Button(btn_bar, text="Annulla", command=_cancel).pack(side="left", padx=6)
+
         win.protocol("WM_DELETE_WINDOW", _cancel)
         _refresh_state()
         self.wait_window(win)
@@ -1241,7 +1431,7 @@ class HolyWarGUI(tk.Tk):
 
         win = tk.Toplevel(self)
         win.title(f"{labels[zone_key]} (Debug)")
-        win.geometry("560x500")
+        self._center_toplevel(win, 560, 500)
         win.transient(self)
 
         ttk.Label(
@@ -1392,11 +1582,22 @@ class HolyWarGUI(tk.Tk):
 
         return total
 
-    def _target_selection_limits(self, uid: str) -> tuple[int, int | None]:
+    def _first_activate_target_spec(self, uid: str):
+        script = self._card_script(uid)
+        if script is None:
+            return None
+        for action in script.on_activate_actions:
+            target = action.target
+            ttype = str(target.type or "").strip().lower()
+            if ttype in {"selected_target", "selected_targets"}:
+                return target
+        return None
+
+    def _target_selection_limits(self, uid: str, *, for_activate: bool = False) -> tuple[int, int | None]:
         mode = self._play_targeting_mode(uid)
 
         # Nuovo sistema: solo se esiste davvero un target nello script
-        target = self._first_play_target_spec(uid)
+        target = self._first_activate_target_spec(uid) if for_activate else self._first_play_target_spec(uid)
         if target is not None:
             min_targets = target.min_targets if target.min_targets is not None else 1
 
@@ -1530,6 +1731,23 @@ class HolyWarGUI(tk.Tk):
                                 if token not in seen:
                                     out.append(token)
                                     seen.add(token)
+                    for i in range(4):
+                        r_uid = player.artifacts[i]
+                        if r_uid is not None:
+                            inst = engine.state.instances[r_uid]
+                            if matches(inst):
+                                token = r_uid
+                                if token not in seen:
+                                    out.append(token)
+                                    seen.add(token)
+                    b_uid = player.building
+                    if b_uid is not None:
+                        inst = engine.state.instances[b_uid]
+                        if matches(inst):
+                            token = b_uid
+                            if token not in seen:
+                                out.append(token)
+                                seen.add(token)
 
                 elif zone == "graveyard":
                     for c_uid in player.graveyard:
@@ -1628,14 +1846,14 @@ class HolyWarGUI(tk.Tk):
                     for i in range(3):
                         a_uid = player.attack[i]
                         if a_uid is not None and matches(a_uid):
-                            token = f"a{i+1}"
+                            token = a_uid
                             if token not in seen:
                                 out.append(token)
                                 seen.add(token)
 
                         d_uid = player.defense[i]
                         if d_uid is not None and matches(d_uid):
-                            token = f"d{i+1}"
+                            token = d_uid
                             if token not in seen:
                                 out.append(token)
                                 seen.add(token)
@@ -1643,16 +1861,16 @@ class HolyWarGUI(tk.Tk):
                     for i in range(len(player.artifacts)):
                         r_uid = player.artifacts[i]
                         if r_uid is not None and matches(r_uid):
-                            token = f"r{i+1}"
+                            token = r_uid
                             if token not in seen:
                                 out.append(token)
                                 seen.add(token)
 
-                if player.building is not None and matches(player.building):
-                    token = "b"
-                    if token not in seen:
-                        out.append(token)
-                        seen.add(token)
+                    if player.building is not None and matches(player.building):
+                        token = player.building
+                        if token not in seen:
+                            out.append(token)
+                            seen.add(token)
 
                 elif zone == "graveyard":
                     for c_uid in player.graveyard:
@@ -1683,9 +1901,29 @@ class HolyWarGUI(tk.Tk):
     def _board_activation_candidates(self, player_idx: int) -> list[str]:
         if self.engine is None:
             return []
-        candidates = self._candidate_slot_tokens()
-        # Keep both sides available; the engine validation will reject illegal choices.
-        return candidates
+        own = self.engine.state.players[player_idx]
+        opp = self.engine.state.players[1 - player_idx]
+        out: list[str] = []
+        for i in range(3):
+            if own.attack[i] is not None:
+                out.append(f"s:a{i+1}")
+            if opp.attack[i] is not None:
+                out.append(f"o:a{i+1}")
+        for i in range(3):
+            if own.defense[i] is not None:
+                out.append(f"s:d{i+1}")
+            if opp.defense[i] is not None:
+                out.append(f"o:d{i+1}")
+        for i in range(4):
+            if own.artifacts[i] is not None:
+                out.append(f"s:r{i+1}")
+            if opp.artifacts[i] is not None:
+                out.append(f"o:r{i+1}")
+        if own.building is not None:
+            out.append("s:b")
+        if opp.building is not None:
+            out.append("o:b")
+        return out
 
     def _format_guided_candidate(self, token: str, own_idx: int) -> str:
         if self.engine is None:
@@ -1693,28 +1931,39 @@ class HolyWarGUI(tk.Tk):
         st = self.engine.state
         own = st.players[own_idx]
         opp = st.players[1 - own_idx]
-        if token.startswith("a") and len(token) == 2 and token[1].isdigit():
-            i = int(token[1]) - 1
-            own_uid = own.attack[i] if 0 <= i < 3 else None
-            opp_uid = opp.attack[i] if 0 <= i < 3 else None
-            own_name = st.instances[own_uid].definition.name if own_uid is not None else "-"
-            opp_name = st.instances[opp_uid].definition.name if opp_uid is not None else "-"
-            return f"Slot Attacco {i + 1} | Tuo: {own_name} | Avv: {opp_name}"
-        if token.startswith("d") and len(token) == 2 and token[1].isdigit():
-            i = int(token[1]) - 1
-            own_uid = own.defense[i] if 0 <= i < 3 else None
-            opp_uid = opp.defense[i] if 0 <= i < 3 else None
-            own_name = st.instances[own_uid].definition.name if own_uid is not None else "-"
-            opp_name = st.instances[opp_uid].definition.name if opp_uid is not None else "-"
-            return f"Slot Difesa {i + 1} | Tuo: {own_name} | Avv: {opp_name}"
-        if token.startswith("r") and len(token) == 2 and token[1].isdigit():
-            i = int(token[1]) - 1
-            opp_uid = opp.artifacts[i] if 0 <= i < 4 else None
-            opp_name = st.instances[opp_uid].definition.name if opp_uid is not None else "-"
-            return f"Artefatto Avversario {i + 1} | {opp_name}"
-        if token == "b":
-            opp_name = st.instances[opp.building].definition.name if opp.building else "-"
-            return f"Edificio Avversario | {opp_name}"
+        raw = str(token or "").strip()
+        side = ""
+        core = raw
+        if ":" in raw:
+            pref, code = raw.split(":", 1)
+            p = pref.strip().lower()
+            if p in {"s", "self", "me", "own", "owner", "controller"}:
+                side = "TUO"
+                core = code.strip()
+            elif p in {"o", "opp", "enemy", "opponent", "other"}:
+                side = "AVV"
+                core = code.strip()
+        chosen_player = own if side != "AVV" else opp
+        side_prefix = f"[{side}] " if side else ""
+        if core.startswith("a") and len(core) == 2 and core[1].isdigit():
+            i = int(core[1]) - 1
+            uid = chosen_player.attack[i] if 0 <= i < 3 else None
+            name = st.instances[uid].definition.name if uid is not None else "-"
+            return f"{side_prefix}Attacco {i + 1} | {name}"
+        if core.startswith("d") and len(core) == 2 and core[1].isdigit():
+            i = int(core[1]) - 1
+            uid = chosen_player.defense[i] if 0 <= i < 3 else None
+            name = st.instances[uid].definition.name if uid is not None else "-"
+            return f"{side_prefix}Difesa {i + 1} | {name}"
+        if core.startswith("r") and len(core) == 2 and core[1].isdigit():
+            i = int(core[1]) - 1
+            uid = chosen_player.artifacts[i] if 0 <= i < 4 else None
+            name = st.instances[uid].definition.name if uid is not None else "-"
+            return f"{side_prefix}Artefatto {i + 1} | {name}"
+        if core == "b":
+            uid = chosen_player.building
+            name = st.instances[uid].definition.name if uid else "-"
+            return f"{side_prefix}Edificio | {name}"
         if ":" in token:
             pref, name = token.split(":", 1)
             if pref == "deck":
@@ -1750,84 +1999,6 @@ class HolyWarGUI(tk.Tk):
 
         return token
 
-    def _open_target_picker(
-        self,
-        *,
-        title: str,
-        prompt: str,
-        choices: list[tuple[str, str]],
-        allow_multi: bool,
-        min_targets: int = 0,
-        max_targets: int | None = None,
-        allow_none: bool = True,
-        allow_manual: bool = False,
-    ) -> tuple[bool, str | None]:
-        win = tk.Toplevel(self)
-        win.title(title)
-        win.geometry("620x540")
-        ttk.Label(win, text=prompt).pack(anchor="w", padx=8, pady=6)
-        if allow_multi:
-            lim = ""
-            if min_targets > 0 and max_targets is not None and min_targets == max_targets:
-                lim = f" (seleziona esattamente {min_targets})"
-            elif max_targets is not None:
-                lim = f" (min {min_targets}, max {max_targets})"
-            ttk.Label(win, text=f"Selezione multipla: clicca tutti i bersagli necessari{lim}.").pack(anchor="w", padx=8)
-        lb = tk.Listbox(win, selectmode=("multiple" if allow_multi else "browse"))
-        lb.pack(fill="both", expand=True, padx=8, pady=6)
-        for label, _token in choices:
-            lb.insert(tk.END, label)
-        selected: dict[str, str | None] = {"value": ""}
-
-        manual_var = tk.StringVar(value="")
-        if allow_manual:
-            row = ttk.Frame(win)
-            row.pack(fill="x", padx=8, pady=(0, 4))
-            ttk.Label(row, text="Valore manuale (opzionale):").pack(side="left")
-            ttk.Entry(row, textvariable=manual_var).pack(side="left", fill="x", expand=True, padx=6)
-
-        def _ok() -> None:
-            raw_manual = manual_var.get().strip() if allow_manual else ""
-            if raw_manual:
-                selected["value"] = raw_manual
-                win.destroy()
-                return
-            idxs = list(lb.curselection())
-            chosen_count = len(idxs)
-            upper = max_targets if max_targets is not None else (9999 if allow_multi else 1)
-            if chosen_count < min_targets or chosen_count > upper:
-                if max_targets is not None and min_targets == max_targets:
-                    messagebox.showwarning("Selezione non valida", f"Devi selezionare esattamente {min_targets} bersagli.")
-                elif max_targets is not None:
-                    messagebox.showwarning("Selezione non valida", f"Seleziona tra {min_targets} e {max_targets} bersagli.")
-                else:
-                    messagebox.showwarning("Selezione non valida", f"Seleziona almeno {min_targets} bersagli.")
-                return
-            if not idxs:
-                selected["value"] = None if allow_none else ""
-            else:
-                selected["value"] = ",".join(choices[i][1] for i in idxs)
-            win.destroy()
-
-        def _no_target() -> None:
-            selected["value"] = None
-            win.destroy()
-
-        def _cancel() -> None:
-            selected["value"] = ""
-            win.destroy()
-
-        btn = ttk.Frame(win)
-        btn.pack(fill="x", padx=8, pady=8)
-        ttk.Button(btn, text="OK", command=_ok).pack(side="left")
-        if allow_none:
-            ttk.Button(btn, text="Senza Target", command=_no_target).pack(side="left", padx=6)
-        ttk.Button(btn, text="Annulla", command=_cancel).pack(side="left", padx=6)
-        win.transient(self)
-        win.grab_set()
-        self.wait_window(win)
-        return (selected["value"] == "", selected["value"])
-
     def _monsone_target_payload(self, spell_uid: str) -> tuple[bool, str | None]:
         if self.engine is None:
             return (True, None)
@@ -1841,7 +2012,7 @@ class HolyWarGUI(tk.Tk):
             c = self.engine.state.instances[h_uid].definition
             hand_choices.append((f"{c.name} ({c.card_type})", h_uid))
 
-        canceled, picked_hand = self._open_target_picker(
+        canceled, picked_hand = self._open_board_target_picker(
             title="Monsone - Scarto",
             prompt="Seleziona fino a 3 carte dalla tua mano da mandare al cimitero.",
             choices=hand_choices,
@@ -1901,7 +2072,7 @@ class HolyWarGUI(tk.Tk):
                 if crosses <= 8:
                     field_choices.append((f"{side} Edificio | {inst.definition.name} (Croci {inst.definition.crosses})", b_uid))
 
-        canceled, picked_field = self._open_target_picker(
+        canceled, picked_field = self._open_board_target_picker(
             title="Monsone - Ritorno al Reliquiario",
             prompt="Seleziona fino a 3 carte sul terreno (Croci <= 8) da rimettere nei reliquiari dei rispettivi proprietari.",
             choices=field_choices,
@@ -1932,7 +2103,7 @@ class HolyWarGUI(tk.Tk):
             ("Pesca 1 carta", "draw"),
             ("Attiva Warcry", "warcry"),
         ]
-        canceled, selected = self._open_target_picker(
+        canceled, selected = self._open_board_target_picker(
             title="Yggdrasil - Modalita",
             prompt="Scegli la modalita di attivazione.",
             choices=choices,
@@ -1955,8 +2126,7 @@ class HolyWarGUI(tk.Tk):
             if not saint_choices:
                 messagebox.showwarning("Yggdrasil", "Nessun santo valido da potenziare.")
                 return (True, None)
-            self._set_slot_highlights([token for _, token in saint_choices], card_uid=uid, side_hint="own")
-            canceled, saint_target = self._open_target_picker(
+            canceled, saint_target = self._open_board_target_picker(
                 title="Yggdrasil - Bersaglio",
                 prompt="Seleziona un tuo Santo da potenziare.",
                 choices=saint_choices,
@@ -1965,8 +2135,9 @@ class HolyWarGUI(tk.Tk):
                 max_targets=1,
                 allow_none=False,
                 allow_manual=False,
+                card_uid=uid,
+                side_hint="own",
             )
-            self._clear_slot_highlights()
             if canceled or not saint_target:
                 return (True, None)
             return (False, f"buff:{saint_target}")
@@ -1977,7 +2148,7 @@ class HolyWarGUI(tk.Tk):
             ("Aggiungi 1 Segnalino Sigillo", "add"),
             ("Rimuovi 3 Segnalini e pesca 1 carta", "draw"),
         ]
-        canceled, selected = self._open_target_picker(
+        canceled, selected = self._open_board_target_picker(
             title="Veggente dell'Apocalisse",
             prompt="Scegli la modalita di attivazione.",
             choices=choices,
@@ -2022,31 +2193,18 @@ class HolyWarGUI(tk.Tk):
                 return (True, None)
 
             choices = [(self._format_guided_candidate(c, own_idx), c) for c in candidates]
-            all_board = all(self._is_board_token(c) for c in candidates)
 
-            if all_board:
-                canceled, selected = self._open_board_target_picker(
-                    title="Selezione Bersaglio",
-                    prompt="Clicca sul campo i bersagli validi; riclicca per deselezionare.",
-                    candidates=candidates,
-                    min_targets=min_targets,
-                    max_targets=max_targets,
-                    allow_none=allow_none,
-                    card_uid=uid,
-                )
-            else:
-                self._set_slot_highlights(candidates, card_uid=uid)
-                canceled, selected = self._open_target_picker(
-                    title="Selezione Bersaglio",
-                    prompt="Seleziona i bersagli validi dalla lista.",
-                    choices=choices,
-                    allow_multi=multi,
-                    min_targets=min_targets,
-                    max_targets=max_targets,
-                    allow_none=allow_none,
-                    allow_manual=False,
-                )
-                self._clear_slot_highlights()
+            canceled, selected = self._open_board_target_picker(
+                title="Selezione Bersaglio",
+                prompt="Seleziona i bersagli validi dalla lista oppure cliccando sul campo.",
+                choices=choices,
+                allow_multi=multi,
+                min_targets=min_targets,
+                max_targets=max_targets,
+                allow_none=allow_none,
+                allow_manual=False,
+                card_uid=uid,
+            )
 
             if canceled:
                 return (True, None)
@@ -2092,7 +2250,7 @@ class HolyWarGUI(tk.Tk):
         choices = [(self._format_guided_candidate(c, own_idx), c) for c in candidates]
         if not choices:
             if mode == "manual":
-                canceled, selected = self._open_target_picker(
+                canceled, selected = self._open_board_target_picker(
                     title="Selezione Bersaglio",
                     prompt="Inserisci manualmente il bersaglio della carta.",
                     choices=[],
@@ -2111,30 +2269,18 @@ class HolyWarGUI(tk.Tk):
                 return
             messagebox.showwarning("Selezione Bersaglio", "Nessun bersaglio valido disponibile per questa carta.")
             return
-        all_board = all(self._is_board_token(c) for c in candidates)
-        if all_board:
-            canceled, selected = self._open_board_target_picker(
-                title="Selezione Bersaglio",
-                prompt="Clicca sul campo i bersagli validi; riclicca per deselezionare.",
-                candidates=candidates,
-                min_targets=min_targets,
-                max_targets=max_targets,
-                allow_none=allow_none,
-                card_uid=uid,
-            )
-        else:
-            self._set_slot_highlights(candidates, card_uid=uid)
-            canceled, selected = self._open_target_picker(
-                title="Selezione Bersaglio",
-                prompt="Seleziona i bersagli validi dalla lista.",
-                choices=choices,
-                allow_multi=multi,
-                min_targets=min_targets,
-                max_targets=max_targets,
-                allow_none=allow_none,
-                allow_manual=False,
-            )
-            self._clear_slot_highlights()
+    
+        canceled, selected = self._open_board_target_picker(
+            title="Selezione Bersaglio",
+            prompt="Seleziona i bersagli validi dalla lista oppure cliccando sul campo.",
+            choices=choices,
+            allow_multi=multi,
+            min_targets=min_targets,
+            max_targets=max_targets,
+            allow_none=allow_none,
+            allow_manual=False,
+            card_uid=uid,
+        )
         if canceled:
             return
         self.play_uid(uid, selected)
@@ -2177,6 +2323,7 @@ class HolyWarGUI(tk.Tk):
         uid = self.engine.resolve_board_uid(own_idx, source)
         if uid is None:
             return
+        self._trace_vulcano_gui(f"right_click source={source} uid={uid}", source_uid=uid)
         menu = tk.Menu(self, tearoff=0)
         if source.startswith("a"):
             slot = int(source[1])
@@ -2195,7 +2342,12 @@ class HolyWarGUI(tk.Tk):
             menu.add_cascade(label="Attacca", menu=m_attack)
             if hl_tokens:
                 self._set_slot_highlights(hl_tokens, side_hint="enemy")
-        if self._activation_has_any_valid_option(own_idx, source):
+        has_activation = self._activation_has_any_valid_option(own_idx, source)
+        self._trace_vulcano_gui(
+            f"menu activation availability source={source} has_activation={has_activation}",
+            source_uid=uid,
+        )
+        if has_activation:
             menu.add_command(label="Attiva abilita", command=lambda src=source: self.do_activate(src))
         else:
             menu.add_command(label="Attiva abilita", state="disabled")
@@ -2228,9 +2380,13 @@ class HolyWarGUI(tk.Tk):
         if uid is None:
             messagebox.showwarning("Abilita non valida", "Sorgente non valida.")
             return
+        self._trace_vulcano_gui(f"do_activate start source={source} uid={uid}", source_uid=uid)
         mode = self._activate_targeting_mode(uid)
+        self._trace_vulcano_gui(f"activate mode={mode}", source_uid=uid)
         if mode == "none":
+            self._trace_vulcano_gui("calling activate_ability with target=None", source_uid=uid)
             res = self.engine.activate_ability(own_idx, source, None)
+            self._trace_vulcano_gui(f"activate_ability result ok={res.ok} msg={res.message!r}", source_uid=uid)
             if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
                 self._post_reveal_chain_actor = own_idx
                 self._maybe_show_runtime_reveal()
@@ -2252,7 +2408,7 @@ class HolyWarGUI(tk.Tk):
             if not hand_choices:
                 messagebox.showwarning("Abilita non valida", "Nessuna carta disponibile in mano.")
                 return
-            canceled, target = self._open_target_picker(
+            canceled, target = self._open_board_target_picker(
                 title="Attiva Abilita",
                 prompt="Scegli la carta da evocare.",
                 choices=hand_choices,
@@ -2263,8 +2419,11 @@ class HolyWarGUI(tk.Tk):
                 allow_manual=False,
             )
             if canceled or not target:
+                self._trace_vulcano_gui("manual picker canceled/empty target", source_uid=uid)
                 return
+            self._trace_vulcano_gui(f"manual picker target={target!r}", source_uid=uid)
             res = self.engine.activate_ability(own_idx, source, target)
+            self._trace_vulcano_gui(f"activate_ability result ok={res.ok} msg={res.message!r}", source_uid=uid)
             if res.ok:
                 self.start_chain(actor_idx=own_idx)
             if not res.ok:
@@ -2281,40 +2440,39 @@ class HolyWarGUI(tk.Tk):
             if canceled:
                 return
         else:
-            min_targets, max_targets = self._target_selection_limits(uid)
+            min_targets, max_targets = self._target_selection_limits(uid, for_activate=True)
             valid_tokens = self._valid_activation_targets(own_idx, source, uid)
             allow_no_target = self._can_activate_target(own_idx, source, None)
+            valid_tokens = [
+                tok
+                for tok in valid_tokens
+                if self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
+            ]
+            self._trace_vulcano_gui(
+                f"board mode options min={min_targets} max={max_targets} allow_no_target={allow_no_target} tokens={valid_tokens}",
+                source_uid=uid,
+            )
             if not valid_tokens and not allow_no_target:
                 messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
                 return
-            all_board = all(self._is_board_token(c) for c in valid_tokens)
-            if valid_tokens and all_board:
-                canceled, target = self._open_board_target_picker(
-                    title="Attiva Abilita",
-                    prompt="Clicca sul campo i bersagli validi dell'abilita.",
-                    candidates=valid_tokens,
-                    min_targets=min_targets,
-                    max_targets=max_targets,
-                    allow_none=allow_no_target,
-                    card_uid=uid,
-                )
-            else:
-                self._set_slot_highlights(valid_tokens, card_uid=uid)
-                choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
-                canceled, target = self._open_target_picker(
-                    title="Attiva Abilita",
-                    prompt="Seleziona un bersaglio valido per l'abilita.",
-                    choices=choices,
-                    allow_multi=(max_targets is None or max_targets > 1),
-                    min_targets=min_targets,
-                    max_targets=max_targets,
-                    allow_none=allow_no_target,
-                    allow_manual=False,
-                )
-                self._clear_slot_highlights()
+            choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
+            canceled, target = self._open_board_target_picker(
+                title="Attiva Abilita",
+                prompt="Seleziona un bersaglio valido per l'abilita dalla lista oppure cliccando sul campo.",
+                choices=choices,
+                allow_multi=(max_targets is None or max_targets > 1),
+                min_targets=min_targets,
+                max_targets=max_targets,
+                allow_none=allow_no_target,
+                allow_manual=False,
+                card_uid=uid,
+            )
         if canceled:
+            self._trace_vulcano_gui("picker canceled", source_uid=uid)
             return
+        self._trace_vulcano_gui(f"calling activate_ability target={target!r}", source_uid=uid)
         res = self.engine.activate_ability(own_idx, source, target)
+        self._trace_vulcano_gui(f"activate_ability result ok={res.ok} msg={res.message!r}", source_uid=uid)
         if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
             self._post_reveal_chain_actor = own_idx
             self._maybe_show_runtime_reveal()

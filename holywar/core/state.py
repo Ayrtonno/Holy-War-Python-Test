@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -141,7 +142,9 @@ class GameState:
             "phase": self.phase,
             "preparation_turns_done": self.preparation_turns_done,
             "coin_toss_winner": self.coin_toss_winner,
-            "flags": self.flags,
+            # Deep-copy runtime flags so cloned states used by GUI simulations
+            # cannot mutate nested dictionaries of the live match state.
+            "flags": copy.deepcopy(self.flags),
             "logs": self.logs,
             "winner": self.winner,
         }
@@ -156,7 +159,7 @@ class GameState:
             phase=str(data.get("phase", "preparation")),
             preparation_turns_done=int(data.get("preparation_turns_done", 0)),
             coin_toss_winner=data.get("coin_toss_winner"),
-            flags=dict(data.get("flags", {})),
+            flags=copy.deepcopy(data.get("flags", {})),
             logs=list(data.get("logs", [])),
             winner=data.get("winner"),
         )

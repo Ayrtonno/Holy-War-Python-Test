@@ -95,6 +95,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "mill_cards",
     "draw_cards",
     "inflict_sin",
+    "inflict_sin_to_target_owners",
     "remove_sin",
     "add_inspiration",
     "pay_inspiration",
@@ -202,6 +203,7 @@ class CardScript:
     on_activate_mode: str = "auto"
     activate_once_per_turn: bool = False
     play_owner: str = "me"
+    can_play_from_hand: bool = True
     play_targeting: str = "auto"
     play_requirements: dict[str, Any] = field(default_factory=dict)
     activate_targeting: str = "auto"
@@ -350,6 +352,7 @@ class RuntimeCardManager:
                 on_activate_mode=str(spec.get("on_activate_mode", "auto")),
                 activate_once_per_turn=bool(spec.get("activate_once_per_turn", False)),
                 play_owner=str(spec.get("play_owner", "me")),
+                can_play_from_hand=bool(spec.get("can_play_from_hand", True)),
                 play_targeting=str(spec.get("play_targeting", "auto")),
                 activate_targeting=str(spec.get("activate_targeting", "auto")),
                 attack_targeting=str(spec.get("attack_targeting", "auto")),
@@ -391,16 +394,6 @@ class RuntimeCardManager:
 
     def _bootstrap_from_script_files(self) -> None:
         for card_name, spec in iter_card_scripts():
-            key = _norm(card_name)
-            existing = self._scripts.get(key)
-            if existing is not None:
-                has_custom = bool(existing.triggered_effects or existing.on_play_actions or existing.on_activate_actions)
-                has_non_auto_modes = any(
-                    _norm(mode) != "auto"
-                    for mode in (existing.on_play_mode, existing.on_enter_mode, existing.on_activate_mode)
-                )
-                if has_custom or has_non_auto_modes:
-                    continue
             self.register_script_from_dict(card_name, spec)
 
     def ensure_all_cards_migrated(self, engine: GameEngine) -> None:
@@ -418,6 +411,26 @@ class RuntimeCardManager:
 
     def get_script(self, card_name: str) -> CardScript | None:
         return self._scripts.get(_norm(card_name))
+
+    def _is_vulcano_trace_enabled(self, engine: GameEngine, source_uid: str) -> bool:
+        if bool(engine.state.flags.get("_runtime_trace_vulcano", True)):
+            inst = engine.state.instances.get(source_uid)
+            if inst is not None and _norm(inst.definition.name) == _norm("Vulcano"):
+                return True
+        return False
+
+    def _debug_uid_label(self, engine: GameEngine, uid: str) -> str:
+        inst = engine.state.instances.get(uid)
+        if inst is None:
+            return f"{uid}<?>"
+        owner = int(inst.owner)
+        zone = engine._locate_uid_zone(owner, uid)
+        return f"{uid}<{inst.definition.name}|owner={owner}|zone={zone}>"
+
+    def _trace_vulcano(self, engine: GameEngine, source_uid: str, message: str) -> None:
+        if not self._is_vulcano_trace_enabled(engine, source_uid):
+            return
+        engine.state.log(f"[TRACE VULCANO] {message}")
 
     def get_play_targeting_mode(self, card_name: str) -> str:
         script = self.get_script(card_name)
@@ -530,6 +543,8 @@ class RuntimeCardManager:
         self.ensure_all_cards_migrated(engine)
         inst = engine.state.instances[uid]
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+        if not script.can_play_from_hand:
+            return (False, "Questa carta non puo essere giocata dalla mano.")
 
         if script.play_requirements:
             ok = self._eval_condition_node(
@@ -682,7 +697,7 @@ class RuntimeCardManager:
                 self._run_enter_actions(engine, player_idx, uid, script.on_enter_actions)
                 return f"{inst.definition.name}: effetto di ingresso risolto via script."
             if is_saint:
-                return f"{inst.definition.name}: nessun effetto scriptato."
+                return None
 
             if mode in {"registry", "auto", "custom"}:
                 handler = get_enter(inst.definition.name)
@@ -714,22 +729,46 @@ class RuntimeCardManager:
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = str(target or "")
         try:
+            self._trace_vulcano(
+                engine,
+                uid,
+                (
+                    f"resolve_activate start: source={self._debug_uid_label(engine, uid)} "
+                    f"mode={mode} target_raw={str(target)!r} activate_targeting={script.activate_targeting} "
+                    f"once_per_turn={script.activate_once_per_turn} actions={len(script.on_activate_actions)}"
+                ),
+            )
             is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"registry", "auto", "custom"}:
                 handler = get_activate(inst.definition.name)
                 if handler is not None:
+                    self._trace_vulcano(engine, uid, "registry handler found, invoking...")
                     out = handler(engine, player_idx, uid, target)
                     if out is not NOT_HANDLED:
+                        self._trace_vulcano(engine, uid, f"registry handler handled activation: out={out!r}")
                         return str(out)
+                    self._trace_vulcano(engine, uid, "registry handler returned NOT_HANDLED.")
             if mode in {"scripted", "custom"} and script.on_activate_actions:
+                self._trace_vulcano(engine, uid, "scripted activate path selected.")
                 self._run_activate_actions(engine, player_idx, uid, script.on_activate_actions)
+                if script.activate_once_per_turn and not flags.get("_runtime_waiting_for_reveal"):
+                    engine.mark_activated_this_turn(uid)
+                    self._trace_vulcano(engine, uid, "marked activated_this_turn.")
                 return f"{inst.definition.name}: effetto attivato via script."
             if is_saint:
+                self._trace_vulcano(engine, uid, "saint fallback reached: no scripted activate actions.")
                 return f"{inst.definition.name}: nessun effetto scriptato."
             if mode in {"ported", "auto", "runtime"}:
+                self._trace_vulcano(engine, uid, "ported activate fallback path selected.")
                 return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
+            self._trace_vulcano(engine, uid, "default activate fallback path selected (ported).")
             return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
         finally:
+            self._trace_vulcano(
+                engine,
+                uid,
+                f"resolve_activate end: waiting_for_reveal={bool(flags.get('_runtime_waiting_for_reveal'))}",
+            )
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
             else:
@@ -747,22 +786,44 @@ class RuntimeCardManager:
     ) -> None:
         flags = engine.state.flags
         flags["_runtime_pending_mode"] = "activate"
+        self._trace_vulcano(
+            engine,
+            source_uid,
+            f"_run_activate_actions start: owner={owner_idx} start_index={start_index} actions={len(actions)} selected_raw={flags.get('_runtime_selected_target')!r}",
+        )
         for i in range(start_index, len(actions)):
             if flags.get("_runtime_waiting_for_reveal"):
+                self._trace_vulcano(engine, source_uid, f"pause before action[{i}] due to waiting_for_reveal.")
                 flags["_runtime_action_index_resume"] = str(i)
                 flags["_runtime_resume_source"] = source_uid
                 flags["_runtime_resume_owner"] = str(owner_idx)
                 break
             action = actions[i]
+            self._trace_vulcano(
+                engine,
+                source_uid,
+                (
+                    f"action[{i}] begin: effect={action.effect.action} target_type={action.target.type} "
+                    f"target_owner={action.target.owner} zone={action.target.zone} "
+                    f"min={action.target.min_targets} max={action.target.max_targets}"
+                ),
+            )
             if action.condition and not self._eval_condition_node(
                 RuleEventContext(engine=engine, event="on_activate", player_idx=owner_idx, payload={"card": source_uid}),
                 owner_idx,
                 action.condition,
             ):
+                self._trace_vulcano(engine, source_uid, f"action[{i}] skipped: condition=false {action.condition}")
                 continue
+            if action.condition:
+                self._trace_vulcano(engine, source_uid, f"action[{i}] condition=true {action.condition}")
             targets = self._resolve_targets(engine, owner_idx, action.target)
+            target_labels = [self._debug_uid_label(engine, t_uid) for t_uid in targets]
+            self._trace_vulcano(engine, source_uid, f"action[{i}] resolved targets={target_labels}")
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
+            self._trace_vulcano(engine, source_uid, f"action[{i}] effect applied.")
             if flags.get("_runtime_waiting_for_reveal"):
+                self._trace_vulcano(engine, source_uid, f"pause after action[{i}] due to reveal.")
                 flags["_runtime_action_index_resume"] = str(i + 1)
                 flags["_runtime_resume_source"] = source_uid
                 flags["_runtime_resume_owner"] = str(owner_idx)
@@ -770,6 +831,11 @@ class RuntimeCardManager:
 
         if not flags.get("_runtime_waiting_for_reveal"):
             flags.pop("_runtime_pending_mode", None)
+        self._trace_vulcano(
+            engine,
+            source_uid,
+            f"_run_activate_actions end: waiting_for_reveal={bool(flags.get('_runtime_waiting_for_reveal'))}",
+        )
 
     def resume_pending_effect(self, engine: GameEngine) -> None:
         flags = engine.state.flags
@@ -1196,41 +1262,96 @@ class RuntimeCardManager:
             raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
                 selected = raw_selected.split(",", 1)[0].strip()
+
                 if selected.startswith("buff:"):
                     selected = selected.split(":", 1)[1]
 
                 if selected in engine.state.instances:
                     pool.append(selected)
                 else:
-                    real_owner = owner_idx if _norm(target.owner) in {"me", "owner", "controller"} else 1 - owner_idx
-                    p = engine.state.players[real_owner]
+                    source_uid = str(engine.state.flags.get("_runtime_source_card", "")).strip()
+                    owner_key = _norm(target.owner)
+                    allow_any_owner = owner_key in {"any", "both", "all", "either"}
+                    owner_candidates = self._target_owner_indices(owner_idx, target.owner)
 
-                    zone, slot = engine._parse_zone_target(selected)
-                    if zone is not None:
-                        if zone == "attack" and 0 <= slot < len(p.attack):
-                            uid = p.attack[slot]
-                            if uid:
-                                pool.append(uid)
-                        elif zone == "defense" and 0 <= slot < len(p.defense):
-                            uid = p.defense[slot]
-                            if uid:
-                                pool.append(uid)
-                    elif selected.startswith("r") and len(selected) == 2 and selected[1].isdigit():
-                        art_idx = int(selected[1]) - 1
-                        if 0 <= art_idx < len(p.artifacts):
-                            uid = p.artifacts[art_idx]
-                            if uid:
-                                pool.append(uid)
-                    elif selected == "b":
-                        if p.building:
-                            pool.append(p.building)
+                    if ":" in selected:
+                        side, token = selected.split(":", 1)
+                        side_key = _norm(side)
+                        if side_key in {"o", "opp", "enemy", "opponent", "other"}:
+                            owner_candidates = [1 - owner_idx]
+                            selected = token.strip()
+                        elif side_key in {"s", "self", "me", "own", "owner", "controller"}:
+                            owner_candidates = [owner_idx]
+                            selected = token.strip()
+
+                    resolved = False
+                    fallback_uid: str | None = None
+                    for real_owner in owner_candidates:
+                        p = engine.state.players[real_owner]
+                        zone, slot = engine._parse_zone_target(selected)
+                        if zone is not None:
+                            if zone == "attack" and 0 <= slot < len(p.attack):
+                                uid = p.attack[slot]
+                                if uid:
+                                    if allow_any_owner and uid == source_uid and len(owner_candidates) > 1:
+                                        fallback_uid = uid
+                                        continue
+                                    pool.append(uid)
+                                    resolved = True
+                                    break
+                            elif zone == "defense" and 0 <= slot < len(p.defense):
+                                uid = p.defense[slot]
+                                if uid:
+                                    if allow_any_owner and uid == source_uid and len(owner_candidates) > 1:
+                                        fallback_uid = uid
+                                        continue
+                                    pool.append(uid)
+                                    resolved = True
+                                    break
+                        elif selected.startswith("r") and len(selected) == 2 and selected[1].isdigit():
+                            art_idx = int(selected[1]) - 1
+                            if 0 <= art_idx < len(p.artifacts):
+                                uid = p.artifacts[art_idx]
+                                if uid:
+                                    if allow_any_owner and uid == source_uid and len(owner_candidates) > 1:
+                                        fallback_uid = uid
+                                        continue
+                                    pool.append(uid)
+                                    resolved = True
+                                    break
+                        elif selected == "b":
+                            if p.building:
+                                if allow_any_owner and p.building == source_uid and len(owner_candidates) > 1:
+                                    fallback_uid = p.building
+                                    continue
+                                pool.append(p.building)
+                                resolved = True
+                                break
+
+                    if not resolved and fallback_uid:
+                        pool.append(fallback_uid)
+                        resolved = True
+
+                    if not resolved:
+                        lookup = selected
+                        if ":" in lookup:
+                            pref, val = lookup.split(":", 1)
+                            pref_key = _norm(pref)
+                            if pref_key in {"deck", "relicario", "grave", "graveyard", "excom", "excommunicated"}:
+                                lookup = val.strip()
+                        selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, target)
+                        for candidate_uid in selectable:
+                            if _norm(engine.state.instances[candidate_uid].definition.name) == _norm(lookup):
+                                pool.append(candidate_uid)
+                                break
 
         elif ttype == "selected_targets":
             raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
                 parts = [part.strip() for part in raw_selected.split(",") if part.strip()]
-                real_owner = owner_idx if _norm(target.owner) in {"me", "owner", "controller"} else 1 - owner_idx
-                p = engine.state.players[real_owner]
+                source_uid = str(engine.state.flags.get("_runtime_source_card", "")).strip()
+                owner_key = _norm(target.owner)
+                allow_any_owner = owner_key in {"any", "both", "all", "either"}
 
                 for selected in parts:
                     if selected.startswith("buff:"):
@@ -1240,42 +1361,65 @@ class RuntimeCardManager:
                         pool.append(selected)
                         continue
 
-                    zone, slot = engine._parse_zone_target(selected)
-                    if zone is not None:
-                        if zone == "attack" and 0 <= slot < len(p.attack):
-                            uid = p.attack[slot]
-                            if uid:
-                                pool.append(uid)
-                        elif zone == "defense" and 0 <= slot < len(p.defense):
-                            uid = p.defense[slot]
-                            if uid:
-                                pool.append(uid)
-                        continue
+                    owner_candidates = self._target_owner_indices(owner_idx, target.owner)
+                    if ":" in selected:
+                        side, token = selected.split(":", 1)
+                        side_key = _norm(side)
+                        if side_key in {"o", "opp", "enemy", "opponent", "other"}:
+                            owner_candidates = [1 - owner_idx]
+                            selected = token.strip()
+                        elif side_key in {"s", "self", "me", "own", "owner", "controller"}:
+                            owner_candidates = [owner_idx]
+                            selected = token.strip()
 
-                    if selected.startswith("r") and len(selected) == 2 and selected[1].isdigit():
-                        art_idx = int(selected[1]) - 1
-                        if 0 <= art_idx < len(p.artifacts):
-                            uid = p.artifacts[art_idx]
-                            if uid:
-                                pool.append(uid)
-                        continue
-
-                    if selected == "b":
-                        if p.building:
+                    resolved = False
+                    fallback_uid: str | None = None
+                    for real_owner in owner_candidates:
+                        p = engine.state.players[real_owner]
+                        zone, slot = engine._parse_zone_target(selected)
+                        if zone is not None:
+                            if zone == "attack" and 0 <= slot < len(p.attack):
+                                uid = p.attack[slot]
+                                if uid:
+                                    if allow_any_owner and uid == source_uid and len(owner_candidates) > 1:
+                                        fallback_uid = uid
+                                        continue
+                                    pool.append(uid)
+                                    resolved = True
+                                    break
+                            elif zone == "defense" and 0 <= slot < len(p.defense):
+                                uid = p.defense[slot]
+                                if uid:
+                                    if allow_any_owner and uid == source_uid and len(owner_candidates) > 1:
+                                        fallback_uid = uid
+                                        continue
+                                    pool.append(uid)
+                                    resolved = True
+                                    break
+                        elif selected.startswith("r") and len(selected) == 2 and selected[1].isdigit():
+                            art_idx = int(selected[1]) - 1
+                            if 0 <= art_idx < len(p.artifacts):
+                                uid = p.artifacts[art_idx]
+                                if uid:
+                                    if allow_any_owner and uid == source_uid and len(owner_candidates) > 1:
+                                        fallback_uid = uid
+                                        continue
+                                    pool.append(uid)
+                                    resolved = True
+                                    break
+                        elif selected == "b" and p.building:
+                            if allow_any_owner and p.building == source_uid and len(owner_candidates) > 1:
+                                fallback_uid = p.building
+                                continue
                             pool.append(p.building)
+                            resolved = True
                             break
-                        continue
-                    zone, slot = engine._parse_zone_target(selected)
-                    if zone is not None:
-                        if zone == "attack" and 0 <= slot < len(p.attack):
-                            uid = p.attack[slot]
-                            if uid:
-                                pool.append(uid)
-                        elif zone == "defense" and 0 <= slot < len(p.defense):
-                            uid = p.defense[slot]
-                            if uid:
-                                pool.append(uid)
-                    if selected not in engine.state.instances:
+
+                    if not resolved and fallback_uid:
+                        pool.append(fallback_uid)
+                        resolved = True
+
+                    if not resolved and selected not in engine.state.instances:
                         selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, target)
                         for candidate_uid in selectable:
                             if _norm(engine.state.instances[candidate_uid].definition.name) == _norm(selected):
@@ -1484,6 +1628,11 @@ class RuntimeCardManager:
     ) -> None:
         action = _norm(effect.action)
         action = EFFECT_ACTION_ALIASES.get(action, action)
+        self._trace_vulcano(
+            engine,
+            source_uid,
+            f"_apply_effect: action={action} owner={owner_idx} targets={[self._debug_uid_label(engine, t) for t in targets]}",
+        )
         if action == "return_to_hand_once_per_turn":
             self._apply_return_to_hand_once_per_turn(engine, owner_idx, source_uid, targets)
             return
@@ -2004,6 +2153,20 @@ class RuntimeCardManager:
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             engine.gain_sin(target, max(0, int(effect.amount)))
             return
+        if action == "inflict_sin_to_target_owners":
+            per_card = max(0, int(effect.amount))
+            if per_card <= 0:
+                return
+            counts: dict[int, int] = {}
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                counts[inst.owner] = int(counts.get(inst.owner, 0)) + 1
+            for p_idx, qty in counts.items():
+                if qty > 0:
+                    engine.gain_sin(p_idx, per_card * qty)
+            return
         if action == "remove_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             engine.reduce_sin(target, max(0, int(effect.amount)))
@@ -2017,8 +2180,21 @@ class RuntimeCardManager:
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
+                    self._trace_vulcano(engine, source_uid, f"destroy_card: target uid missing {t_uid}")
                     continue
+                before_zone = engine._locate_uid_zone(inst.owner, t_uid)
+                self._trace_vulcano(
+                    engine,
+                    source_uid,
+                    f"destroy_card: before target={self._debug_uid_label(engine, t_uid)}",
+                )
                 engine.destroy_any_card(inst.owner, t_uid)
+                after_zone = engine._locate_uid_zone(inst.owner, t_uid)
+                self._trace_vulcano(
+                    engine,
+                    source_uid,
+                    f"destroy_card: after uid={t_uid} zone {before_zone} -> {after_zone}",
+                )
             return
         if action == "excommunicate_card":
             for t_uid in targets:
@@ -2068,6 +2244,7 @@ class RuntimeCardManager:
             if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
                 player.hand.append(chosen_uid)
                 return
+            engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
             inst = engine.state.instances[chosen_uid]
             inst.exhausted = False
             engine.state.log(f"{player.name} evoca {inst.definition.name} dalla mano.")
@@ -2120,6 +2297,7 @@ class RuntimeCardManager:
                 return
             if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
                 return
+            engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
             inst = engine.state.instances[chosen_uid]
             inst.exhausted = False
             engine.state.log(f"{player.name} evoca {inst.definition.name}.")
@@ -2240,6 +2418,7 @@ class RuntimeCardManager:
             if not engine.place_card_from_uid(owner_idx, source, zone, slot):
                 player.hand.append(source)
                 return
+            engine.state.flags.setdefault("activated_turn", {}).pop(source, None)
             inst = engine.state.instances[source]
             inst.exhausted = False
             engine.state.log(f"{player.name} posiziona {inst.definition.name}.")

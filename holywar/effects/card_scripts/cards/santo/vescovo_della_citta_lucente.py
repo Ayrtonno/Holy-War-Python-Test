@@ -17,8 +17,7 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {"card_type_in": ["santo", "token"]},
             },
-            "condition": {"target_is_damaged": True},
-            "effect": {"action": "increase_faith_if_damaged", "amount": 5},
+            "effect": {"action": "increase_faith", "amount": 5},
         }
     ],
 }

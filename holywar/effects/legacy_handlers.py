@@ -1125,31 +1125,6 @@ def resolve_card_effect(engine: "GameEngine", player_idx: int, uid: str, target:
         engine.gain_sin(player_idx, 2)
         return "Terremoto Magnitudo 3 risolta."
 
-    if name_key == _norm("Terremoto: Magnitudo 10"):
-        destroyed = 0
-        for idx in (0, 1):
-            p = state.players[idx]
-            for a_uid in list(p.artifacts):
-                if a_uid:
-                    engine.send_to_graveyard(idx, a_uid)
-                    destroyed += 1
-            if p.building:
-                engine.send_to_graveyard(idx, p.building)
-                destroyed += 1
-        sin_gain = 2 * destroyed
-        engine.gain_sin(0, sin_gain)
-        engine.gain_sin(1, sin_gain)
-        for h_uid in list(player.hand):
-            if _norm(state.instances[h_uid].definition.name) == _norm("Vulcano"):
-                slot = _first_open_slot(engine, player_idx)
-                if slot:
-                    player.hand.remove(h_uid)
-                    z, s = slot
-                    engine.place_card_from_uid(player_idx, h_uid, z, s)
-                    state.log(f"{player.name} evoca Vulcano per effetto di Magnitudo 10.")
-                break
-        return "Terremoto Magnitudo 10 risolta."
-
     if name_key == _norm("Monsone"):
         discard_selected: list[str] = []
         return_selected: list[str] = []

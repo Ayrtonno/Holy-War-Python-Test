@@ -39,8 +39,6 @@ def validate_play_constraints(
     if ctype in SAINT_TYPES:
         if _norm(runtime_cards.get_play_owner(card.definition.name)) in {"opponent", "enemy", "other"}:
             place_owner_idx = 1 - player_idx
-        if _norm(card.definition.name) == _norm("Vulcano"):
-            return False, "Vulcano puo essere evocato solo tramite Terremoto: Magnitudo 10.", place_owner_idx, zone, slot
         if _norm(card.definition.name) == _norm("Brigante") and not engine.all_saints_on_field(player_idx):
             return False, "Per giocare Brigante devi sacrificare un tuo santo sul terreno.", place_owner_idx, zone, slot
         zone, slot = engine._parse_zone_target(target)
@@ -256,7 +254,15 @@ def resolve_quick_play_from_hand(engine: "GameEngine", player_idx: int, uid: str
         engine.state.log(f"{player.name} prova a usare {card.definition.name}, ma viene annullata da Barriera Magica.")
         return ActionResult(True, "Attivazione annullata da Barriera Magica.")
     resolved = resolve_card_effect(engine, player_idx, uid, target)
-    engine.send_to_graveyard(player_idx, uid)
+    moved_elsewhere = (
+        uid in player.hand
+        or uid in player.deck
+        or uid in player.white_deck
+        or uid in player.graveyard
+        or uid in player.excommunicated
+    )
+    if not moved_elsewhere:
+        engine.send_to_graveyard(player_idx, uid)
     engine._cleanup_zero_faith_saints()
     engine.check_win_conditions()
     return ActionResult(True, resolved)
