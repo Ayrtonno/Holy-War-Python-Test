@@ -94,6 +94,9 @@ class HolyWarGUI(tk.Tk):
         ttk.Button(actions, text="Catena SI", command=lambda: self.set_chain_enabled(True)).pack(side="left", padx=(12, 4))
         ttk.Button(actions, text="Catena NO", command=lambda: self.set_chain_enabled(False)).pack(side="left", padx=4)
         ttk.Button(actions, text="OK Catena", command=self.chain_ok).pack(side="left", padx=4)
+        ttk.Button(actions, text="Deck", command=lambda: self.open_debug_zone("deck")).pack(side="left", padx=(12, 4))
+        ttk.Button(actions, text="Cimitero", command=lambda: self.open_debug_zone("graveyard")).pack(side="left", padx=4)
+        ttk.Button(actions, text="Scomunicate", command=lambda: self.open_debug_zone("excommunicated")).pack(side="left", padx=4)
 
         top.columnconfigure(7, weight=1)
         top.columnconfigure(13, weight=1)
@@ -257,6 +260,8 @@ class HolyWarGUI(tk.Tk):
             "impossibile",
             "devi selezionare",
             "scegli un artefatto",
+            "nessun effetto scriptato",
+            "nessun effetto attivabile",
             "effetto registrato",
             "in sviluppo",
         ]
@@ -300,9 +305,14 @@ class HolyWarGUI(tk.Tk):
                 break
             if "target" not in raw_action:
                 continue
+            raw_target = raw_action.get("target", {}) or {}
             t = script.on_play_actions[i].target
             ttype = str(t.type or "").strip().lower()
-            if ttype in {"selected_target", "selected_targets"}:
+            requires_manual = any(
+                key in raw_target
+                for key in ("zone", "zones", "card_filter", "min_targets", "max_targets", "max_targets_from", "owner")
+            )
+            if ttype in {"selected_target", "selected_targets"} and requires_manual:
                 out.append((i, t))
         return out
 
@@ -427,6 +437,8 @@ class HolyWarGUI(tk.Tk):
 
             if "field" in zones:
                 owner_key = str(target.owner or "me").strip().lower()
+                if owner_key in {"any", "both", "all", "either"}:
+                    return (True, True)
                 if owner_key in {"me", "owner", "controller"}:
                     return (True, False)
                 if owner_key in {"opponent", "enemy"}:
@@ -455,6 +467,32 @@ class HolyWarGUI(tk.Tk):
                 side_hint = "own"
             elif wants_opp and not wants_own:
                 side_hint = "enemy"
+
+        # UID diretto: risolvi la carta sul campo senza ambiguita di slot/sponda.
+        if token in self.engine.state.instances:
+            for i, c_uid in enumerate(own.attack):
+                if c_uid == token:
+                    return self.own_attack[i]
+            for i, c_uid in enumerate(own.defense):
+                if c_uid == token:
+                    return self.own_defense[i]
+            for i, c_uid in enumerate(own.artifacts):
+                if c_uid == token:
+                    return self.own_artifacts[i]
+            if own.building == token:
+                return self.own_building
+            for i, c_uid in enumerate(enemy.attack):
+                if c_uid == token:
+                    return self.enemy_attack[i]
+            for i, c_uid in enumerate(enemy.defense):
+                if c_uid == token:
+                    return self.enemy_defense[i]
+            for i, c_uid in enumerate(enemy.artifacts):
+                if c_uid == token:
+                    return self.enemy_artifacts[i]
+            if enemy.building == token:
+                return self.enemy_building
+            return None
 
         if token.startswith("a") and len(token) == 2 and token[1].isdigit():
             i = int(token[1]) - 1
@@ -517,6 +555,16 @@ class HolyWarGUI(tk.Tk):
                         widget.configure(relief="solid", borderwidth=4)
                     else:
                         widget.configure(relief="ridge", borderwidth=2)
+                elif isinstance(widget, (ttk.Label, tk.Label)):
+                    # ttk.Label non supporta bene border highlight: usa marker testuale.
+                    old["text"] = str(widget.cget("text"))
+                    marker = "[X] " if token in selected else "[ ] "
+                    base_text = old["text"]
+                    if base_text.startswith("[X] ") or base_text.startswith("[ ] "):
+                        base_text = base_text[4:]
+                    widget.configure(text=marker + base_text)
+                else:
+                    continue
                 self._slot_highlights.append((widget, old))
             except tk.TclError:
                 # ttk widgets do not always support relief/borderwidth in all themes.
@@ -1167,6 +1215,84 @@ class HolyWarGUI(tk.Tk):
         self.card_detail_text.insert(tk.END, detail)
         self.card_detail_text.configure(state="disabled")
 
+    def open_debug_zone(self, zone: str) -> None:
+        engine = self.engine
+        if engine is None:
+            messagebox.showinfo("Debug Zone", "Avvia prima una partita.")
+            return
+        zone_key = str(zone).strip().lower()
+        labels = {
+            "deck": "Deck",
+            "graveyard": "Cimitero",
+            "excommunicated": "Scomunicate",
+        }
+        if zone_key not in labels:
+            return
+        player_idx = self.current_human_idx()
+        if player_idx is None:
+            player_idx = 0
+        player = engine.state.players[player_idx]
+        if zone_key == "deck":
+            uids = list(player.deck)
+        elif zone_key == "graveyard":
+            uids = list(player.graveyard)
+        else:
+            uids = list(player.excommunicated)
+
+        win = tk.Toplevel(self)
+        win.title(f"{labels[zone_key]} (Debug)")
+        win.geometry("560x500")
+        win.transient(self)
+
+        ttk.Label(
+            win,
+            text=f"{labels[zone_key]} di {player.name} - {len(uids)} carte",
+        ).pack(anchor="w", padx=8, pady=(8, 4))
+
+        body = ttk.Frame(win)
+        body.pack(fill="both", expand=True, padx=8, pady=8)
+        lb = tk.Listbox(body)
+        lb.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(body, command=lb.yview)
+        lb.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+
+        details = tk.Text(win, wrap="word", height=8)
+        details.pack(fill="x", padx=8, pady=(0, 8))
+        details.configure(state="disabled")
+
+        for i, uid in enumerate(uids, start=1):
+            inst = engine.state.instances.get(uid)
+            if inst is None:
+                lb.insert(tk.END, f"{i:02d}. <missing> [{uid}]")
+                continue
+            lb.insert(tk.END, f"{i:02d}. {inst.definition.name} [{uid}]")
+
+        def _on_pick(_event=None):
+            sel = lb.curselection()
+            if not sel:
+                return
+            row = int(sel[0])
+            if row < 0 or row >= len(uids):
+                return
+            uid = uids[row]
+            inst = engine.state.instances.get(uid)
+            if inst is None:
+                text = f"{uid}\n\nCarta non trovata nelle istanze."
+            else:
+                cdef = inst.definition
+                effect = (cdef.effect_text or "").strip() or "Nessun effetto testuale disponibile."
+                text = f"{cdef.name}\nTipo: {cdef.card_type}\nUID: {uid}\n\n{effect}"
+            details.configure(state="normal")
+            details.delete("1.0", tk.END)
+            details.insert(tk.END, text)
+            details.configure(state="disabled")
+
+        lb.bind("<<ListboxSelect>>", _on_pick)
+        if uids:
+            lb.selection_set(0)
+            _on_pick()
+
     def _card_allows_multi_target(self, uid: str) -> bool:
         mode = self._play_targeting_mode(uid)
 
@@ -1331,7 +1457,12 @@ class HolyWarGUI(tk.Tk):
             return []
 
         owner_key = str(target.owner or "me").strip().lower()
-        player = own if owner_key in {"me", "owner", "controller"} else opp
+        if owner_key in {"any", "both", "all", "either"}:
+            players = [own, opp]
+        elif owner_key in {"me", "owner", "controller"}:
+            players = [own]
+        else:
+            players = [opp]
 
         zones = [z.lower().strip() for z in (target.zones or []) if str(z).strip()]
         if not zones:
@@ -1378,54 +1509,55 @@ class HolyWarGUI(tk.Tk):
 
         seen: set[str] = set()
 
-        for zone in zones:
-            if zone == "field":
-                for i in range(3):
-                    a_uid = player.attack[i]
-                    if a_uid is not None:
-                        inst = engine.state.instances[a_uid]
-                        if matches(inst):
-                            token = f"a{i+1}"
-                            if token not in seen:
-                                out.append(token)
-                                seen.add(token)
+        for player in players:
+            for zone in zones:
+                if zone == "field":
+                    for i in range(3):
+                        a_uid = player.attack[i]
+                        if a_uid is not None:
+                            inst = engine.state.instances[a_uid]
+                            if matches(inst):
+                                token = a_uid
+                                if token not in seen:
+                                    out.append(token)
+                                    seen.add(token)
 
-                    d_uid = player.defense[i]
-                    if d_uid is not None:
-                        inst = engine.state.instances[d_uid]
-                        if matches(inst):
-                            token = f"d{i+1}"
-                            if token not in seen:
-                                out.append(token)
-                                seen.add(token)
+                        d_uid = player.defense[i]
+                        if d_uid is not None:
+                            inst = engine.state.instances[d_uid]
+                            if matches(inst):
+                                token = d_uid
+                                if token not in seen:
+                                    out.append(token)
+                                    seen.add(token)
 
-            elif zone == "graveyard":
-                for c_uid in player.graveyard:
-                    inst = engine.state.instances[c_uid]
-                    if matches(inst) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone == "graveyard":
+                    for c_uid in player.graveyard:
+                        inst = engine.state.instances[c_uid]
+                        if matches(inst) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
-            elif zone == "excommunicated":
-                for c_uid in player.excommunicated:
-                    inst = engine.state.instances[c_uid]
-                    if matches(inst) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone == "excommunicated":
+                    for c_uid in player.excommunicated:
+                        inst = engine.state.instances[c_uid]
+                        if matches(inst) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
-            elif zone == "hand":
-                for c_uid in player.hand:
-                    inst = engine.state.instances[c_uid]
-                    if matches(inst) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone == "hand":
+                    for c_uid in player.hand:
+                        inst = engine.state.instances[c_uid]
+                        if matches(inst) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
-            elif zone in {"deck", "relicario"}:
-                for c_uid in player.deck:
-                    inst = engine.state.instances[c_uid]
-                    if matches(inst) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone in {"deck", "relicario"}:
+                    for c_uid in player.deck:
+                        inst = engine.state.instances[c_uid]
+                        if matches(inst) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
         return out
     
@@ -1440,7 +1572,12 @@ class HolyWarGUI(tk.Tk):
         out: list[str] = []
 
         owner_key = str(target.owner or "me").strip().lower()
-        player = own if owner_key in {"me", "owner", "controller"} else opp
+        if owner_key in {"any", "both", "all", "either"}:
+            players = [own, opp]
+        elif owner_key in {"me", "owner", "controller"}:
+            players = [own]
+        else:
+            players = [opp]
 
         zones = [z.lower().strip() for z in (target.zones or []) if str(z).strip()]
         if not zones:
@@ -1485,45 +1622,46 @@ class HolyWarGUI(tk.Tk):
 
         seen: set[str] = set()
 
-        for zone in zones:
-            if zone == "field":
-                for i in range(3):
-                    a_uid = player.attack[i]
-                    if a_uid is not None and matches(a_uid):
-                        token = f"a{i+1}"
-                        if token not in seen:
-                            out.append(token)
-                            seen.add(token)
-                    d_uid = player.defense[i]
-                    if d_uid is not None and matches(d_uid):
-                        token = f"d{i+1}"
-                        if token not in seen:
-                            out.append(token)
-                            seen.add(token)
+        for player in players:
+            for zone in zones:
+                if zone == "field":
+                    for i in range(3):
+                        a_uid = player.attack[i]
+                        if a_uid is not None and matches(a_uid):
+                            token = a_uid
+                            if token not in seen:
+                                out.append(token)
+                                seen.add(token)
+                        d_uid = player.defense[i]
+                        if d_uid is not None and matches(d_uid):
+                            token = d_uid
+                            if token not in seen:
+                                out.append(token)
+                                seen.add(token)
 
-            elif zone == "graveyard":
-                for c_uid in player.graveyard:
-                    if matches(c_uid) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone == "graveyard":
+                    for c_uid in player.graveyard:
+                        if matches(c_uid) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
-            elif zone == "excommunicated":
-                for c_uid in player.excommunicated:
-                    if matches(c_uid) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone == "excommunicated":
+                    for c_uid in player.excommunicated:
+                        if matches(c_uid) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
-            elif zone == "hand":
-                for c_uid in player.hand:
-                    if matches(c_uid) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone == "hand":
+                    for c_uid in player.hand:
+                        if matches(c_uid) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
-            elif zone in {"deck", "relicario"}:
-                for c_uid in player.deck:
-                    if matches(c_uid) and c_uid not in seen:
-                        out.append(c_uid)
-                        seen.add(c_uid)
+                elif zone in {"deck", "relicario"}:
+                    for c_uid in player.deck:
+                        if matches(c_uid) and c_uid not in seen:
+                            out.append(c_uid)
+                            seen.add(c_uid)
 
         return out
 
@@ -1574,7 +1712,26 @@ class HolyWarGUI(tk.Tk):
 
         if token in st.instances:
             inst = st.instances[token]
-            return f"{inst.definition.name} ({inst.definition.card_type})"
+            owner = "TUO" if inst.owner == own_idx else "AVV"
+            p = st.players[inst.owner]
+            where = "fuori campo"
+            for i, c_uid in enumerate(p.attack):
+                if c_uid == token:
+                    where = f"Attacco {i + 1}"
+                    break
+            if where == "fuori campo":
+                for i, c_uid in enumerate(p.defense):
+                    if c_uid == token:
+                        where = f"Difesa {i + 1}"
+                        break
+            if where == "fuori campo":
+                for i, c_uid in enumerate(p.artifacts):
+                    if c_uid == token:
+                        where = f"Artefatto {i + 1}"
+                        break
+            if where == "fuori campo" and p.building == token:
+                where = "Edificio"
+            return f"{owner} {where} | {inst.definition.name} ({inst.definition.card_type})"
 
         return token
 

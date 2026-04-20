@@ -342,6 +342,172 @@ def test_rito_della_ri_manifestazione_draws_if_controller_has_avdrna_or_phdrna()
     assert ex_uid not in p0.excommunicated
     assert ex_uid in p0.deck or ex_uid in p0.hand
 
+
+def test_rito_funebre_is_scripted_and_can_target_saint_in_any_graveyard() -> None:
+    script = runtime_cards.get_script("Rito Funebre")
+    assert script is not None
+    assert [a.effect.action for a in script.on_play_actions] == [
+        "move_to_relicario",
+        "shuffle_target_owner_decks",
+    ]
+    tgt = script.on_play_actions[0].target
+    assert tgt.type == "selected_target"
+    assert tgt.zone == "graveyard"
+    assert tgt.owner == "any"
+    assert tgt.card_filter.card_type_in == ["santo"]
+    assert tgt.min_targets == 1
+    assert tgt.max_targets == 1
+
+    cards = [
+        CardDefinition("Rito Funebre", "Benedizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("DeadSaint", "Santo", "2", 2, 1, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=126)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p1 = engine.state.players[1]
+    rito_idx = _force_card_in_hand(engine, 0, "Rito Funebre")
+    dead_uid = next(uid for uid in p1.deck if engine.state.instances[uid].definition.name == "DeadSaint")
+    p1.deck.remove(dead_uid)
+    p1.graveyard.append(dead_uid)
+    out = engine.play_card(0, rito_idx, dead_uid)
+    assert out.ok
+    assert dead_uid not in p1.graveyard
+    assert dead_uid in p1.deck
+
+
+def test_rito_funebre_cannot_be_played_without_valid_graveyard_saint_targets() -> None:
+    cards = [
+        CardDefinition("Rito Funebre", "Benedizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Fill", "Artefatto", "1", 1, None, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=127)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx = _force_card_in_hand(engine, 0, "Rito Funebre")
+    out = engine.play_card(0, idx, None)
+    assert not out.ok
+    assert "nessun bersaglio valido disponibile" in out.message.lower()
+
+
+def test_ritorno_catastrofico_is_scripted_and_returns_target_saint_to_owner_hand() -> None:
+    script = runtime_cards.get_script("Ritorno Catastrofico")
+    assert script is not None
+    assert [a.effect.action for a in script.on_play_actions] == ["move_to_hand"]
+    tgt = script.on_play_actions[0].target
+    assert tgt.type == "selected_target"
+    assert tgt.zone == "field"
+    assert tgt.owner == "any"
+    assert tgt.card_filter.card_type_in == ["santo"]
+    assert tgt.min_targets == 1
+    assert tgt.max_targets == 1
+
+    cards = [
+        CardDefinition("Ritorno Catastrofico", "Benedizione", "1", None, None, "", "NOR-1"),
+        CardDefinition("MySaint", "Santo", "2", 3, 1, "", "NOR-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=128)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    saint_idx = _force_card_in_hand(engine, 0, "MySaint")
+    assert engine.play_card(0, saint_idx, "a1").ok
+    target_uid = p0.attack[0]
+    assert target_uid is not None
+
+    spell_idx = _force_card_in_hand(engine, 0, "Ritorno Catastrofico")
+    out = engine.play_card(0, spell_idx, "a1")
+    assert out.ok
+    assert p0.attack[0] is None
+    assert target_uid in p0.hand
+
+
+def test_ritorno_catastrofico_resets_runtime_stats_when_target_leaves_field() -> None:
+    cards = [
+        CardDefinition("Ritorno Catastrofico", "Benedizione", "1", None, None, "", "NOR-1"),
+        CardDefinition("MySaint", "Santo", "2", 3, 1, "", "NOR-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=131)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    saint_idx = _force_card_in_hand(engine, 0, "MySaint")
+    assert engine.play_card(0, saint_idx, "a1").ok
+    target_uid = p0.attack[0]
+    assert target_uid is not None
+    inst = engine.state.instances[target_uid]
+    inst.current_faith = (inst.definition.faith or 0) + 7
+    inst.blessed.append("buff_str:5")
+    inst.cursed.append("silenced")
+    inst.exhausted = True
+
+    spell_idx = _force_card_in_hand(engine, 0, "Ritorno Catastrofico")
+    out = engine.play_card(0, spell_idx, target_uid)
+    assert out.ok
+    assert target_uid in p0.hand
+    assert inst.current_faith == inst.definition.faith
+    assert inst.blessed == []
+    assert inst.cursed == []
+    assert inst.exhausted is False
+
+
+def test_ritorno_catastrofico_can_target_opponent_saint_and_returns_to_opponent_hand() -> None:
+    cards = [
+        CardDefinition("Ritorno Catastrofico", "Benedizione", "1", None, None, "", "NOR-1"),
+        CardDefinition("EnemySaint", "Santo", "2", 3, 1, "", "NOR-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=130)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+    enemy_idx = _force_card_in_hand(engine, 1, "EnemySaint")
+    enemy_uid = p1.hand.pop(enemy_idx)
+    p1.attack[0] = enemy_uid
+    assert enemy_uid is not None
+
+    spell_idx = _force_card_in_hand(engine, 0, "Ritorno Catastrofico")
+    out = engine.play_card(0, spell_idx, enemy_uid)
+    assert out.ok
+    assert p1.attack[0] is None
+    assert enemy_uid in p1.hand
+    assert enemy_uid not in p0.hand
+
+
+def test_ritorno_catastrofico_cannot_be_played_without_own_saint_on_field() -> None:
+    cards = [
+        CardDefinition("Ritorno Catastrofico", "Benedizione", "1", None, None, "", "NOR-1"),
+        CardDefinition("Fill", "Artefatto", "1", 1, None, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=129)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    idx = _force_card_in_hand(engine, 0, "Ritorno Catastrofico")
+    out = engine.play_card(0, idx, None)
+    assert not out.ok
+    assert "nessun bersaglio valido disponibile" in out.message.lower()
+
+
 def test_ya_ner_summons_token_at_turn_start() -> None:
     cards = [
         CardDefinition("Ya-ner", "Santo", "3", 5, 2, "", "PHD-1"),

@@ -106,6 +106,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "move_to_relicario",
     "request_end_turn",
     "shuffle_deck",
+    "shuffle_target_owner_decks",
     "return_to_hand_once_per_turn",
     "swap_attack_defense",
     "increase_faith_per_opponent_saints",
@@ -1008,20 +1009,44 @@ class RuntimeCardManager:
         configured = int(target.min_targets) if target.min_targets is not None else 1
         return max(1, configured)
 
+    def _target_requires_manual_selection(self, target: TargetSpec) -> bool:
+        ttype = _norm(target.type)
+        if ttype not in {"selected_target", "selected_targets"}:
+            return False
+        has_explicit_zone = bool(target.zones) or _norm(target.zone) != "field"
+        has_filter = bool(
+            (target.card_filter.name_contains or "").strip()
+            or (target.card_filter.name_not_contains or "").strip()
+            or target.card_filter.card_type_in
+            or target.card_filter.exclude_event_card
+            or target.card_filter.exclude_buildings_if_my_building_zone_occupied
+            or target.card_filter.crosses_gte is not None
+            or target.card_filter.crosses_lte is not None
+            or target.card_filter.drawn_this_turn_only
+        )
+        has_limits = (
+            target.min_targets is not None
+            or target.max_targets is not None
+            or target.max_targets_from is not None
+        )
+        owner_key = _norm(target.owner or "me")
+        has_non_default_owner = owner_key not in {"", "me", "owner", "controller"}
+        return has_explicit_zone or has_filter or has_limits or has_non_default_owner
+
     def _collect_selectable_targets_for_manual_target(
         self,
         engine: GameEngine,
         owner_idx: int,
         target: TargetSpec,
     ) -> list[str]:
-        real_owner = self._resolve_owner_scope(owner_idx, target.owner)
         zones = [z for z in target.zones if str(z).strip()]
         if not zones:
             zones = [target.zone]
 
         pool: list[str] = []
-        for zone_name in zones:
-            pool.extend(self._get_zone_cards(engine, real_owner, zone_name))
+        for scoped_owner in self._target_owner_indices(owner_idx, target.owner):
+            for zone_name in zones:
+                pool.extend(self._get_zone_cards(engine, scoped_owner, zone_name))
         # Preserve order but avoid duplicates.
         deduped_pool = list(dict.fromkeys(pool))
         return self._filter_target_pool(engine, owner_idx, target, deduped_pool)
@@ -1097,8 +1122,7 @@ class RuntimeCardManager:
         flags["_runtime_selected_target"] = str(selected_target or "")
         try:
             for i, action in enumerate(actions):
-                ttype = _norm(action.target.type)
-                if ttype not in {"selected_target", "selected_targets"}:
+                if not self._target_requires_manual_selection(action.target):
                     continue
                 flags["_runtime_action_index"] = str(i)
                 if action.condition and not self._eval_condition_node(
@@ -1139,21 +1163,27 @@ class RuntimeCardManager:
         pool: list[str] = []
         ttype = _norm(target.type)
         if ttype == "cards_controlled_by_owner":
-            real_owner = owner_idx if _norm(target.owner) in {"me", "owner", "controller"} else 1 - owner_idx
-            p = engine.state.players[real_owner]
-            zone = _norm(target.zone)
-            if zone == "field":
-                for uid in p.attack + p.defense + p.artifacts:
-                    if uid:
-                        pool.append(uid)
-                if p.building:
-                    pool.append(p.building)
-            elif zone == "hand":
-                pool.extend(p.hand)
-            elif zone in {"deck", "relicario"}:
-                pool.extend(p.deck)
-            elif zone == "graveyard":
-                pool.extend(p.graveyard)
+            zones = [z for z in target.zones if str(z).strip()]
+            if not zones:
+                zones = [target.zone]
+            for scoped_owner in self._target_owner_indices(owner_idx, target.owner):
+                p = engine.state.players[scoped_owner]
+                for zone_name in zones:
+                    zone = _norm(zone_name)
+                    if zone == "field":
+                        for uid in p.attack + p.defense + p.artifacts:
+                            if uid:
+                                pool.append(uid)
+                        if p.building:
+                            pool.append(p.building)
+                    elif zone == "hand":
+                        pool.extend(p.hand)
+                    elif zone in {"deck", "relicario"}:
+                        pool.extend(p.deck)
+                    elif zone == "graveyard":
+                        pool.extend(p.graveyard)
+                    elif zone == "excommunicated":
+                        pool.extend(p.excommunicated)
         elif ttype == "event_card":
             event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
             if event_uid:
@@ -1251,6 +1281,14 @@ class RuntimeCardManager:
         key = _norm(owner_key or "me")
         return owner_idx if key in {"me", "owner", "controller"} else 1 - owner_idx
 
+    def _target_owner_indices(self, owner_idx: int, owner_key: str | None) -> list[int]:
+        key = _norm(owner_key or "me")
+        if key in {"opponent", "enemy", "other"}:
+            return [1 - owner_idx]
+        if key in {"any", "both", "all", "either"}:
+            return [owner_idx, 1 - owner_idx]
+        return [owner_idx]
+
     def _get_zone_cards(self, engine: GameEngine, owner_idx: int, zone_name: str) -> list[str]:
         player = engine.state.players[owner_idx]
         zone = _norm(zone_name)
@@ -1318,6 +1356,8 @@ class RuntimeCardManager:
         real_owner = inst.owner
         player = engine.state.players[real_owner]
         zone = _norm(to_zone)
+        from_zone = engine._locate_uid_zone(real_owner, uid)
+        leaving_field = from_zone in {"attack", "defense", "artifact", "building"}
 
         if zone == "hand":
             if uid in player.hand:
@@ -1325,10 +1365,14 @@ class RuntimeCardManager:
             if len(player.hand) >= MAX_HAND:
                 return False
             self._remove_uid_from_all_player_zones(engine, real_owner, uid)
+            if leaving_field:
+                engine._reset_card_runtime_state(uid)
             player.hand.append(uid)
             return True
 
         self._remove_uid_from_all_player_zones(engine, real_owner, uid)
+        if leaving_field:
+            engine._reset_card_runtime_state(uid)
 
         if zone in {"deck_bottom", "bottom_of_deck"}:
             if uid not in player.deck:
@@ -2157,6 +2201,11 @@ class RuntimeCardManager:
         if action == "shuffle_deck":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             engine.rng.shuffle(engine.state.players[target].deck)
+            return
+        if action == "shuffle_target_owner_decks":
+            owners = {engine.state.instances[t_uid].owner for t_uid in targets if t_uid in engine.state.instances}
+            for owner in owners:
+                engine.rng.shuffle(engine.state.players[owner].deck)
             return
         if action == "move_source_to_board":
             source = str(engine.state.flags.get("_runtime_source_card", ""))
