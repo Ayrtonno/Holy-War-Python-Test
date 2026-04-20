@@ -17,7 +17,7 @@ SCRIPT = {
                 "card_filter": {
                     "crosses_lte": 7,
                 },
-                "min_targets": 0,
+                "min_targets": 1,
                 "max_targets_from": {
                     "count_cards_controlled_by_owner": {
                         "owner": "me",

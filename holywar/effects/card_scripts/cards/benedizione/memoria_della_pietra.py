@@ -17,7 +17,7 @@ SCRIPT = {
                 "card_filter": {
                     "name_contains": "Pietra",
                 },
-                "min_targets": 0,
+                "min_targets": 1,
                 "max_targets": 1,
             },
             "effect": {

@@ -1299,6 +1299,10 @@ class HolyWarGUI(tk.Tk):
         crosses_gte = target.card_filter.crosses_gte
         crosses_lte = target.card_filter.crosses_lte
 
+        exclude_buildings_if_my_building_zone_occupied = (
+            target.card_filter.exclude_buildings_if_my_building_zone_occupied
+        )
+
         def matches(inst) -> bool:
             ctype = inst.definition.card_type.lower().strip()
             name = inst.definition.name.lower().strip()
@@ -1306,14 +1310,26 @@ class HolyWarGUI(tk.Tk):
 
             if type_filter and ctype not in type_filter:
                 return False
+
             if name_contains and name_contains not in name:
                 return False
+
             if name_not_contains and name_not_contains in name:
                 return False
+
+            if (
+                exclude_buildings_if_my_building_zone_occupied
+                and own.building is not None
+                and ctype == "edificio"
+            ):
+                return False
+
             if crosses_gte is not None and (crosses is None or crosses < crosses_gte):
                 return False
+
             if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
                 return False
+
             return True
 
         seen: set[str] = set()
@@ -1391,20 +1407,29 @@ class HolyWarGUI(tk.Tk):
         name_not_contains = target.card_filter.name_not_contains.lower().strip() if target.card_filter.name_not_contains else None
         crosses_gte = target.card_filter.crosses_gte
         crosses_lte = target.card_filter.crosses_lte
-        source_uid = uid
+
+        exclude_buildings_if_my_building_zone_occupied = (
+            target.card_filter.exclude_buildings_if_my_building_zone_occupied
+        )
 
         def matches(inst_uid: str) -> bool:
             inst = engine.state.instances[inst_uid]
             ctype = inst.definition.card_type.lower().strip()
             name = inst.definition.name.lower().strip()
 
-            if target.card_filter.exclude_event_card and inst_uid == source_uid:
+            if target.card_filter.exclude_event_card and inst_uid == uid:
                 return False
             if type_filter and ctype not in type_filter:
                 return False
             if name_contains and name_contains not in name:
                 return False
             if name_not_contains and name_not_contains in name:
+                return False
+            if (
+                exclude_buildings_if_my_building_zone_occupied
+                and own.building is not None
+                and ctype == "edificio"
+            ):
                 return False
 
             crosses = getattr(inst.definition, "crosses", None)

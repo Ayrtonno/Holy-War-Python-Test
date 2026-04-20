@@ -14,7 +14,7 @@ SCRIPT = {
                 "type": "selected_target",
                 "zones": ["excommunicated", "graveyard"],
                 "owner": "me",
-                "min_targets": 0,
+                "min_targets": 1,
                 "max_targets": 1,
             },
             "effect": {

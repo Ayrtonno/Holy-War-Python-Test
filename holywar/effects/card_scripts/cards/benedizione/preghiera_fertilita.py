@@ -24,6 +24,7 @@ SCRIPT = {
             },
             "effect": {
                 "action": "summon_target_to_field",
+                "exclude_buildings_if_my_building_zone_occupied": True,
             },
         },
         {
@@ -33,6 +34,7 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {
                     "name_contains": "Albero",
+                    "exclude_buildings_if_my_building_zone_occupied": True,
                 },
                 "min_targets": 1,
                 "max_targets": 1,
@@ -48,6 +50,7 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {
                     "name_contains": "Albero",
+                    "exclude_buildings_if_my_building_zone_occupied": True,
                 },
                 "min_targets": 1,
                 "max_targets": 1,

@@ -137,6 +137,7 @@ class CardFilterSpec:
     name_not_contains: str | None = None
     card_type_in: list[str] = field(default_factory=list)
     exclude_event_card: bool = False
+    exclude_buildings_if_my_building_zone_occupied: bool = False
     crosses_gte: int | None = None
     crosses_lte: int | None = None
     drawn_this_turn_only: bool = False
@@ -275,6 +276,9 @@ class RuntimeCardManager:
                     name_not_contains=filt.get("name_not_contains"),
                     card_type_in=list(filt.get("card_type_in", []) or []),
                     exclude_event_card=bool(filt.get("exclude_event_card", False)),
+                    exclude_buildings_if_my_building_zone_occupied=bool(
+                        filt.get("exclude_buildings_if_my_building_zone_occupied", False)
+                    ),
                     crosses_gte=(int(filt["crosses_gte"]) if filt.get("crosses_gte") is not None else None),
                     crosses_lte=(int(filt["crosses_lte"]) if filt.get("crosses_lte") is not None else None),
                     drawn_this_turn_only=bool(filt.get("drawn_this_turn_only", False)),
@@ -902,6 +906,12 @@ class RuntimeCardManager:
                 continue
             if type_filter and _norm(inst.definition.card_type) not in type_filter:
                 continue
+                if (
+                    target.card_filter.exclude_buildings_if_my_building_zone_occupied
+                    and engine.state.players[owner_idx].building is not None
+                    and _norm(inst.definition.card_type) == _norm("edificio")
+                ):
+                    continue
             cross_txt = _norm(str(inst.definition.crosses or ""))
             if cross_txt in {"white", "croce bianca"}:
                 cross_val = 11
