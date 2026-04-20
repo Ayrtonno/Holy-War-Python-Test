@@ -1628,16 +1628,31 @@ class HolyWarGUI(tk.Tk):
                     for i in range(3):
                         a_uid = player.attack[i]
                         if a_uid is not None and matches(a_uid):
-                            token = a_uid
+                            token = f"a{i+1}"
                             if token not in seen:
                                 out.append(token)
                                 seen.add(token)
+
                         d_uid = player.defense[i]
                         if d_uid is not None and matches(d_uid):
-                            token = d_uid
+                            token = f"d{i+1}"
                             if token not in seen:
                                 out.append(token)
                                 seen.add(token)
+
+                    for i in range(len(player.artifacts)):
+                        r_uid = player.artifacts[i]
+                        if r_uid is not None and matches(r_uid):
+                            token = f"r{i+1}"
+                            if token not in seen:
+                                out.append(token)
+                                seen.add(token)
+
+                if player.building is not None and matches(player.building):
+                    token = "b"
+                    if token not in seen:
+                        out.append(token)
+                        seen.add(token)
 
                 elif zone == "graveyard":
                     for c_uid in player.graveyard:

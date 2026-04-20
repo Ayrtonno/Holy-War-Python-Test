@@ -1198,58 +1198,73 @@ class RuntimeCardManager:
                 selected = raw_selected.split(",", 1)[0].strip()
                 if selected.startswith("buff:"):
                     selected = selected.split(":", 1)[1]
+
                 if selected in engine.state.instances:
                     pool.append(selected)
                 else:
-                    found_uid = None
-                    if ":" in selected:
-                        zone_name, card_name = selected.split(":", 1)
-                        if _norm(zone_name) in {"deck", "relicario"}:
-                            p = engine.state.players[owner_idx]
-                            for uid in p.deck:
-                                if _norm(engine.state.instances[uid].definition.name) == _norm(card_name):
-                                    found_uid = uid
-                                    break
-                    if found_uid is not None:
-                        pool.append(found_uid)
-                    else:
-                        zone, slot = engine._parse_zone_target(selected)
-                        if zone is not None:
-                            p = engine.state.players[owner_idx]
-                            if zone == "attack" and 0 <= slot < len(p.attack):
-                                uid = p.attack[slot]
-                                if uid:
-                                    pool.append(uid)
-                            elif zone == "defense" and 0 <= slot < len(p.defense):
-                                uid = p.defense[slot]
-                                if uid:
-                                    pool.append(uid)
-                        if not pool:
-                            selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, target)
-                            for candidate_uid in selectable:
-                                if _norm(engine.state.instances[candidate_uid].definition.name) == _norm(selected):
-                                    pool.append(candidate_uid)
-                                    break
+                    real_owner = owner_idx if _norm(target.owner) in {"me", "owner", "controller"} else 1 - owner_idx
+                    p = engine.state.players[real_owner]
+
+                    zone, slot = engine._parse_zone_target(selected)
+                    if zone is not None:
+                        if zone == "attack" and 0 <= slot < len(p.attack):
+                            uid = p.attack[slot]
+                            if uid:
+                                pool.append(uid)
+                        elif zone == "defense" and 0 <= slot < len(p.defense):
+                            uid = p.defense[slot]
+                            if uid:
+                                pool.append(uid)
+                    elif selected.startswith("r") and len(selected) == 2 and selected[1].isdigit():
+                        art_idx = int(selected[1]) - 1
+                        if 0 <= art_idx < len(p.artifacts):
+                            uid = p.artifacts[art_idx]
+                            if uid:
+                                pool.append(uid)
+                    elif selected == "b":
+                        if p.building:
+                            pool.append(p.building)
 
         elif ttype == "selected_targets":
             raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
                 parts = [part.strip() for part in raw_selected.split(",") if part.strip()]
-                p = engine.state.players[owner_idx]
+                real_owner = owner_idx if _norm(target.owner) in {"me", "owner", "controller"} else 1 - owner_idx
+                p = engine.state.players[real_owner]
+
                 for selected in parts:
                     if selected.startswith("buff:"):
                         selected = selected.split(":", 1)[1]
+
                     if selected in engine.state.instances:
                         pool.append(selected)
                         continue
-                    if ":" in selected:
-                        zone_name, card_name = selected.split(":", 1)
-                        if _norm(zone_name) in {"deck", "relicario"}:
-                            for uid in p.deck:
-                                if _norm(engine.state.instances[uid].definition.name) == _norm(card_name):
-                                    pool.append(uid)
-                                    break
-                            continue
+
+                    zone, slot = engine._parse_zone_target(selected)
+                    if zone is not None:
+                        if zone == "attack" and 0 <= slot < len(p.attack):
+                            uid = p.attack[slot]
+                            if uid:
+                                pool.append(uid)
+                        elif zone == "defense" and 0 <= slot < len(p.defense):
+                            uid = p.defense[slot]
+                            if uid:
+                                pool.append(uid)
+                        continue
+
+                    if selected.startswith("r") and len(selected) == 2 and selected[1].isdigit():
+                        art_idx = int(selected[1]) - 1
+                        if 0 <= art_idx < len(p.artifacts):
+                            uid = p.artifacts[art_idx]
+                            if uid:
+                                pool.append(uid)
+                        continue
+
+                    if selected == "b":
+                        if p.building:
+                            pool.append(p.building)
+                            break
+                        continue
                     zone, slot = engine._parse_zone_target(selected)
                     if zone is not None:
                         if zone == "attack" and 0 <= slot < len(p.attack):
@@ -2003,7 +2018,7 @@ class RuntimeCardManager:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
                     continue
-                engine.destroy_saint_by_uid(inst.owner, t_uid, cause="effect")
+                engine.destroy_any_card(inst.owner, t_uid)
             return
         if action == "excommunicate_card":
             for t_uid in targets:
