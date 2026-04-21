@@ -23,6 +23,24 @@ def _norm(text: str) -> str:
     return value.strip().lower()
 
 
+def _aliases_of(inst: "CardInstance") -> list[str]:
+    raw_aliases = getattr(inst.definition, "aliases", []) or []
+    if isinstance(raw_aliases, str):
+        return [part.strip() for part in raw_aliases.split(",") if part.strip()]
+    return [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
+
+
+def _name_variants(inst: "CardInstance") -> set[str]:
+    variants = {_norm(inst.definition.name)}
+    variants.update(_norm(alias) for alias in _aliases_of(inst))
+    return {v for v in variants if v}
+
+
+def _name_haystack(inst: "CardInstance") -> str:
+    parts = [inst.definition.name, *_aliases_of(inst)]
+    return " ".join(_norm(part) for part in parts if str(part).strip())
+
+
 # Validates whether the card can be played in the requested zone and context.
 def validate_play_constraints(
     engine: "GameEngine",
@@ -69,9 +87,9 @@ def _find_owned_field_uid_by_name(engine: "GameEngine", owner_idx: int, card_nam
     wanted = _norm(card_name)
     player = engine.state.players[owner_idx]
     for uid in player.attack + player.defense + player.artifacts:
-        if uid and _norm(engine.state.instances[uid].definition.name) == wanted:
+        if uid and wanted in _name_variants(engine.state.instances[uid]):
             return uid
-    if player.building and _norm(engine.state.instances[player.building].definition.name) == wanted:
+    if player.building and wanted in _name_variants(engine.state.instances[player.building]):
         return player.building
     return None
 
@@ -108,13 +126,15 @@ def _match_requirement_filter(engine: "GameEngine", uid: str, card_filter: dict)
     if inst is None:
         return False
     name_eq = _norm(str(card_filter.get("name_equals", "")))
-    if name_eq and _norm(inst.definition.name) != name_eq:
+    name_variants = _name_variants(inst)
+    name_haystack = _name_haystack(inst)
+    if name_eq and name_eq not in name_variants:
         return False
     name_contains = _norm(str(card_filter.get("name_contains", "")))
-    if name_contains and name_contains not in _norm(inst.definition.name):
+    if name_contains and name_contains not in name_haystack:
         return False
     name_not_contains = _norm(str(card_filter.get("name_not_contains", "")))
-    if name_not_contains and name_not_contains in _norm(inst.definition.name):
+    if name_not_contains and name_not_contains in name_haystack:
         return False
     type_filter = {_norm(str(v)) for v in list(card_filter.get("card_type_in", []) or [])}
     if type_filter and _norm(inst.definition.card_type) not in type_filter:

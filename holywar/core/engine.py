@@ -285,8 +285,15 @@ class GameEngine:
         sigilli_amount = runtime_cards.get_sigilli_strength_bonus_amount(inst.definition.name)
         if sigilli_threshold is not None and sigilli_amount is not None and self._get_altare_sigilli(owner) >= int(sigilli_threshold):
             strength += int(sigilli_amount)
-        if self._has_artifact(opponent, "Segno Del Passato"):
-            strength -= 4
+        if _norm(inst.definition.card_type) in {"santo", "token"} and zone in {"attack", "defense"}:
+            for a_uid in self.state.players[opponent].artifacts:
+                if not a_uid:
+                    continue
+                enemy_mod = runtime_cards.get_modifies_enemy_saints_strength(
+                    self.state.instances[a_uid].definition.name
+                )
+                if enemy_mod:
+                    strength += int(enemy_mod)
         return max(0, strength)
 
     # Adds Sin to a player and refreshes any derived runtime flags.
@@ -306,9 +313,21 @@ class GameEngine:
 
     # Destroys a saint or token by uid using the shared destruction flow.
     def destroy_saint_by_uid(
-        self, owner_idx: int, uid: str, excommunicate: bool = False, cause: str = "effect"
+        self,
+        owner_idx: int,
+        uid: str,
+        excommunicate: bool = False,
+        cause: str = "effect",
+        by_whom: str | None = None,
     ) -> None:
-        destruction_ops.destroy_saint_by_uid(self, owner_idx, uid, excommunicate=excommunicate, cause=cause)
+        destruction_ops.destroy_saint_by_uid(
+            self,
+            owner_idx,
+            uid,
+            excommunicate=excommunicate,
+            cause=cause,
+            by_whom=by_whom,
+        )
 
     # Starts the active player's turn and applies all start-of-turn effects.
     def start_turn(self) -> None:
@@ -426,12 +445,18 @@ class GameEngine:
         combat_ops.start_battle_phase_if_needed(self, player_idx)
 
     # Validates the attacker-side rules that can stop combat before damage is assigned.
-    def _validate_attack_preconditions(self, player_idx: int, defender_idx: int, attacker: CardInstance) -> ActionResult | None:
-        return combat_ops.validate_attack_preconditions(self, player_idx, defender_idx, attacker)
+    def _validate_attack_preconditions(
+        self,
+        player_idx: int,
+        defender_idx: int,
+        attacker: CardInstance,
+        target_slot: int | None,
+    ) -> ActionResult | None:
+        return combat_ops.validate_attack_preconditions(self, player_idx, defender_idx, attacker, target_slot)
 
     # Marks the attacker as committed and updates the per-turn attack counter.
-    def _mark_attack_committed(self, player_idx: int, attacker: CardInstance) -> None:
-        combat_ops.mark_attack_committed(self, player_idx, attacker)
+    def _mark_attack_committed(self, player_idx: int, attacker: CardInstance, defender_uid: str | None = None) -> None:
+        combat_ops.mark_attack_committed(self, player_idx, attacker, defender_uid=defender_uid)
 
     # Resolves the direct-attack case when the defender has no saints on the board.
     def _resolve_direct_attack(self, player_idx: int, defender_idx: int, attacker_uid: str, attacker: CardInstance) -> ActionResult:

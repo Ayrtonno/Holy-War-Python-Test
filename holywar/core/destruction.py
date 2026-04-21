@@ -40,6 +40,7 @@ def destroy_saint_by_uid(
     uid: str,
     excommunicate: bool = False,
     cause: str = "effect",
+    by_whom: str | None = None,
 ) -> None:
     if uid not in engine.state.instances:
         return
@@ -56,15 +57,24 @@ def destroy_saint_by_uid(
         source_uid = str(engine.state.flags.get("_runtime_effect_source", ""))
         if source_uid and source_uid in engine.state.instances:
             source = engine.state.instances[source_uid]
-            if (
-                int(source.owner) != int(owner_idx)
-                and _norm(source.definition.card_type) == _norm("artefatto")
-                and engine._has_artifact(owner_idx, "Terra")
-            ):
-                engine.state.log(
-                    f"Terra impedisce a {source.definition.name} di distruggere {inst.definition.name}."
-                )
-                return
+            if int(source.owner) != int(owner_idx):
+                source_type = _norm(source.definition.card_type)
+                defender = engine.state.players[owner_idx]
+                defensive_sources = [uid for uid in defender.artifacts if uid]
+                if defender.building:
+                    defensive_sources.append(defender.building)
+                for def_uid in defensive_sources:
+                    def_inst = engine.state.instances.get(def_uid)
+                    if def_inst is None:
+                        continue
+                    protected_types = runtime_cards.get_prevent_effect_destruction_of_friendly_saints_from_source_card_types(
+                        def_inst.definition.name
+                    )
+                    if source_type in {t.strip().lower() for t in protected_types}:
+                        engine.state.log(
+                            f"{def_inst.definition.name} impedisce a {source.definition.name} di distruggere {inst.definition.name}."
+                        )
+                        return
     if "bende_consacrate" in inst.blessed:
         inst.blessed.remove("bende_consacrate")
         inst.current_faith = 1
@@ -163,10 +173,18 @@ def destroy_saint_by_uid(
         "on_this_card_destroyed",
         owner_idx,
         card=uid,
-        by_whom=None,
+        by_whom=by_whom,
+        source=by_whom,
         reason=cause,
     )
-    engine._emit_event("on_card_destroyed_on_field", owner_idx, card=uid, by_whom=None, reason=cause)
+    engine._emit_event(
+        "on_card_destroyed_on_field",
+        owner_idx,
+        card=uid,
+        by_whom=by_whom,
+        source=by_whom,
+        reason=cause,
+    )
     if excommunicate:
         engine.excommunicate_card(owner_idx, uid, from_zone_override=from_zone)
     else:
@@ -180,9 +198,9 @@ def destroy_saint_by_uid(
                 f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
             )
     if cause == "battle":
-        engine._emit_event("on_saint_defeated_in_battle", owner_idx, saint=uid, by_whom=None)
+        engine._emit_event("on_saint_defeated_in_battle", owner_idx, saint=uid, by_whom=by_whom, source=by_whom)
     else:
-        engine._emit_event("on_saint_destroyed_by_effect", owner_idx, saint=uid, by_whom=None)
+        engine._emit_event("on_saint_destroyed_by_effect", owner_idx, saint=uid, by_whom=by_whom, source=by_whom)
     engine._emit_event("on_saint_defeated_or_destroyed", owner_idx, saint=uid, reason=cause)
 
 

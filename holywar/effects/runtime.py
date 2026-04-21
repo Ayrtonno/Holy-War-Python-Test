@@ -64,6 +64,7 @@ SUPPORTED_CONDITION_KEYS = {
     "controller_hand_size_lte",
     "stored_card_matches",
     "controller_saints_sent_to_graveyard_this_turn_gte",
+    "event_card_owner_attack_count_gte",
 }
 
 EFFECT_ACTION_ALIASES = {
@@ -108,6 +109,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "remove_from_board_no_sin",
     "summon_card_from_hand",
     "summon_named_card",
+    "summon_named_card_from_flag",
     "move_source_to_board",
     "move_to_deck_bottom",
     "move_to_relicario",
@@ -151,6 +153,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "destroy_all_saints_except_selected",
     "retaliate_damage_to_event_source_if_enemy_saint",
     "grant_attack_barrier",
+    "prevent_specific_card_from_attacking",
+    "halve_strength_rounded_down",
     "equip_card",
     "unequip_card",
     "destroy_equipment",
@@ -161,6 +165,31 @@ def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text or "")
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
+
+
+def _card_aliases(definition: CardDefinition) -> list[str]:
+    raw_aliases = getattr(definition, "aliases", []) or []
+    if isinstance(raw_aliases, str):
+        return [part.strip() for part in raw_aliases.split(",") if part.strip()]
+    return [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
+
+
+def _card_name_variants(definition: CardDefinition) -> set[str]:
+    variants = {_norm(definition.name)}
+    variants.update(_norm(alias) for alias in _card_aliases(definition))
+    return {v for v in variants if v}
+
+
+def _card_name_haystack(definition: CardDefinition) -> str:
+    parts = [definition.name, *_card_aliases(definition)]
+    return " ".join(_norm(part) for part in parts if str(part).strip())
+
+
+def _card_matches_name(definition: CardDefinition, wanted: str) -> bool:
+    wanted_norm = _norm(wanted)
+    if not wanted_norm:
+        return False
+    return wanted_norm in _card_name_variants(definition)
 
 
 @dataclass(slots=True)
@@ -257,6 +286,11 @@ class CardScript:
     activate_targeting: str = "auto"
     attack_targeting: str = "auto"
     can_attack: bool = True
+    attack_requirements: dict[str, Any] = field(default_factory=dict)
+    attack_blocked_message: str | None = None
+    can_attack_from_defense: bool = False
+    can_attack_multiple_targets_in_attack_per_turn: bool = False
+    blocks_enemy_attackers_with_crosses_lte: int | None = None
     prevent_incoming_damage_if_less_than: int | None = None
     prevent_incoming_damage_to_card_types: list[str] = field(default_factory=list)
     battle_survival_mode: str = "none"
@@ -276,6 +310,11 @@ class CardScript:
     strength_gain_on_lethal_to_enemy_saint: int = 0
     grants_strength_to_friendly_saints: int = 0
     grants_strength_to_friendly_saints_except_names: list[str] = field(default_factory=list)
+    modifies_enemy_saints_strength: int = 0
+    prevent_effect_destruction_of_friendly_saints_from_source_card_types: list[str] = field(default_factory=list)
+    retaliation_damage_to_enemy_attacker: int = 0
+    retaliation_reduce_sin_on_kill: int = 0
+    retaliation_multiplier_for_friendly_building_name: str | None = None
     triggered_effects: list[TriggeredEffectSpec] = field(default_factory=list)
     on_play_actions: list[ActionSpec] = field(default_factory=list)
     on_enter_actions: list[ActionSpec] = field(default_factory=list)
@@ -454,6 +493,21 @@ class RuntimeCardManager:
                 activate_targeting=str(spec.get("activate_targeting", "auto")),
                 attack_targeting=str(spec.get("attack_targeting", "auto")),
                 can_attack=bool(spec.get("can_attack", True)),
+                attack_requirements=dict(spec.get("attack_requirements", {}) or {}),
+                attack_blocked_message=(
+                    str(spec.get("attack_blocked_message"))
+                    if spec.get("attack_blocked_message") is not None
+                    else None
+                ),
+                can_attack_from_defense=bool(spec.get("can_attack_from_defense", False)),
+                can_attack_multiple_targets_in_attack_per_turn=bool(
+                    spec.get("can_attack_multiple_targets_in_attack_per_turn", False)
+                ),
+                blocks_enemy_attackers_with_crosses_lte=(
+                    int(spec["blocks_enemy_attackers_with_crosses_lte"])
+                    if spec.get("blocks_enemy_attackers_with_crosses_lte") is not None
+                    else None
+                ),
                 prevent_incoming_damage_if_less_than=(
                     int(spec["prevent_incoming_damage_if_less_than"])
                     if spec.get("prevent_incoming_damage_if_less_than") is not None
@@ -500,6 +554,20 @@ class RuntimeCardManager:
                 grants_strength_to_friendly_saints_except_names=[
                     str(v) for v in list(spec.get("grants_strength_to_friendly_saints_except_names", []) or [])
                 ],
+                modifies_enemy_saints_strength=int(spec.get("modifies_enemy_saints_strength", 0) or 0),
+                prevent_effect_destruction_of_friendly_saints_from_source_card_types=[
+                    str(v)
+                    for v in list(
+                        spec.get("prevent_effect_destruction_of_friendly_saints_from_source_card_types", []) or []
+                    )
+                ],
+                retaliation_damage_to_enemy_attacker=int(spec.get("retaliation_damage_to_enemy_attacker", 0) or 0),
+                retaliation_reduce_sin_on_kill=int(spec.get("retaliation_reduce_sin_on_kill", 0) or 0),
+                retaliation_multiplier_for_friendly_building_name=(
+                    str(spec.get("retaliation_multiplier_for_friendly_building_name"))
+                    if spec.get("retaliation_multiplier_for_friendly_building_name") is not None
+                    else None
+                ),
                 play_requirements=dict(spec.get("play_requirements", {}) or {}),
                 triggered_effects=trig_specs,
                 on_play_actions=on_play_actions,
@@ -557,6 +625,47 @@ class RuntimeCardManager:
         if script is None:
             return True
         return bool(script.can_attack)
+
+    def can_attack_now(self, engine: GameEngine, player_idx: int, uid: str) -> tuple[bool, str | None]:
+        inst = engine.state.instances.get(uid)
+        if inst is None:
+            return False, "Carta attaccante non valida."
+        script = self.get_script(inst.definition.name)
+        if script is None or not script.attack_requirements:
+            return True, None
+        ok = self._eval_condition_node(
+            RuleEventContext(engine=engine, event="can_attack", player_idx=player_idx, payload={"card": uid}),
+            player_idx,
+            script.attack_requirements,
+        )
+        if ok:
+            return True, None
+        msg = (script.attack_blocked_message or "").strip() or f"{inst.definition.name} non puo attaccare."
+        return False, msg
+
+    def get_can_attack_from_defense(self, card_name: str) -> bool:
+        script = self.get_script(card_name)
+        if script is None:
+            return False
+        return bool(script.can_attack_from_defense)
+
+    def get_can_attack_multiple_targets_in_attack_per_turn(self, card_name: str) -> bool:
+        script = self.get_script(card_name)
+        if script is None:
+            return False
+        return bool(script.can_attack_multiple_targets_in_attack_per_turn)
+
+    def get_blocks_enemy_attackers_with_crosses_lte(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        raw = script.blocks_enemy_attackers_with_crosses_lte
+        if raw is None:
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
 
     def get_prevent_incoming_damage_if_less_than(self, card_name: str) -> int | None:
         script = self.get_script(card_name)
@@ -673,6 +782,41 @@ class RuntimeCardManager:
         if script is None:
             return []
         return [str(v) for v in script.grants_strength_to_friendly_saints_except_names if str(v).strip()]
+
+    def get_modifies_enemy_saints_strength(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return int(script.modifies_enemy_saints_strength or 0)
+
+    def get_prevent_effect_destruction_of_friendly_saints_from_source_card_types(self, card_name: str) -> list[str]:
+        script = self.get_script(card_name)
+        if script is None:
+            return []
+        return [
+            str(v).strip().lower()
+            for v in script.prevent_effect_destruction_of_friendly_saints_from_source_card_types
+            if str(v).strip()
+        ]
+
+    def get_retaliation_damage_to_enemy_attacker(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return int(script.retaliation_damage_to_enemy_attacker or 0)
+
+    def get_retaliation_reduce_sin_on_kill(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return int(script.retaliation_reduce_sin_on_kill or 0)
+
+    def get_retaliation_multiplier_for_friendly_building_name(self, card_name: str) -> str | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        value = str(script.retaliation_multiplier_for_friendly_building_name or "").strip()
+        return value or None
 
     def migrated_count(self) -> int:
         return len(self._scripts)
@@ -1295,14 +1439,16 @@ class RuntimeCardManager:
                     continue
             inst = engine.state.instances[uid]
             needle_eq = _norm(target.card_filter.name_equals or "")
-            if needle_eq and _norm(inst.definition.name) != needle_eq:
+            name_variants = _card_name_variants(inst.definition)
+            name_haystack = _card_name_haystack(inst.definition)
+            if needle_eq and needle_eq not in name_variants:
                 continue
-            if needle_in and _norm(inst.definition.name) not in needle_in:
+            if needle_in and needle_in.isdisjoint(name_variants):
                 continue
-            if needle and needle not in _norm(inst.definition.name):
+            if needle and needle not in name_haystack:
                 continue
             needle_not = _norm(target.card_filter.name_not_contains or "")
-            if needle_not and needle_not in _norm(inst.definition.name):
+            if needle_not and needle_not in name_haystack:
                 continue
             if type_filter and _norm(inst.definition.card_type) not in type_filter:
                 continue
@@ -1427,6 +1573,10 @@ class RuntimeCardManager:
                 pool.append(event_uid)
         elif ttype == "source_card":
             source_uid = str(engine.state.flags.get("_runtime_source_card", ""))
+            if source_uid:
+                pool.append(source_uid)
+        elif ttype == "event_source_card":
+            source_uid = str(engine.state.flags.get("_runtime_event_source", ""))
             if source_uid:
                 pool.append(source_uid)
         elif ttype == "equipped_target_of_source":
@@ -1884,6 +2034,17 @@ class RuntimeCardManager:
                 for _ in range(charges):
                     inst.blessed.append(f"barrier_once:attack:{source_uid}")
             return
+        if action == "prevent_specific_card_from_attacking":
+            duration_turns = max(1, int(effect.amount or 1))
+            until_turn = int(engine.state.turn_number) + duration_turns - 1
+            tag = f"no_attack_until:{until_turn}"
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                if tag not in inst.cursed:
+                    inst.cursed.append(tag)
+            return
         if action == "equip_card":
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
@@ -1971,6 +2132,17 @@ class RuntimeCardManager:
                 return
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{-amount}")
+            return
+        if action == "halve_strength_rounded_down":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                current_strength = max(0, int(engine.get_effective_strength(t_uid)))
+                reduced = current_strength // 2
+                delta = current_strength - reduced
+                if delta > 0:
+                    inst.blessed.append(f"buff_str:{-delta}")
             return
         if action == "retaliate_damage_to_event_source_if_enemy_saint":
             dmg = max(0, int(effect.amount or 0))
@@ -2820,7 +2992,7 @@ class RuntimeCardManager:
                     conditional_to = str(effect.to_zone_if_controller_has_saint_with_name or "").strip()
                     if condition_name and conditional_to:
                         has_required = any(
-                            _norm(engine.state.instances[uid].definition.name) == condition_name
+                            _card_matches_name(engine.state.instances[uid].definition, condition_name)
                             for uid in engine.all_saints_on_field(target)
                         )
                         actual_to_zone = conditional_to if has_required else to_zone
@@ -3250,12 +3422,30 @@ class RuntimeCardManager:
                     break
             if chosen_uid is None:
                 return
-            slot = engine._first_open(player.attack)
-            zone = "attack"
-            if slot is None:
-                slot = engine._first_open(player.defense)
-                zone = "defense"
-            if slot is None:
+            chosen_inst = engine.state.instances[chosen_uid]
+            chosen_type = _norm(chosen_inst.definition.card_type)
+            slot = None
+            zone = ""
+            if chosen_type in {"santo", "token"}:
+                slot = engine._first_open(player.attack)
+                zone = "attack"
+                if slot is None:
+                    slot = engine._first_open(player.defense)
+                    zone = "defense"
+            elif chosen_type == "artefatto":
+                slot = engine._first_open(player.artifacts)
+                zone = "artifact"
+            elif chosen_type == "edificio":
+                if player.building is None:
+                    slot = 0
+                    zone = "building"
+            else:
+                slot = engine._first_open(player.attack)
+                zone = "attack"
+                if slot is None:
+                    slot = engine._first_open(player.defense)
+                    zone = "defense"
+            if slot is None or not zone:
                 return
             if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
                 return
@@ -3279,7 +3469,97 @@ class RuntimeCardManager:
             if enter_msg:
                 engine.state.log(str(enter_msg))
             return
-        
+        if action == "summon_named_card_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                copies = int(raw_value)
+            except (TypeError, ValueError):
+                copies = 0
+            if copies <= 0:
+                engine.state.flags.pop(flag_name, None)
+                return
+
+            card_name = _norm(effect.card_name or "")
+            if not card_name:
+                engine.state.flags.pop(flag_name, None)
+                return
+
+            player = engine.state.players[owner_idx]
+            for _ in range(copies):
+                chosen_uid = None
+                chosen_from_zone = None
+                for pool_name in ("hand", "deck"):
+                    pool = getattr(player, pool_name)
+                    for uid in list(pool):
+                        if _norm(engine.state.instances[uid].definition.name) != card_name:
+                            continue
+                        chosen_uid = uid
+                        chosen_from_zone = pool_name
+                        pool.remove(uid)
+                        break
+                    if chosen_uid:
+                        break
+                if chosen_uid is None:
+                    break
+
+                chosen_inst = engine.state.instances[chosen_uid]
+                chosen_type = _norm(chosen_inst.definition.card_type)
+                slot = None
+                zone = ""
+                if chosen_type in {"santo", "token"}:
+                    slot = engine._first_open(player.attack)
+                    zone = "attack"
+                    if slot is None:
+                        slot = engine._first_open(player.defense)
+                        zone = "defense"
+                elif chosen_type == "artefatto":
+                    slot = engine._first_open(player.artifacts)
+                    zone = "artifact"
+                elif chosen_type == "edificio":
+                    if player.building is None:
+                        slot = 0
+                        zone = "building"
+                else:
+                    slot = engine._first_open(player.attack)
+                    zone = "attack"
+                    if slot is None:
+                        slot = engine._first_open(player.defense)
+                        zone = "defense"
+                if slot is None or not zone:
+                    if chosen_from_zone:
+                        getattr(player, chosen_from_zone).insert(0, chosen_uid)
+                    break
+                if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
+                    if chosen_from_zone:
+                        getattr(player, chosen_from_zone).insert(0, chosen_uid)
+                    break
+
+                engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
+                inst = engine.state.instances[chosen_uid]
+                inst.exhausted = False
+                engine.state.log(f"{player.name} evoca {inst.definition.name}.")
+                actual_from_zone = chosen_from_zone or "summon"
+                engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone=actual_from_zone)
+
+                if actual_from_zone == "graveyard":
+                    engine._emit_event("on_summoned_from_graveyard", owner_idx, card=chosen_uid)
+                elif actual_from_zone == "hand":
+                    engine._emit_event("on_summoned_from_hand", owner_idx, card=chosen_uid)
+                ctype = _norm(inst.definition.card_type)
+                if ctype == _norm("token"):
+                    engine._emit_event("on_token_summoned", owner_idx, token=chosen_uid, summoner=owner_idx)
+                elif ctype == _norm("santo"):
+                    engine._emit_event("on_opponent_saint_enters_field", 1 - owner_idx, saint=chosen_uid)
+                enter_msg = self.resolve_enter(engine, owner_idx, chosen_uid)
+                if enter_msg:
+                    engine.state.log(str(enter_msg))
+
+            engine.state.flags.pop(flag_name, None)
+            return
+
         if action == "summon_token":
             token_name = str(effect.card_name or "").strip()
             if not token_name:
@@ -3590,6 +3870,16 @@ class RuntimeCardManager:
             expected_owner = owner_idx if owner_rule in {"me", "owner", "controller"} else (1 - owner_idx)
             if int(inst.owner) != int(expected_owner):
                 return False
+        owner_attack_count_gte = condition.get("event_card_owner_attack_count_gte")
+        if owner_attack_count_gte is not None:
+            if not event_card_uid:
+                return False
+            inst = ctx.engine.state.instances.get(event_card_uid)
+            if inst is None:
+                return False
+            attack_count = ctx.engine.state.flags.setdefault("attack_count", {"0": 0, "1": 0})
+            if int(attack_count.get(str(inst.owner), 0)) < int(owner_attack_count_gte):
+                return False
 
         ctype_in = condition.get("event_card_type_in")
         if ctype_in and event_card_uid:
@@ -3634,7 +3924,7 @@ class RuntimeCardManager:
         if controller_has_name:
             wanted = _norm(str(controller_has_name))
             if not any(
-                _norm(ctx.engine.state.instances[uid].definition.name) == wanted
+                _card_matches_name(ctx.engine.state.instances[uid].definition, wanted)
                 for uid in ctx.engine.all_saints_on_field(owner_idx)
             ):
                 return False
@@ -3642,7 +3932,7 @@ class RuntimeCardManager:
         if artifact_name:
             wanted = _norm(str(artifact_name))
             if not any(
-                a_uid and _norm(ctx.engine.state.instances[a_uid].definition.name) == wanted
+                a_uid and _card_matches_name(ctx.engine.state.instances[a_uid].definition, wanted)
                 for a_uid in ctx.engine.state.players[owner_idx].artifacts
             ):
                 return False
@@ -3657,11 +3947,11 @@ class RuntimeCardManager:
             p = ctx.engine.state.players[owner_idx]
             found = False
             for zone_uid in p.attack + p.defense + p.artifacts:
-                if zone_uid and _norm(ctx.engine.state.instances[zone_uid].definition.name) == wanted:
+                if zone_uid and _card_matches_name(ctx.engine.state.instances[zone_uid].definition, wanted):
                     found = True
                     break
             if not found and p.building:
-                found = _norm(ctx.engine.state.instances[p.building].definition.name) == wanted
+                found = _card_matches_name(ctx.engine.state.instances[p.building].definition, wanted)
             if not found:
                 return False
         can_play_by_sacrificing = condition.get("can_play_by_sacrificing")
@@ -3673,19 +3963,22 @@ class RuntimeCardManager:
         hand_name = condition.get("controller_has_card_in_hand_with_name")
         if hand_name:
             wanted = _norm(str(hand_name))
-            if not any(_norm(ctx.engine.state.instances[uid].definition.name) == wanted for uid in ctx.engine.state.players[owner_idx].hand):
+            if not any(
+                _card_matches_name(ctx.engine.state.instances[uid].definition, wanted)
+                for uid in ctx.engine.state.players[owner_idx].hand
+            ):
                 return False
         building_name = condition.get("controller_has_building_with_name")
         if building_name:
             wanted = _norm(str(building_name))
             b_uid = ctx.engine.state.players[owner_idx].building
-            if b_uid is None or _norm(ctx.engine.state.instances[b_uid].definition.name) != wanted:
+            if b_uid is None or not _card_matches_name(ctx.engine.state.instances[b_uid].definition, wanted):
                 return False
         event_name_is = condition.get("event_card_name_is")
         if event_name_is and event_card_uid:
             wanted = _norm(str(event_name_is))
             inst = ctx.engine.state.instances.get(event_card_uid)
-            if inst is None or _norm(inst.definition.name) != wanted:
+            if inst is None or not _card_matches_name(inst.definition, wanted):
                 return False
         target_is_damaged = condition.get("target_is_damaged")
         if target_is_damaged:
@@ -3696,7 +3989,10 @@ class RuntimeCardManager:
         deck_name = condition.get("controller_has_card_in_deck_with_name")
         if deck_name:
             wanted = _norm(str(deck_name))
-            if not any(_norm(ctx.engine.state.instances[uid].definition.name) == wanted for uid in ctx.engine.state.players[owner_idx].deck):
+            if not any(
+                _card_matches_name(ctx.engine.state.instances[uid].definition, wanted)
+                for uid in ctx.engine.state.players[owner_idx].deck
+            ):
                 return False
         drawn_this_turn_gte = condition.get("controller_drawn_cards_this_turn_gte")
         if drawn_this_turn_gte is not None:
@@ -3758,12 +4054,13 @@ class RuntimeCardManager:
 
             filt = stored_card_matches.get("card_filter", {}) or {}
 
+            name_haystack = _card_name_haystack(inst.definition)
             name_contains = _norm(str(filt.get("name_contains", "")))
-            if name_contains and name_contains not in _norm(inst.definition.name):
+            if name_contains and name_contains not in name_haystack:
                 return False
 
             name_not_contains = _norm(str(filt.get("name_not_contains", "")))
-            if name_not_contains and name_not_contains in _norm(inst.definition.name):
+            if name_not_contains and name_not_contains in name_haystack:
                 return False
 
             type_filter = {_norm(v) for v in list(filt.get("card_type_in", []) or [])}

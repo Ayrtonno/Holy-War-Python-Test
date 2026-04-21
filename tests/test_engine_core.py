@@ -162,6 +162,84 @@ def test_invalid_attack_target_does_not_consume_attack() -> None:
     assert good.ok
 
 
+def test_insetto_dorato_can_attack_multiple_enemy_attackers_once_each() -> None:
+    cards = [
+        CardDefinition("Insetto Dorato", "Santo", "2", 5, 2, "", "ANI-1"),
+        CardDefinition("Guardia 1", "Santo", "2", 5, 5, "", "ANI-1"),
+        CardDefinition("Guardia 2", "Santo", "2", 5, 5, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=212)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+    p0.inspiration = 20
+    p1.inspiration = 20
+
+    insetto_idx = _force_card_in_hand(engine, 0, "Insetto Dorato")
+    assert engine.play_card(0, insetto_idx, "a1").ok
+
+    engine.end_turn()
+    engine.start_turn()
+    g1_idx = _force_card_in_hand(engine, 1, "Guardia 1")
+    assert engine.play_card(1, g1_idx, "a1").ok
+    g2_idx = _force_card_in_hand(engine, 1, "Guardia 2")
+    assert engine.play_card(1, g2_idx, "a2").ok
+
+    engine.end_turn()
+    engine.start_turn()
+    insetto_uid = p0.attack[0]
+    assert insetto_uid is not None
+
+    first = engine.attack(0, 0, 0)
+    assert first.ok
+    assert engine.get_effective_strength(insetto_uid) == 3
+
+    second = engine.attack(0, 0, 1)
+    assert second.ok
+    assert engine.get_effective_strength(insetto_uid) == 4
+
+    repeat_same_target = engine.attack(0, 0, 1)
+    assert not repeat_same_target.ok
+    assert "gia attaccato questo bersaglio" in repeat_same_target.message.lower()
+
+
+def test_sabbie_mobili_blocks_second_attack_via_scripted_trigger() -> None:
+    cards = [
+        CardDefinition("Attaccante 1", "Santo", "2", 5, 3, "", "ANI-1"),
+        CardDefinition("Attaccante 2", "Santo", "2", 5, 3, "", "ANI-1"),
+        CardDefinition("Sabbie Mobili", "Artefatto", "1", 1, None, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=211)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p0.inspiration = 20
+
+    art_idx = _force_card_in_hand(engine, 0, "Sabbie Mobili")
+    assert engine.play_card(0, art_idx, None).ok
+    a1_idx = _force_card_in_hand(engine, 0, "Attaccante 1")
+    assert engine.play_card(0, a1_idx, "a1").ok
+    a2_idx = _force_card_in_hand(engine, 0, "Attaccante 2")
+    assert engine.play_card(0, a2_idx, "a2").ok
+
+    first = engine.attack(0, 0, None)
+    assert first.ok
+
+    second_uid = p0.attack[1]
+    assert second_uid is not None
+    second = engine.attack(0, 1, None)
+    assert not second.ok
+    assert "non puo attaccare in questo turno" in second.message.lower()
+    assert any(tag.startswith("no_attack_until:") for tag in engine.state.instances[second_uid].cursed)
+
+
 def test_pianta_carnivora_gets_bonus_with_insetto_della_palude() -> None:
     cards = [
         CardDefinition("Insetto della Palude", "Santo", "1", 2, 2, "", "ANI-1"),

@@ -326,15 +326,26 @@ def move_graveyard_card_to_deck_bottom(engine: "GameEngine", player_idx: int, ui
 # Places a card instance directly onto the requested board zone if the slot is free.
 def place_card_from_uid(engine: "GameEngine", player_idx: int, uid: str, zone: str, slot: int) -> bool:
     player = engine.state.players[player_idx]
-    if zone == "attack":
+    z = zone.strip().lower()
+    if z == "attack":
         if not (0 <= slot < ATTACK_SLOTS) or player.attack[slot] is not None:
             return False
         player.attack[slot] = uid
         return True
-    if zone == "defense":
+    if z == "defense":
         if not (0 <= slot < DEFENSE_SLOTS) or player.defense[slot] is not None:
             return False
         player.defense[slot] = uid
+        return True
+    if z in {"artifact", "artifacts"}:
+        if not (0 <= slot < ARTIFACT_SLOTS) or player.artifacts[slot] is not None:
+            return False
+        player.artifacts[slot] = uid
+        return True
+    if z == "building":
+        if player.building is not None:
+            return False
+        player.building = uid
         return True
     return False
 

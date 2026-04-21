@@ -871,6 +871,10 @@
   },
   {
     "name": "Albero di Pietra",
+    "aliases": [
+      "Albero",
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "5",
     "faith": 8,
@@ -881,6 +885,9 @@
   },
   {
     "name": "Albero Fortunato",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "2",
     "faith": 2,
@@ -891,6 +898,9 @@
   },
   {
     "name": "Albero Sacro",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "White",
     "faith": 10,
@@ -901,6 +911,9 @@
   },
   {
     "name": "Albero Sconsacrato",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "3",
     "faith": 3,
@@ -911,6 +924,9 @@
   },
   {
     "name": "Albero Secolare",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "7",
     "faith": 7,
@@ -975,7 +991,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Distruggi ogni carta \"Albero\" presente sul tuo lato di campo e guadagna 2 peccato per ogni carta distrutta. Per ogni carta distrutta in questo modo, evoca una carta \"Segno Del Passato\" dalla tua mano o dal tuo reliquiario sul tuo campo.",
+    "effect_text": "Per ogni carta Albero sul tuo campo, ricevi 2 Peccato e distruggi quella carta. Per ogni carta distrutta in questo modo, evoca una carta \"Segno Del Passato\" dalla tua mano o dal tuo reliquiario sul tuo campo.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -985,7 +1001,7 @@
     "crosses": "5",
     "faith": 5,
     "strength": null,
-    "effect_text": "Ogni carta Albero riceve +5 Fede.",
+    "effect_text": "Finche questa carta è sul terreno, ogni tua carta Albero riceve +5 Fede.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1051,11 +1067,14 @@
   },
   {
     "name": "Golem di Pietra",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "4",
     "faith": 4,
     "strength": 4,
-    "effect_text": "Se questo Santo distrugge un Santo avversario riceve +4 fede.",
+    "effect_text": "Se questo Santo distrugge un Santo avversario, aumenta la sua Fede a 4.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1085,7 +1104,7 @@
     "crosses": "4",
     "faith": 3,
     "strength": 2,
-    "effect_text": "Questo Santo può attaccare ogni Santo avversario in zona d'attacco. Per ogni attacco andato a segno, riceve +1 Forza.",
+    "effect_text": "Questo Santo può attaccare ogni Santo avversario in zona d'attacco una volta per turno. Per ogni attacco andato a segno, riceve +1 Forza.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1105,7 +1124,7 @@
     "crosses": "3",
     "faith": 2,
     "strength": 1,
-    "effect_text": "Dimezza la Forza del Santo che distrugge questa carta.",
+    "effect_text": "Dimezza (arrotondando per difetto) la Forza del Santo che distrugge questa carta.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1155,12 +1174,15 @@
     "crosses": "2",
     "faith": 2,
     "strength": 2,
-    "effect_text": "Questo Santo può attaccare dalla zona di difesa.",
+    "effect_text": "Questo Santo può attaccare anche se si trova in zona di difesa.",
     "expansion": "ANI-1",
     "is_token": false
   },
   {
     "name": "Pianta Carnivora",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "2",
     "faith": 3,
@@ -1171,6 +1193,9 @@
   },
   {
     "name": "Pietra Bianca",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Benedizione",
     "crosses": "3",
     "faith": null,
@@ -1181,6 +1206,9 @@
   },
   {
     "name": "Pietra Focaia",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "4",
     "faith": 2,
@@ -1191,6 +1219,9 @@
   },
   {
     "name": "Pietra Levigata",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "8",
     "faith": 6,
@@ -1201,6 +1232,9 @@
   },
   {
     "name": "Pietra Nera",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Maledizione",
     "crosses": "3",
     "faith": null,
@@ -1211,6 +1245,9 @@
   },
   {
     "name": "Pietre Aguzze",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Artefatto",
     "crosses": "5",
     "faith": 4,
@@ -1221,6 +1258,9 @@
   },
   {
     "name": "Pietre Pesanti",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Maledizione",
     "crosses": "2",
     "faith": null,
@@ -1321,6 +1361,9 @@
   },
   {
     "name": "Sequoia",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "7",
     "faith": 8,
@@ -1341,6 +1384,9 @@
   },
   {
     "name": "Stalagmiti",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "2",
     "faith": 5,
@@ -1351,6 +1397,9 @@
   },
   {
     "name": "Stalattiti",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "3",
     "faith": 4,
@@ -1431,6 +1480,9 @@
   },
   {
     "name": "Totem di Pietra",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "5",
     "faith": null,
@@ -3441,6 +3493,10 @@
   },
   {
     "name": "Albero di Pietra",
+    "aliases": [
+      "Albero",
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "5",
     "faith": 8,
@@ -3451,6 +3507,9 @@
   },
   {
     "name": "Albero Fortunato",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "2",
     "faith": 2,
@@ -3461,6 +3520,9 @@
   },
   {
     "name": "Albero Sacro",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "White",
     "faith": 10,
@@ -3471,6 +3533,9 @@
   },
   {
     "name": "Albero Sconsacrato",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "3",
     "faith": 3,
@@ -3481,6 +3546,9 @@
   },
   {
     "name": "Albero Secolare",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "7",
     "faith": 7,
@@ -3555,7 +3623,7 @@
     "crosses": "5",
     "faith": 5,
     "strength": null,
-    "effect_text": "Ogni carta Albero riceve +5 Fede.",
+    "effect_text": "Finche questa carta è sul terreno, ogni tua carta Albero riceve +5 Fede.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -3621,11 +3689,14 @@
   },
   {
     "name": "Golem di Pietra",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "4",
     "faith": 4,
     "strength": 4,
-    "effect_text": "Se questo Santo distrugge un Santo avversario, ripristina la sua Fede a 4.",
+    "effect_text": "Se questo Santo distrugge un Santo avversario, aumenta la sua Fede a 4.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -3655,7 +3726,7 @@
     "crosses": "4",
     "faith": 3,
     "strength": 2,
-    "effect_text": "Questo Santo può attaccare ogni Santo avversario in zona d'attacco. Per ogni attacco andato a segno, riceve +1 Forza.",
+    "effect_text": "Questo Santo può attaccare ogni Santo avversario in zona d'attacco una volta per turno. Per ogni attacco andato a segno, riceve +1 Forza.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -3731,6 +3802,9 @@
   },
   {
     "name": "Pianta Carnivora",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "2",
     "faith": 3,
@@ -3741,6 +3815,9 @@
   },
   {
     "name": "Pietra Bianca",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Benedizione",
     "crosses": "3",
     "faith": null,
@@ -3751,6 +3828,9 @@
   },
   {
     "name": "Pietra Focaia",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "4",
     "faith": 2,
@@ -3761,6 +3841,9 @@
   },
   {
     "name": "Pietra Levigata",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "8",
     "faith": 6,
@@ -3771,6 +3854,9 @@
   },
   {
     "name": "Pietra Nera",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Maledizione",
     "crosses": "3",
     "faith": null,
@@ -3781,6 +3867,9 @@
   },
   {
     "name": "Pietre Aguzze",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Artefatto",
     "crosses": "5",
     "faith": 4,
@@ -3791,6 +3880,9 @@
   },
   {
     "name": "Pietre Pesanti",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Maledizione",
     "crosses": "2",
     "faith": null,
@@ -3891,6 +3983,9 @@
   },
   {
     "name": "Sequoia",
+    "aliases": [
+      "Albero"
+    ],
     "card_type": "Santo",
     "crosses": "7",
     "faith": 8,
@@ -3911,6 +4006,9 @@
   },
   {
     "name": "Stalagmiti",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "2",
     "faith": 5,
@@ -3921,6 +4019,9 @@
   },
   {
     "name": "Stalattiti",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "3",
     "faith": 4,
@@ -4001,6 +4102,9 @@
   },
   {
     "name": "Totem di Pietra",
+    "aliases": [
+      "Pietra"
+    ],
     "card_type": "Santo",
     "crosses": "5",
     "faith": null,

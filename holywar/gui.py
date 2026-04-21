@@ -22,6 +22,24 @@ from holywar.data.deck_builder import (
 )
 
 
+def _card_aliases(definition) -> list[str]:
+    raw_aliases = getattr(definition, "aliases", []) or []
+    if isinstance(raw_aliases, str):
+        return [part.strip() for part in raw_aliases.split(",") if part.strip()]
+    return [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
+
+
+def _card_name_variants(definition) -> set[str]:
+    variants = {_norm(definition.name)}
+    variants.update(_norm(alias) for alias in _card_aliases(definition))
+    return {v for v in variants if v}
+
+
+def _card_name_haystack(definition) -> str:
+    parts = [definition.name, *_card_aliases(definition)]
+    return " ".join(_norm(part) for part in parts if str(part).strip())
+
+
 class HolyWarGUI(tk.Tk):
     def __init__(self, cards, seed: int | None, ai_delay: float) -> None:
         super().__init__()
@@ -60,6 +78,7 @@ class HolyWarGUI(tk.Tk):
         self._reveal_prompt_open = False
         self._reveal_prompt_last_uid = ""
         self._post_reveal_chain_actor: int | None = None
+        self._sim_state_snapshot: dict | None = None
         self.religions = religions
         self._p1_deck_map: dict[str, str | None] = {}
         self._p2_deck_map: dict[str, str | None] = {}
@@ -238,7 +257,13 @@ class HolyWarGUI(tk.Tk):
     def _clone_engine(self) -> GameEngine | None:
         if self.engine is None:
             return None
-        cloned_state = GameState.from_dict(self.engine.state.to_dict())
+        if self._sim_state_snapshot is None:
+            snapshot = self.engine.state.to_dict()
+            # The right-click preview does not need historical logs; skipping
+            # them keeps per-click simulation clones cheaper in long matches.
+            snapshot["logs"] = []
+            self._sim_state_snapshot = snapshot
+        cloned_state = GameState.from_dict(self._sim_state_snapshot)
         return GameEngine(cloned_state, seed=self.seed)
 
     def _can_attack_target(self, player_idx: int, from_slot: int, target_slot: int | None) -> bool:
@@ -1190,6 +1215,8 @@ class HolyWarGUI(tk.Tk):
     def refresh(self) -> None:
         if self.engine is None:
             return
+        # Any real state refresh invalidates the cached preview snapshot.
+        self._sim_state_snapshot = None
         self._clear_slot_highlights()
         st = self.engine.state
         own_idx = self.current_human_idx() or 0
@@ -1723,15 +1750,16 @@ class HolyWarGUI(tk.Tk):
             if inst is None:
                 continue
 
-            name = inst.definition.name.lower().strip()
+            name_variants = _card_name_variants(inst.definition)
+            name_haystack = _card_name_haystack(inst.definition)
             ctype = inst.definition.card_type.lower().strip()
             crosses = getattr(inst.definition, "crosses", None)
 
             if card_type_in and ctype not in card_type_in:
                 continue
-            if name_contains and name_contains.lower().strip() not in name:
+            if name_contains and _norm(name_contains) not in name_haystack:
                 continue
-            if name_not_contains and name_not_contains.lower().strip() in name:
+            if name_not_contains and _norm(name_not_contains) in name_haystack:
                 continue
             if crosses_gte is not None and (crosses is None or crosses < int(crosses_gte)):
                 continue
@@ -1850,20 +1878,21 @@ class HolyWarGUI(tk.Tk):
 
         def matches(inst) -> bool:
             ctype = inst.definition.card_type.lower().strip()
-            name = inst.definition.name.lower().strip()
+            name_variants = _card_name_variants(inst.definition)
+            name_haystack = _card_name_haystack(inst.definition)
             crosses = getattr(inst.definition, "crosses", None)
 
             if type_filter and ctype not in type_filter:
                 return False
-            if name_in and name not in name_in:
+            if name_in and name_in.isdisjoint(name_variants):
                 return False
-            if name_equals and name != name_equals:
-                return False
-
-            if name_contains and name_contains not in name:
+            if name_equals and _norm(name_equals) not in name_variants:
                 return False
 
-            if name_not_contains and name_not_contains in name:
+            if name_contains and _norm(name_contains) not in name_haystack:
+                return False
+
+            if name_not_contains and _norm(name_not_contains) in name_haystack:
                 return False
 
             if (
@@ -1997,19 +2026,20 @@ class HolyWarGUI(tk.Tk):
         def matches(inst_uid: str) -> bool:
             inst = engine.state.instances[inst_uid]
             ctype = inst.definition.card_type.lower().strip()
-            name = inst.definition.name.lower().strip()
+            name_variants = _card_name_variants(inst.definition)
+            name_haystack = _card_name_haystack(inst.definition)
 
             if target.card_filter.exclude_event_card and inst_uid == uid:
                 return False
             if type_filter and ctype not in type_filter:
                 return False
-            if name_in and name not in name_in:
+            if name_in and name_in.isdisjoint(name_variants):
                 return False
-            if name_equals and name != name_equals:
+            if name_equals and _norm(name_equals) not in name_variants:
                 return False
-            if name_contains and name_contains not in name:
+            if name_contains and _norm(name_contains) not in name_haystack:
                 return False
-            if name_not_contains and name_not_contains in name:
+            if name_not_contains and _norm(name_not_contains) in name_haystack:
                 return False
             if (
                 exclude_buildings_if_my_building_zone_occupied

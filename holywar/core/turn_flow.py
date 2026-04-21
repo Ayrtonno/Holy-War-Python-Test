@@ -165,6 +165,7 @@ def start_turn(engine: "GameEngine") -> None:
     _reset_start_turn_resources(engine, current)
     _summon_turn_start_tokens(engine, current)
     engine.state.flags.setdefault("attack_count", {"0": 0, "1": 0})[str(engine.state.active_player)] = 0
+    engine.state.flags["attacked_targets_this_turn"] = {}
     engine.state.flags.setdefault("spent_inspiration_turn", {"0": 0, "1": 0})[str(engine.state.active_player)] = 0
     engine._cleanup_zero_faith_saints()
     if engine.state.phase == "preparation":

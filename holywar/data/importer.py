@@ -35,6 +35,8 @@ def load_cards_from_xlsx(xlsx_path: str | Path) -> list[CardDefinition]:
             strength = _to_int(row[4])
             effect_text = str(row[5]).strip() if row[5] is not None else ""
             expansion = str(row[6]).strip() if row[6] is not None else sheet_name
+            aliases_raw = str(row[7]).strip() if len(row) > 7 and row[7] is not None else ""
+            aliases = [part.strip() for part in aliases_raw.split(",") if part.strip()]
             is_token = card_type.lower() == "token"
             cards.append(
                 CardDefinition(
@@ -46,6 +48,7 @@ def load_cards_from_xlsx(xlsx_path: str | Path) -> list[CardDefinition]:
                     effect_text=effect_text,
                     expansion=expansion,
                     is_token=is_token,
+                    aliases=aliases,
                 )
             )
     return cards
