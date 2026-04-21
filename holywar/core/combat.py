@@ -116,11 +116,6 @@ def resolve_direct_attack(
     if engine._consume_attack_shield(defender_idx):
         engine.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
         return ActionResult(True, "Attacco annullato da effetto di scudo.")
-    if attacker_name_key == _norm("Fenrir"):
-        attacker.definition.strength = (attacker.definition.strength or 0) + 1
-    if attacker_name_key == _norm("Jormungandr"):
-        attacker.current_faith = (attacker.current_faith or 0) + 1
-
     base_strength = max(0, attacker.definition.strength or 0)
     damage = engine.get_effective_strength(attacker_uid)
     defender_player.sin += damage
@@ -180,11 +175,6 @@ def resolve_targeted_attack(
     if engine._consume_attack_shield(defender_idx):
         engine.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
         return ActionResult(True, "Attacco annullato da effetto di scudo.")
-    if attacker_name_key == _norm("Fenrir"):
-        attacker.definition.strength = (attacker.definition.strength or 0) + 1
-    if attacker_name_key == _norm("Jormungandr"):
-        attacker.current_faith = (attacker.current_faith or 0) + 1
-
     defender = engine.state.instances[defender_uid]
     barrier = engine._consume_barrier(defender)
     if barrier:
@@ -321,7 +311,13 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
         return ActionResult(False, "Nessun Santo in quello slot.")
 
     attacker = engine.state.instances[attacker_uid]
-    engine._emit_event("on_attack_declared", player_idx, attacker=attacker_uid, target_slot=target_slot)
+    engine._emit_event(
+        "on_attack_declared",
+        player_idx,
+        attacker=attacker_uid,
+        card=attacker_uid,
+        target_slot=target_slot,
+    )
     engine._emit_event("on_this_card_attacks", player_idx, card=attacker_uid, target_slot=target_slot)
 
     validation_error = validate_attack_preconditions(engine, player_idx, defender_idx, attacker)

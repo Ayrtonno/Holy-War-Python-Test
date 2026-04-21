@@ -25,6 +25,7 @@ SUPPORTED_CONDITION_KEYS = {
     "not",
     "payload_from_zone_in",
     "payload_to_zone_in",
+    "payload_target_slot_is_set",
     "event_card_owner",
     "event_card_type_in",
     "turn_scope",
@@ -128,6 +129,9 @@ SUPPORTED_EFFECT_ACTIONS = {
     "optional_draw_from_top_n_then_shuffle",
     "optional_recover_from_graveyard_then_shuffle",
     "optional_recover_cards",
+    "store_target_count",
+    "draw_cards_from_flag",
+    "choose_targets",
 }
 
 
@@ -146,6 +150,7 @@ class TriggerSpec:
 
 @dataclass(slots=True)
 class CardFilterSpec:
+    name_in: list[str] = field(default_factory=list)
     name_equals: str | None = None
     name_contains: str | None = None
     name_not_contains: str | None = None
@@ -154,6 +159,8 @@ class CardFilterSpec:
     exclude_buildings_if_my_building_zone_occupied: bool = False
     crosses_gte: int | None = None
     crosses_lte: int | None = None
+    strength_gte: int | None = None
+    strength_lte: int | None = None
     drawn_this_turn_only: bool = False
     top_n_from_zone: int | None = None
 
@@ -342,12 +349,15 @@ class RuntimeCardManager:
             filt = raw.get("card_filter", {}) or {}
             crosses_gte_raw = filt.get("crosses_gte")
             crosses_lte_raw = filt.get("crosses_lte")
+            strength_gte_raw = filt.get("strength_gte")
+            strength_lte_raw = filt.get("strength_lte")
             top_n_raw = filt.get("top_n_from_zone")
             target_min_raw = raw.get("min_targets")
             target_max_raw = raw.get("max_targets")
             return TargetSpec(
                 type=str(raw.get("type", "cards_controlled_by_owner")),
                 card_filter=CardFilterSpec(
+                    name_in=[str(v) for v in list(filt.get("name_in", []) or [])],
                     name_equals=filt.get("name_equals"),
                     name_contains=filt.get("name_contains"),
                     name_not_contains=filt.get("name_not_contains"),
@@ -358,6 +368,8 @@ class RuntimeCardManager:
                     ),
                     crosses_gte=_to_int_or_none(crosses_gte_raw),
                     crosses_lte=_to_int_or_none(crosses_lte_raw),
+                    strength_gte=_to_int_or_none(strength_gte_raw),
+                    strength_lte=_to_int_or_none(strength_lte_raw),
                     drawn_this_turn_only=bool(filt.get("drawn_this_turn_only", False)),
                     top_n_from_zone=_to_int_or_none(top_n_raw),
                 ),
@@ -1118,7 +1130,8 @@ class RuntimeCardManager:
             return False
         has_explicit_zone = bool(target.zones) or _norm(target.zone) != "field"
         has_filter = bool(
-            (target.card_filter.name_equals or "").strip()
+            target.card_filter.name_in
+            or (target.card_filter.name_equals or "").strip()
             or (target.card_filter.name_contains or "").strip()
             or (target.card_filter.name_not_contains or "").strip()
             or target.card_filter.card_type_in
@@ -1126,6 +1139,8 @@ class RuntimeCardManager:
             or target.card_filter.exclude_buildings_if_my_building_zone_occupied
             or target.card_filter.crosses_gte is not None
             or target.card_filter.crosses_lte is not None
+            or target.card_filter.strength_gte is not None
+            or target.card_filter.strength_lte is not None
             or target.card_filter.drawn_this_turn_only
             or target.card_filter.top_n_from_zone is not None
         )
@@ -1163,6 +1178,7 @@ class RuntimeCardManager:
         target: TargetSpec,
         pool: list[str],
     ) -> list[str]:
+        needle_in = {_norm(v) for v in target.card_filter.name_in}
         needle = _norm(target.card_filter.name_contains or "")
         type_filter = {_norm(v) for v in target.card_filter.card_type_in}
         event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
@@ -1185,6 +1201,8 @@ class RuntimeCardManager:
             inst = engine.state.instances[uid]
             needle_eq = _norm(target.card_filter.name_equals or "")
             if needle_eq and _norm(inst.definition.name) != needle_eq:
+                continue
+            if needle_in and _norm(inst.definition.name) not in needle_in:
                 continue
             if needle and needle not in _norm(inst.definition.name):
                 continue
@@ -1212,6 +1230,12 @@ class RuntimeCardManager:
                     continue
             if target.card_filter.crosses_lte is not None:
                 if cross_val is None or cross_val > int(target.card_filter.crosses_lte):
+                    continue
+            if target.card_filter.strength_gte is not None:
+                if int(engine.get_effective_strength(uid)) < int(target.card_filter.strength_gte):
+                    continue
+            if target.card_filter.strength_lte is not None:
+                if int(engine.get_effective_strength(uid)) > int(target.card_filter.strength_lte):
                     continue
             if target.card_filter.drawn_this_turn_only:
                 drawn = engine.state.flags.get("cards_drawn_this_turn", {})
@@ -1699,6 +1723,13 @@ class RuntimeCardManager:
         if action == "increase_strength":
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
+            return
+        if action == "decrease_strength":
+            amount = max(0, int(effect.amount))
+            if amount <= 0:
+                return
+            for t_uid in targets:
+                engine.state.instances[t_uid].blessed.append(f"buff_str:{-amount}")
             return
         if action == "reveal_stored_card":
             store_name = str(effect.stored or "").strip()
@@ -2196,6 +2227,75 @@ class RuntimeCardManager:
             target = self._resolve_player_scope(owner_idx, effect.target_player)
             engine.draw_cards(target, max(0, int(effect.amount or 1)))
             return
+        if action == "choose_targets":
+            flags = engine.state.flags
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            min_targets = max(0, int(effect.min_targets if effect.min_targets is not None else 0))
+            max_targets = int(effect.max_targets if effect.max_targets is not None else 1)
+            max_targets = max(min_targets, max_targets)
+
+            if choice_ready and choice_source == source_uid:
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                selected_uids = [uid for uid in selected_uids if uid in candidates]
+                if max_targets >= 0:
+                    selected_uids = selected_uids[:max_targets]
+                if len(selected_uids) < min_targets:
+                    selected_uids = []
+                flags["_runtime_selected_target"] = ",".join(selected_uids)
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                return
+
+            candidates = list(targets)
+            if not candidates:
+                flags["_runtime_selected_target"] = ""
+                return
+            flags["_runtime_choice_source"] = source_uid
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(owner_idx)
+            flags["_runtime_choice_title"] = "Selezione Bersaglio"
+            flags["_runtime_choice_prompt"] = "Seleziona i bersagli per l'effetto."
+            flags["_runtime_choice_min_targets"] = str(min_targets)
+            flags["_runtime_choice_max_targets"] = str(max_targets)
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
+        if action == "store_target_count":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            engine.state.flags[flag_name] = int(len(targets))
+            return
+        if action == "draw_cards_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = max(0, int(raw_value))
+            except (TypeError, ValueError):
+                amount = 0
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            if amount > 0:
+                engine.draw_cards(target, amount)
+            engine.state.flags.pop(flag_name, None)
+            return
         if action == "optional_draw_from_top_n_then_shuffle":
             top_n = max(1, int(effect.amount or 1))
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -2452,15 +2552,17 @@ class RuntimeCardManager:
             return
         if action == "summon_card_from_hand":
             selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
-            card_name = _norm(effect.card_name or selected)
-            if not card_name:
-                return
             player = engine.state.players[owner_idx]
-            chosen_uid = None
-            for h_uid in list(player.hand):
-                if _norm(engine.state.instances[h_uid].definition.name) == card_name:
-                    chosen_uid = h_uid
-                    break
+            selected_uid = selected if selected in engine.state.instances else None
+            chosen_uid = selected_uid if selected_uid in player.hand else None
+            if chosen_uid is None:
+                card_name = _norm(effect.card_name or selected)
+                if not card_name:
+                    return
+                for h_uid in list(player.hand):
+                    if _norm(engine.state.instances[h_uid].definition.name) == card_name:
+                        chosen_uid = h_uid
+                        break
             if chosen_uid is None:
                 return
             slot = engine._first_open(player.attack)
@@ -2829,6 +2931,11 @@ class RuntimeCardManager:
             allowed_to = {_norm(z) for z in to_zone_in}
             if to_zone not in allowed_to:
                 return False
+        target_slot_is_set = condition.get("payload_target_slot_is_set")
+        if target_slot_is_set is not None:
+            has_target_slot = payload.get("target_slot") is not None
+            if bool(target_slot_is_set) != has_target_slot:
+                return False
 
         owner_rule = _norm(str(condition.get("event_card_owner", "")))
         if owner_rule and event_card_uid:
@@ -3071,18 +3178,27 @@ class RuntimeCardManager:
         card_filter = dict(requirement.get("card_filter", {}) or {})
         raw_crosses_gte = card_filter.get("crosses_gte")
         raw_crosses_lte = card_filter.get("crosses_lte")
+        raw_strength_gte = card_filter.get("strength_gte")
+        raw_strength_lte = card_filter.get("strength_lte")
         crosses_gte: int | None = None
         crosses_lte: int | None = None
+        strength_gte: int | None = None
+        strength_lte: int | None = None
         if raw_crosses_gte is not None:
             crosses_gte = int(raw_crosses_gte)
         if raw_crosses_lte is not None:
             crosses_lte = int(raw_crosses_lte)
+        if raw_strength_gte is not None:
+            strength_gte = int(raw_strength_gte)
+        if raw_strength_lte is not None:
+            strength_lte = int(raw_strength_lte)
         target = TargetSpec(
             type="cards_controlled_by_owner",
             owner=owner_key,
             zone=str(zones[0]) if zones else "field",
             zones=[str(z) for z in zones],
             card_filter=CardFilterSpec(
+                name_in=[str(v) for v in list(card_filter.get("name_in", []) or [])],
                 name_equals=str(card_filter.get("name_equals")) if card_filter.get("name_equals") is not None else None,
                 name_contains=str(card_filter.get("name_contains")) if card_filter.get("name_contains") is not None else None,
                 name_not_contains=(
@@ -3091,6 +3207,8 @@ class RuntimeCardManager:
                 card_type_in=[str(v) for v in list(card_filter.get("card_type_in", []) or [])],
                 crosses_gte=crosses_gte,
                 crosses_lte=crosses_lte,
+                strength_gte=strength_gte,
+                strength_lte=strength_lte,
             ),
         )
 

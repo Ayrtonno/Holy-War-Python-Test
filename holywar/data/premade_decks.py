@@ -20,14 +20,14 @@ PREMADE_DECKS: dict[str, dict] = {
         "religion": "Cristianesimo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Muninn", 10), ("Odino", 10), ("Huginn", 10),
+            ("Loki", 10), ("Fenrir", 10), ("Jormungandr", 10), ("Skadi", 10), ("Ragnarok", 10),
         ],
     },
     "test_nemico": {
         "religion": "Cristianesimo",
         "name": "TEST NEMICO",
         "cards": [
-            ("Vescovo della Città Buia", 10), ("vescovo della Città Lucente", 10), ("Frammento dello Specchio", 10),
+            ("Loki", 10), ("Fenrir", 10), ("Jormungandr", 10), ("Skadi", 10), ("Ragnarok", 10),
         ],
     },
     "cristianesimo_via_martirio": {

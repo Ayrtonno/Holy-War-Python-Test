@@ -406,6 +406,11 @@ class HolyWarGUI(tk.Tk):
         mode = self._activate_targeting_mode(uid)
         if mode == "board_card":
             candidates = self._board_activation_candidates(player_idx)
+        elif mode in {"auto", "guided", "manual"}:
+            target_spec = self._first_activate_target_spec(uid)
+            if target_spec is None:
+                return []
+            candidates = self._guided_target_candidates_for_spec(uid, target_spec)
         else:
             return []
         out: list[str] = []
@@ -1574,6 +1579,8 @@ class HolyWarGUI(tk.Tk):
         name_not_contains = filt.get("name_not_contains")
         crosses_gte = filt.get("crosses_gte")
         crosses_lte = filt.get("crosses_lte")
+        strength_gte = filt.get("strength_gte")
+        strength_lte = filt.get("strength_lte")
 
         if zone == "field":
             pool = [x for x in list(player.attack) + list(player.defense) if x is not None]
@@ -1605,6 +1612,11 @@ class HolyWarGUI(tk.Tk):
             if crosses_gte is not None and (crosses is None or crosses < int(crosses_gte)):
                 continue
             if crosses_lte is not None and (crosses is None or crosses > int(crosses_lte)):
+                continue
+            eff_strength = self.engine.get_effective_strength(c_uid)
+            if strength_gte is not None and eff_strength < int(strength_gte):
+                continue
+            if strength_lte is not None and eff_strength > int(strength_lte):
                 continue
 
             total += 1
@@ -1699,10 +1711,14 @@ class HolyWarGUI(tk.Tk):
             zones = [str(target.zone or "field").strip().lower()]
 
         type_filter = {x.lower().strip() for x in target.card_filter.card_type_in}
+        name_in = {str(x).lower().strip() for x in (target.card_filter.name_in or []) if str(x).strip()}
+        name_equals = target.card_filter.name_equals.lower().strip() if target.card_filter.name_equals else None
         name_contains = target.card_filter.name_contains.lower().strip() if target.card_filter.name_contains else None
         name_not_contains = target.card_filter.name_not_contains.lower().strip() if target.card_filter.name_not_contains else None
         crosses_gte = target.card_filter.crosses_gte
         crosses_lte = target.card_filter.crosses_lte
+        strength_gte = target.card_filter.strength_gte
+        strength_lte = target.card_filter.strength_lte
 
         exclude_buildings_if_my_building_zone_occupied = (
             target.card_filter.exclude_buildings_if_my_building_zone_occupied
@@ -1714,6 +1730,10 @@ class HolyWarGUI(tk.Tk):
             crosses = getattr(inst.definition, "crosses", None)
 
             if type_filter and ctype not in type_filter:
+                return False
+            if name_in and name not in name_in:
+                return False
+            if name_equals and name != name_equals:
                 return False
 
             if name_contains and name_contains not in name:
@@ -1733,6 +1753,12 @@ class HolyWarGUI(tk.Tk):
                 return False
 
             if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
+                return False
+
+            eff_strength = engine.get_effective_strength(inst.uid)
+            if strength_gte is not None and eff_strength < int(strength_gte):
+                return False
+            if strength_lte is not None and eff_strength > int(strength_lte):
                 return False
 
             return True
@@ -1831,10 +1857,14 @@ class HolyWarGUI(tk.Tk):
             zones = [str(target.zone or "field").strip().lower()]
 
         type_filter = {x.lower().strip() for x in target.card_filter.card_type_in}
+        name_in = {str(x).lower().strip() for x in (target.card_filter.name_in or []) if str(x).strip()}
+        name_equals = target.card_filter.name_equals.lower().strip() if target.card_filter.name_equals else None
         name_contains = target.card_filter.name_contains.lower().strip() if target.card_filter.name_contains else None
         name_not_contains = target.card_filter.name_not_contains.lower().strip() if target.card_filter.name_not_contains else None
         crosses_gte = target.card_filter.crosses_gte
         crosses_lte = target.card_filter.crosses_lte
+        strength_gte = target.card_filter.strength_gte
+        strength_lte = target.card_filter.strength_lte
 
         exclude_buildings_if_my_building_zone_occupied = (
             target.card_filter.exclude_buildings_if_my_building_zone_occupied
@@ -1848,6 +1878,10 @@ class HolyWarGUI(tk.Tk):
             if target.card_filter.exclude_event_card and inst_uid == uid:
                 return False
             if type_filter and ctype not in type_filter:
+                return False
+            if name_in and name not in name_in:
+                return False
+            if name_equals and name != name_equals:
                 return False
             if name_contains and name_contains not in name:
                 return False
@@ -1864,6 +1898,11 @@ class HolyWarGUI(tk.Tk):
             if crosses_gte is not None and (crosses is None or crosses < crosses_gte):
                 return False
             if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
+                return False
+            eff_strength = engine.get_effective_strength(inst_uid)
+            if strength_gte is not None and eff_strength < int(strength_gte):
+                return False
+            if strength_lte is not None and eff_strength > int(strength_lte):
                 return False
             return True
 
@@ -2420,26 +2459,46 @@ class HolyWarGUI(tk.Tk):
             self.begin_turn_if_needed()
             return
         if mode == "manual":
-            hand_choices: list[tuple[str, str]] = []
-            for h_uid in self.engine.state.players[own_idx].hand:
-                inst = self.engine.state.instances[h_uid]
-                if inst.definition.name in {"Fenrir", "Jormungandr"}:
-                    hand_choices.append((f"{inst.definition.name} ({inst.definition.card_type})", inst.definition.name))
-            if not hand_choices:
-                messagebox.showwarning("Abilita non valida", "Nessuna carta disponibile in mano.")
-                return
-            canceled, target = self._open_board_target_picker(
-                title="Attiva Abilita",
-                prompt="Scegli la carta da evocare.",
-                choices=hand_choices,
-                allow_multi=False,
-                min_targets=1,
-                max_targets=1,
-                allow_none=False,
-                allow_manual=False,
-            )
-            if canceled or not target:
-                return
+            target_spec = self._first_activate_target_spec(uid)
+            if target_spec is not None:
+                candidates = self._guided_target_candidates_for_spec(uid, target_spec)
+                choices = [(self._format_guided_candidate(c, own_idx), c) for c in candidates]
+                min_targets = target_spec.min_targets if target_spec.min_targets is not None else 1
+                if target_spec.max_targets_from:
+                    max_targets = self._count_cards_from_rule(uid, target_spec.max_targets_from)
+                else:
+                    max_targets = target_spec.max_targets if target_spec.max_targets is not None else 1
+                allow_none = min_targets == 0 and self._can_activate_target(own_idx, source, None)
+                if not choices and not allow_none:
+                    messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
+                    return
+                canceled, target = self._open_board_target_picker(
+                    title="Attiva Abilita",
+                    prompt="Seleziona un bersaglio valido per l'abilita.",
+                    choices=choices,
+                    allow_multi=(max_targets is None or max_targets > 1),
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=allow_none,
+                    allow_manual=False,
+                    card_uid=uid,
+                )
+                if canceled:
+                    return
+            else:
+                canceled, target = self._open_board_target_picker(
+                    title="Attiva Abilita",
+                    prompt="Inserisci manualmente il bersaglio dell'abilita.",
+                    choices=[],
+                    allow_multi=False,
+                    min_targets=0,
+                    max_targets=1,
+                    allow_none=True,
+                    allow_manual=True,
+                    card_uid=uid,
+                )
+                if canceled:
+                    return
             res = self.engine.activate_ability(own_idx, source, target)
             if res.ok:
                 self.start_chain(actor_idx=own_idx)
@@ -2463,7 +2522,10 @@ class HolyWarGUI(tk.Tk):
             valid_tokens = [
                 tok
                 for tok in valid_tokens
-                if self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
+                if (
+                    not self._is_board_token(tok)
+                    or self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
+                )
             ]
             if not valid_tokens and not allow_no_target:
                 messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
