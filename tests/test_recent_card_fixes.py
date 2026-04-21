@@ -837,6 +837,105 @@ def test_memoria_della_pietra_summons_only_pietra_saint_from_graveyard() -> None
     assert bianca_uid in p0.graveyard
 
 
+def test_pietre_aguzze_triggers_only_on_opponent_saint_entry() -> None:
+    cards = [
+        CardDefinition("Pietre Aguzze", "Artefatto", "1", 1, None, "", "ANI-1"),
+        CardDefinition("MioSanto", "Santo", "2", 5, 2, "", "ANI-1"),
+        CardDefinition("SantoNemico", "Santo", "2", 5, 2, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=146)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+
+    art_idx = _force_card_in_hand(engine, 0, "Pietre Aguzze")
+    assert engine.play_card(0, art_idx, None).ok
+
+    p0.sin = 0
+    p1.sin = 0
+
+    # Own saint entry must NOT trigger Pietre Aguzze.
+    my_idx = _force_card_in_hand(engine, 0, "MioSanto")
+    assert engine.play_card(0, my_idx, "a1").ok
+    assert p0.sin == 0
+    assert p1.sin == 0
+
+    # Opponent saint entry MUST trigger once (+2 Sin to opponent).
+    engine.end_turn()
+    engine.start_turn()
+    enemy_idx = _force_card_in_hand(engine, 1, "SantoNemico")
+    assert engine.play_card(1, enemy_idx, "a1").ok
+    assert p0.sin == 0
+    assert p1.sin == 2
+
+
+def test_defense_promotes_when_attack_leaves_field_to_hand_deck_or_excommunicated() -> None:
+    cards = [
+        CardDefinition("Front", "Santo", "2", 5, 2, "", "ANI-1"),
+        CardDefinition("Back", "Santo", "2", 5, 2, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+
+    # to hand
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=147)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i_front = _force_card_in_hand(engine, 0, "Front")
+    assert engine.play_card(0, i_front, "a1").ok
+    i_back = _force_card_in_hand(engine, 0, "Back")
+    assert engine.play_card(0, i_back, "d1").ok
+    p0 = engine.state.players[0]
+    front_uid = p0.attack[0]
+    back_uid = p0.defense[0]
+    assert front_uid and back_uid
+    assert engine.move_board_card_to_hand(0, front_uid)
+    assert p0.attack[0] == back_uid
+    assert p0.defense[0] is None
+
+    # to deck (relicario) via runtime move
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=148)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i_front = _force_card_in_hand(engine, 0, "Front")
+    assert engine.play_card(0, i_front, "a1").ok
+    i_back = _force_card_in_hand(engine, 0, "Back")
+    assert engine.play_card(0, i_back, "d1").ok
+    p0 = engine.state.players[0]
+    front_uid = p0.attack[0]
+    back_uid = p0.defense[0]
+    assert front_uid and back_uid
+    runtime_cards._move_uid_to_zone(engine, front_uid, "relicario", 0)  # noqa: SLF001 - regression test on runtime path
+    assert p0.attack[0] == back_uid
+    assert p0.defense[0] is None
+
+    # to excommunicated
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=149)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    i_front = _force_card_in_hand(engine, 0, "Front")
+    assert engine.play_card(0, i_front, "a1").ok
+    i_back = _force_card_in_hand(engine, 0, "Back")
+    assert engine.play_card(0, i_back, "d1").ok
+    p0 = engine.state.players[0]
+    front_uid = p0.attack[0]
+    back_uid = p0.defense[0]
+    assert front_uid and back_uid
+    engine.excommunicate_card(0, front_uid)
+    assert p0.attack[0] == back_uid
+    assert p0.defense[0] is None
+
+
 def test_pkad_nok_destroys_both_cards_in_combat() -> None:
     cards = [
         CardDefinition("Pkad-nok", "Santo", "3", 6, 3, "", "PHD-1"),

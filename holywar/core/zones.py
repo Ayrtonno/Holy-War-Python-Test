@@ -44,9 +44,11 @@ def find_board_owner_of_uid(engine: "GameEngine", uid: str) -> int | None:
 
 # Removes a card from every board slot where it may be present.
 def remove_from_board(engine: "GameEngine", player: PlayerState, uid: str) -> None:
+    removed_attack_slot: int | None = None
     for i, slot_uid in enumerate(player.attack):
         if slot_uid == uid:
             player.attack[i] = None
+            removed_attack_slot = i
     for i, slot_uid in enumerate(player.defense):
         if slot_uid == uid:
             player.defense[i] = None
@@ -55,6 +57,14 @@ def remove_from_board(engine: "GameEngine", player: PlayerState, uid: str) -> No
             player.artifacts[i] = None
     if player.building == uid:
         player.building = None
+    if removed_attack_slot is not None:
+        back_uid = player.defense[removed_attack_slot]
+        if back_uid is not None and player.attack[removed_attack_slot] is None:
+            player.attack[removed_attack_slot] = back_uid
+            player.defense[removed_attack_slot] = None
+            engine.state.log(
+                f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
+            )
 
 
 def _equipped_target_uid(engine: "GameEngine", equipment_uid: str) -> str | None:
@@ -276,6 +286,13 @@ def move_board_card_to_hand(engine: "GameEngine", owner_idx: int, uid: str) -> b
         idx = player.attack.index(uid)
         player.attack[idx] = None
         was_on_field = True
+        back_uid = player.defense[idx]
+        if back_uid is not None:
+            player.attack[idx] = back_uid
+            player.defense[idx] = None
+            engine.state.log(
+                f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
+            )
     if uid in player.defense:
         idx = player.defense.index(uid)
         player.defense[idx] = None

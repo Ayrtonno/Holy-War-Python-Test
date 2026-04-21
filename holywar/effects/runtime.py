@@ -1063,6 +1063,14 @@ class RuntimeCardManager:
                     event_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))
                     if event_uid != _source:
                         return
+                if _te.trigger.event == "on_opponent_saint_enters_field":
+                    saint_uid = str(ctx.payload.get("saint", ctx.payload.get("card", ""))).strip()
+                    source_inst = ctx.engine.state.instances.get(_source)
+                    saint_inst = ctx.engine.state.instances.get(saint_uid)
+                    if source_inst is None or saint_inst is None:
+                        return
+                    if int(saint_inst.owner) == int(source_inst.owner):
+                        return
                 if not self._event_matches(ctx, _owner, _te.trigger.condition):
                     return
                 source_inst = ctx.engine.state.instances.get(_source)
@@ -1660,6 +1668,14 @@ class RuntimeCardManager:
             for i, slot_uid in enumerate(zone_list):
                 if slot_uid == uid:
                     zone_list[i] = None
+                    if zone_list is player.attack:
+                        back_uid = player.defense[i]
+                        if back_uid is not None and player.attack[i] is None:
+                            player.attack[i] = back_uid
+                            player.defense[i] = None
+                            engine.state.log(
+                                f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
+                            )
                     return True
 
         if player.building == uid:
