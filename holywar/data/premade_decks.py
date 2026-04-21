@@ -1,22 +1,19 @@
 ﻿from __future__ import annotations
 
-# Deck premade forniti dall'utente.
-# Ogni entry: (nome carta, copie)
-
 PREMADE_DECKS: dict[str, dict] = {
     # Cristianesimo
     "test_giocatore": {
         "religion": "Cristianesimo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Loki", 10), ("Fenrir", 10), ("Jormungandr", 10), ("Skadi", 10), ("Ragnarok", 10),
+            ("Pietra Nera", 7), ("Pietra Focaia", 7), ("Pietra Levigata", 7), ("Pietre Aguzze", 7), ("Albero di Pietra", 7),
         ],
     },
     "test_nemico": {
         "religion": "Cristianesimo",
         "name": "TEST NEMICO",
         "cards": [
-            ("Loki", 10), ("Fenrir", 10), ("Yggdrasil", 10), ("Thor", 10), ("Odino", 10),
+            ("Loki", 10), ("Ragnarok", 10), ("Bifrost", 10), ("Thor", 10), ("Odino", 10),
         ],
     },
     "cristianesimo_sette_sigilli": {

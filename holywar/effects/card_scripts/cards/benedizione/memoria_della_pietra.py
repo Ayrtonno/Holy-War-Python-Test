@@ -16,6 +16,7 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {
                     "name_contains": "Pietra",
+                    "card_type_in": ["santo", "token"],
                 },
                 "min_targets": 1,
                 "max_targets": 1,

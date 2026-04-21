@@ -63,6 +63,7 @@ SUPPORTED_CONDITION_KEYS = {
     "target_is_damaged",
     "controller_hand_size_lte",
     "stored_card_matches",
+    "controller_saints_sent_to_graveyard_this_turn_gte",
 }
 
 EFFECT_ACTION_ALIASES = {
@@ -111,6 +112,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "move_to_deck_bottom",
     "move_to_relicario",
     "request_end_turn",
+    "set_next_turn_draw_override",
+    "set_double_cost_next_turn",
     "shuffle_deck",
     "shuffle_target_owner_decks",
     "return_to_hand_once_per_turn",
@@ -134,6 +137,23 @@ SUPPORTED_EFFECT_ACTIONS = {
     "draw_cards_from_flag",
     "choose_targets",
     "choose_option",
+    "inflict_sin_from_flag",
+    "store_target_faith",
+    "excommunicate_card_no_sin",
+    "store_target_faith_and_excommunicate_no_sin",
+    "move_first_to_hand",
+    "absorb_target_stats_and_link",
+    "destroy_source_if_linked_to_event_card",
+    "choose_artifact_from_relicario_then_shuffle",
+    "inflict_sin_from_source_paid_inspiration",
+    "optional_recover_all_matching_then_shuffle",
+    "optional_recover_matching_then_shuffle",
+    "destroy_all_saints_except_selected",
+    "retaliate_damage_to_event_source_if_enemy_saint",
+    "grant_attack_barrier",
+    "equip_card",
+    "unequip_card",
+    "destroy_equipment",
 }
 
 
@@ -236,6 +256,9 @@ class CardScript:
     play_requirements: dict[str, Any] = field(default_factory=dict)
     activate_targeting: str = "auto"
     attack_targeting: str = "auto"
+    can_attack: bool = True
+    prevent_incoming_damage_if_less_than: int | None = None
+    prevent_incoming_damage_to_card_types: list[str] = field(default_factory=list)
     battle_survival_mode: str = "none"
     battle_survival_names: list[str] = field(default_factory=list)
     battle_survival_token_name: str | None = None
@@ -430,6 +453,15 @@ class RuntimeCardManager:
                 play_targeting=str(spec.get("play_targeting", "auto")),
                 activate_targeting=str(spec.get("activate_targeting", "auto")),
                 attack_targeting=str(spec.get("attack_targeting", "auto")),
+                can_attack=bool(spec.get("can_attack", True)),
+                prevent_incoming_damage_if_less_than=(
+                    int(spec["prevent_incoming_damage_if_less_than"])
+                    if spec.get("prevent_incoming_damage_if_less_than") is not None
+                    else None
+                ),
+                prevent_incoming_damage_to_card_types=[
+                    str(v) for v in list(spec.get("prevent_incoming_damage_to_card_types", []) or [])
+                ],
                 battle_survival_mode=str(spec.get("battle_survival_mode", "none")),
                 battle_survival_names=list(spec.get("battle_survival_names", []) or []),
                 battle_survival_token_name=(
@@ -519,6 +551,24 @@ class RuntimeCardManager:
         if script is None:
             return "auto"
         return str(script.attack_targeting or "auto").strip().lower() or "auto"
+
+    def get_can_attack(self, card_name: str) -> bool:
+        script = self.get_script(card_name)
+        if script is None:
+            return True
+        return bool(script.can_attack)
+
+    def get_prevent_incoming_damage_if_less_than(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.prevent_incoming_damage_if_less_than
+
+    def get_prevent_incoming_damage_to_card_types(self, card_name: str) -> list[str]:
+        script = self.get_script(card_name)
+        if script is None:
+            return []
+        return [str(v) for v in script.prevent_incoming_damage_to_card_types if str(v).strip()]
 
     def get_battle_survival_mode(self, card_name: str) -> str:
         script = self.get_script(card_name)
@@ -898,6 +948,18 @@ class RuntimeCardManager:
                 self._run_enter_actions(engine, owner_idx, source_uid, script.on_enter_actions, start_index=start_index)
             elif mode == "activate":
                 self._run_activate_actions(engine, owner_idx, source_uid, script.on_activate_actions, start_index=start_index)
+            elif mode == "trigger_action":
+                action_name = str(flags.get("_runtime_trigger_action", "")).strip()
+                target_player = str(flags.get("_runtime_trigger_target_player", "me")).strip() or "me"
+                trigger_card_name = str(flags.get("_runtime_trigger_card_name", "")).strip() or None
+                if action_name:
+                    self._apply_effect(
+                        engine,
+                        owner_idx,
+                        source_uid,
+                        [],
+                        EffectSpec(action=action_name, target_player=target_player, card_name=trigger_card_name),
+                    )
         finally:
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
@@ -913,6 +975,9 @@ class RuntimeCardManager:
                 flags.pop("_runtime_resume_owner", None)
                 flags.pop("_runtime_action_index_resume", None)
                 flags.pop("_runtime_pending_mode", None)
+                flags.pop("_runtime_trigger_action", None)
+                flags.pop("_runtime_trigger_target_player", None)
+                flags.pop("_runtime_trigger_card_name", None)
 
     def _run_enter_actions(
         self,
@@ -1012,6 +1077,7 @@ class RuntimeCardManager:
                 ctx.engine.state.flags["_runtime_event_card"] = str(
                     ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", "")))
                 )
+                ctx.engine.state.flags["_runtime_event_source"] = str(ctx.payload.get("source", ""))
                 ctx.engine.state.flags["_runtime_event_name"] = str(ctx.event)
                 ctx.engine.state.flags["_runtime_source_card"] = _source
                 try:
@@ -1022,6 +1088,7 @@ class RuntimeCardManager:
                     self._apply_effect(ctx.engine, _owner, _source, targets, _te.effect)
                 finally:
                     ctx.engine.state.flags.pop("_runtime_event_card", None)
+                    ctx.engine.state.flags.pop("_runtime_event_source", None)
                     ctx.engine.state.flags.pop("_runtime_event_name", None)
                     ctx.engine.state.flags.pop("_runtime_source_card", None)
 
@@ -1346,6 +1413,12 @@ class RuntimeCardManager:
             source_uid = str(engine.state.flags.get("_runtime_source_card", ""))
             if source_uid:
                 pool.append(source_uid)
+        elif ttype == "equipped_target_of_source":
+            source_uid = str(engine.state.flags.get("_runtime_source_card", "")).strip()
+            if source_uid:
+                equipped_uid = self._equipment_target_uid(engine, source_uid)
+                if equipped_uid:
+                    pool.append(equipped_uid)
         elif ttype == "selected_target":
             raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
@@ -1644,6 +1717,48 @@ class RuntimeCardManager:
             return True
 
         return False
+
+    def _equipment_target_uid(self, engine: GameEngine, equipment_uid: str) -> str | None:
+        inst = engine.state.instances.get(equipment_uid)
+        if inst is None:
+            return None
+        for tag in inst.blessed:
+            if not isinstance(tag, str) or not tag.startswith("equipped_to:"):
+                continue
+            target_uid = tag.split(":", 1)[1].strip()
+            if target_uid:
+                return target_uid
+        return None
+
+    def _clear_equipment_link(self, engine: GameEngine, equipment_uid: str) -> str | None:
+        equipment = engine.state.instances.get(equipment_uid)
+        if equipment is None:
+            return None
+        target_uid = self._equipment_target_uid(engine, equipment_uid)
+        equipment.blessed = [
+            tag for tag in equipment.blessed if not (isinstance(tag, str) and tag.startswith("equipped_to:"))
+        ]
+        if target_uid and target_uid in engine.state.instances:
+            target_inst = engine.state.instances[target_uid]
+            target_inst.blessed = [
+                tag for tag in target_inst.blessed if str(tag) != f"equipped_by:{equipment_uid}"
+            ]
+        return target_uid
+
+    def _place_equipment_on_field(self, engine: GameEngine, owner_idx: int, uid: str) -> bool:
+        player = engine.state.players[owner_idx]
+        if uid in player.artifacts:
+            return True
+
+        slot = next((i for i, slot_uid in enumerate(player.artifacts) if slot_uid is None), None)
+        if slot is None:
+            slot = len(player.artifacts) - 1
+            replaced_uid = player.artifacts[slot]
+            if replaced_uid:
+                engine.send_to_graveyard(engine.state.instances[replaced_uid].owner, replaced_uid)
+        self._remove_uid_from_all_player_zones(engine, owner_idx, uid)
+        player.artifacts[slot] = uid
+        return True
     
     def _summon_generated_token(
         self,
@@ -1736,12 +1851,141 @@ class RuntimeCardManager:
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
             return
+        if action == "grant_attack_barrier":
+            charges = max(1, int(effect.amount or 1))
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                for _ in range(charges):
+                    inst.blessed.append(f"barrier_once:attack:{source_uid}")
+            return
+        if action == "equip_card":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            for t_uid in targets:
+                target_inst = engine.state.instances.get(t_uid)
+                if target_inst is None:
+                    continue
+                if not self._is_uid_on_field(engine, t_uid):
+                    continue
+                previous_target = self._clear_equipment_link(engine, source_uid)
+                if not self._place_equipment_on_field(engine, source_inst.owner, source_uid):
+                    if previous_target and previous_target in engine.state.instances:
+                        source_inst.blessed.append(f"equipped_to:{previous_target}")
+                        prev_inst = engine.state.instances[previous_target]
+                        if f"equipped_by:{source_uid}" not in prev_inst.blessed:
+                            prev_inst.blessed.append(f"equipped_by:{source_uid}")
+                    continue
+                source_inst.blessed.append(f"equipped_to:{t_uid}")
+                equip_tag = f"equipped_by:{source_uid}"
+                if equip_tag not in target_inst.blessed:
+                    target_inst.blessed.append(equip_tag)
+                engine._emit_event(
+                    "on_player_equips_card",
+                    owner_idx,
+                    card=source_uid,
+                    equipment=source_uid,
+                    target=t_uid,
+                )
+                break
+            return
+        if action == "unequip_card":
+            to_zone = str(effect.to_zone or "").strip()
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                target_uid = self._clear_equipment_link(engine, t_uid)
+                engine._emit_event(
+                    "on_player_unequips_card",
+                    owner_idx,
+                    card=t_uid,
+                    equipment=t_uid,
+                    target=target_uid,
+                )
+                if to_zone:
+                    self._move_uid_to_zone(engine, t_uid, to_zone, inst.owner)
+            return
+        if action == "destroy_equipment":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                target_uid = self._clear_equipment_link(engine, t_uid)
+                engine._emit_event(
+                    "on_player_unequips_card",
+                    owner_idx,
+                    card=t_uid,
+                    equipment=t_uid,
+                    target=target_uid,
+                )
+                engine.send_to_graveyard(inst.owner, t_uid)
+            return
+        if action == "absorb_target_stats_and_link":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            for t_uid in targets:
+                target_inst = engine.state.instances.get(t_uid)
+                if target_inst is None:
+                    continue
+                gain_faith = max(0, int(target_inst.current_faith or 0))
+                gain_strength = max(0, int(engine.get_effective_strength(t_uid)))
+                source_inst.current_faith = max(0, int(source_inst.current_faith or 0) + gain_faith)
+                if gain_strength > 0:
+                    source_inst.blessed.append(f"buff_str:{gain_strength}")
+                link_tag = f"levigata_link:{t_uid}"
+                if link_tag not in source_inst.blessed:
+                    source_inst.blessed.append(link_tag)
+                break
+            return
         if action == "decrease_strength":
             amount = max(0, int(effect.amount))
             if amount <= 0:
                 return
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{-amount}")
+            return
+        if action == "retaliate_damage_to_event_source_if_enemy_saint":
+            dmg = max(0, int(effect.amount or 0))
+            if dmg <= 0:
+                return
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            attacker_uid = str(engine.state.flags.get("_runtime_event_source", "")).strip()
+            if not attacker_uid or attacker_uid not in engine.state.instances:
+                return
+            attacker_inst = engine.state.instances[attacker_uid]
+            if int(attacker_inst.owner) == int(owner_idx):
+                return
+            if _norm(attacker_inst.definition.card_type) not in {"santo", "token"}:
+                return
+            dmg = engine._apply_damage_mitigation(attacker_inst.owner, dmg, target_uid=attacker_uid)
+            if dmg <= 0:
+                return
+            before = attacker_inst.current_faith or 0
+            attacker_inst.current_faith = max(0, (attacker_inst.current_faith or 0) - dmg)
+            after = attacker_inst.current_faith or 0
+            engine.state.log(
+                f"{attacker_inst.definition.name} subisce {dmg} danni di ritorsione (Fede {before}->{after})."
+            )
+            if (attacker_inst.current_faith or 0) <= 0:
+                engine.destroy_saint_by_uid(attacker_inst.owner, attacker_uid, cause="effect")
+            return
+        if action == "destroy_source_if_linked_to_event_card":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            event_uid = str(engine.state.flags.get("_runtime_event_card", "")).strip()
+            if not event_uid:
+                return
+            link_tag = f"levigata_link:{event_uid}"
+            if link_tag not in source_inst.blessed:
+                return
+            engine.destroy_saint_by_uid(source_inst.owner, source_uid, cause="effect")
             return
         if action == "reveal_stored_card":
             store_name = str(effect.stored or "").strip()
@@ -1796,6 +2040,43 @@ class RuntimeCardManager:
                 break
 
             engine.state.flags[flag_name] = value
+            return
+
+        if action == "store_target_faith":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            value = 0
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                value = max(0, int(inst.current_faith or 0))
+                break
+
+            engine.state.flags[flag_name] = value
+            return
+        if action == "store_target_faith_and_excommunicate_no_sin":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            value = 0
+            selected_uid: str | None = None
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                value = max(0, int(inst.current_faith or 0))
+                selected_uid = t_uid
+                break
+
+            engine.state.flags[flag_name] = value
+            if selected_uid:
+                target_inst = engine.state.instances.get(selected_uid)
+                if target_inst is not None:
+                    engine.excommunicate_card(target_inst.owner, selected_uid)
             return
         
         if action == "store_top_card_of_zone":
@@ -2115,7 +2396,12 @@ class RuntimeCardManager:
                 return
             for t_uid in targets:
                 inst = engine.state.instances[t_uid]
-                inst.current_faith = max(0, (inst.current_faith or 0) - amount)
+                dmg = amount
+                if _norm(inst.definition.card_type) in {"santo", "token"}:
+                    dmg = engine._apply_damage_mitigation(inst.owner, dmg, target_uid=t_uid)
+                if dmg <= 0:
+                    continue
+                inst.current_faith = max(0, (inst.current_faith or 0) - dmg)
                 if (inst.current_faith or 0) <= 0 and _norm(inst.definition.card_type) in {"santo", "token"}:
                     engine.destroy_saint_by_uid(inst.owner, t_uid, cause="effect")
             return
@@ -2566,6 +2852,43 @@ class RuntimeCardManager:
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             engine.gain_sin(target, max(0, int(effect.amount)))
             return
+        if action == "inflict_sin_from_source_paid_inspiration":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            amount = 0
+            for tag in list(source_inst.blessed):
+                if not isinstance(tag, str) or not tag.startswith("paid_inspiration_on_summon:"):
+                    continue
+                try:
+                    amount = max(0, int(tag.split(":", 1)[1]))
+                except (TypeError, ValueError):
+                    amount = 0
+                break
+            if amount <= 0:
+                return
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            engine.gain_sin(target, amount)
+            return
+        if action == "inflict_sin_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = int(raw_value)
+            except (TypeError, ValueError):
+                amount = 0
+
+            if amount <= 0:
+                engine.state.flags.pop(flag_name, None)
+                return
+
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            engine.gain_sin(target, amount)
+            engine.state.flags.pop(flag_name, None)
+            return
         if action == "inflict_sin_to_target_owners":
             per_card = max(0, int(effect.amount))
             if per_card <= 0:
@@ -2596,12 +2919,53 @@ class RuntimeCardManager:
                     continue
                 engine.destroy_any_card(inst.owner, t_uid)
             return
+        if action == "destroy_all_saints_except_selected":
+            required_opponent_selected = max(0, int(effect.min_targets if effect.min_targets is not None else 0))
+            selected_set = {
+                uid for uid in targets
+                if uid in engine.state.instances and _norm(engine.state.instances[uid].definition.card_type) in {"santo", "token"}
+            }
+            selected_opponent = sum(
+                1 for uid in selected_set
+                if int(engine.state.instances[uid].owner) != int(owner_idx)
+            )
+            if selected_opponent < required_opponent_selected:
+                engine.state.log("Tornado: selezione non valida, serve almeno un Santo avversario tra i bersagli.")
+                return
+
+            to_destroy: list[tuple[int, str]] = []
+            for p_idx in (0, 1):
+                p = engine.state.players[p_idx]
+                for uid in list(p.attack + p.defense):
+                    if uid is None:
+                        continue
+                    if uid in selected_set:
+                        continue
+                    inst = engine.state.instances.get(uid)
+                    if inst is None:
+                        continue
+                    if _norm(inst.definition.card_type) not in {"santo", "token"}:
+                        continue
+                    to_destroy.append((inst.owner, uid))
+
+            for real_owner, uid in to_destroy:
+                if uid not in engine.state.instances:
+                    continue
+                engine.destroy_saint_by_uid(real_owner, uid, cause="effect")
+            return
         if action == "excommunicate_card":
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
                     continue
                 engine.destroy_saint_by_uid(inst.owner, t_uid, excommunicate=True, cause="effect")
+            return
+        if action == "excommunicate_card_no_sin":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                engine.excommunicate_card(inst.owner, t_uid)
             return
         if action == "excommunicate_top_cards_from_relicario":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -2629,6 +2993,163 @@ class RuntimeCardManager:
                 moved = self._move_uid_to_zone(engine, t_uid, "hand", owner)
                 if moved:
                     engine.state.log(f"{inst.definition.name} viene aggiunta alla mano.")
+            return
+        if action == "move_first_to_hand":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                owner = inst.owner
+                moved = self._move_uid_to_zone(engine, t_uid, "hand", owner)
+                if moved:
+                    engine.state.log(f"{inst.definition.name} viene aggiunta alla mano.")
+                break
+            return
+        if action == "choose_artifact_from_relicario_then_shuffle":
+            flags = engine.state.flags
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            expected_choice_source = f"{source_uid}:choose_artifact_from_relicario_then_shuffle:{target}"
+
+            if choice_ready and choice_source == expected_choice_source:
+                selected_uid = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                if selected_uid in candidates and selected_uid in player.deck:
+                    self._move_uid_to_zone(engine, selected_uid, "hand", target)
+                engine.rng.shuffle(player.deck)
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                return
+
+            candidates = [
+                uid for uid in player.deck
+                if uid in engine.state.instances and _norm(engine.state.instances[uid].definition.card_type) == _norm("artefatto")
+            ]
+            if not candidates:
+                engine.rng.shuffle(player.deck)
+                return
+
+            flags["_runtime_choice_source"] = expected_choice_source
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = "Pietra Focaia"
+            flags["_runtime_choice_prompt"] = "Scegli un Artefatto dal reliquiario da aggiungere alla mano."
+            flags["_runtime_choice_min_targets"] = "1"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            flags["_runtime_resume_source"] = source_uid
+            flags["_runtime_resume_owner"] = str(owner_idx)
+            flags["_runtime_pending_mode"] = "trigger_action"
+            flags["_runtime_trigger_action"] = "choose_artifact_from_relicario_then_shuffle"
+            flags["_runtime_trigger_target_player"] = str(effect.target_player or "me")
+            return
+        if action in {"optional_recover_all_matching_then_shuffle", "optional_recover_matching_then_shuffle"}:
+            flags = engine.state.flags
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            needle = _norm(effect.card_name or "")
+            from_zone = _norm(effect.from_zone or effect.zone or "graveyard")
+            to_zone = str(effect.to_zone or "relicario").strip() or "relicario"
+            source_to_zone_on_yes = str(effect.to_zone_if or "").strip()
+            should_shuffle = bool(effect.shuffle_after)
+            max_to_move = int(effect.amount or 0)
+
+            if from_zone == "graveyard":
+                source_pool = list(player.graveyard)
+            elif from_zone in {"deck", "relicario"}:
+                source_pool = list(player.deck)
+            elif from_zone == "excommunicated":
+                source_pool = list(player.excommunicated)
+            elif from_zone == "hand":
+                source_pool = list(player.hand)
+            else:
+                source_pool = []
+
+            candidates = [
+                uid for uid in source_pool
+                if uid in engine.state.instances
+                and (not needle or needle in _norm(engine.state.instances[uid].definition.name))
+            ]
+            if max_to_move > 0:
+                candidates = candidates[:max_to_move]
+            candidate_names = [engine.state.instances[uid].definition.name for uid in candidates]
+            listed = ", ".join(candidate_names) if candidate_names else "Nessuna carta."
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            expected_choice_source = (
+                f"{source_uid}:optional_recover_matching_then_shuffle:{target}:{from_zone}:{to_zone}:{needle}:{max_to_move}"
+            )
+
+            if choice_ready and choice_source == expected_choice_source:
+                selected = str(flags.get("_runtime_choice_selected", "")).strip().lower()
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_values",
+                    "_runtime_choice_labels",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+
+                if selected != "yes":
+                    return
+
+                moved = 0
+                for uid in candidates:
+                    if self._move_uid_to_zone(engine, uid, to_zone, target):
+                        moved += 1
+                if should_shuffle:
+                    engine.rng.shuffle(player.deck)
+                if moved > 0 and source_to_zone_on_yes:
+                    source_inst = engine.state.instances.get(source_uid)
+                    if source_inst is not None:
+                        self._move_uid_to_zone(engine, source_uid, source_to_zone_on_yes, source_inst.owner)
+                engine.state.log(f"Effetto opzionale risolto: {moved} carte spostate in {to_zone}.")
+                return
+
+            labels = {"yes": "Si, attiva", "no": "No, non attivare"}
+            flags["_runtime_choice_source"] = expected_choice_source
+            flags["_runtime_choice_values"] = "yes;;no"
+            flags["_runtime_choice_labels"] = json.dumps(labels, ensure_ascii=False)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = "Albero di Pietra"
+            flags["_runtime_choice_prompt"] = (
+                "Attivare l'effetto di Albero di Pietra?\n\n"
+                f"Carte che verranno spostate da {from_zone} a {to_zone}: {listed}"
+            )
+            flags["_runtime_choice_min_targets"] = "1"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            flags["_runtime_resume_source"] = source_uid
+            flags["_runtime_resume_owner"] = str(owner_idx)
+            flags["_runtime_pending_mode"] = "trigger_action"
+            flags["_runtime_trigger_action"] = "optional_recover_matching_then_shuffle"
+            flags["_runtime_trigger_target_player"] = str(effect.target_player or "me")
+            flags["_runtime_trigger_card_name"] = str(effect.card_name or "")
             return
         if action == "summon_card_from_hand":
             selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
@@ -2662,9 +3183,10 @@ class RuntimeCardManager:
             engine.state.log(f"{player.name} evoca {inst.definition.name} dalla mano.")
             engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone="hand")
             engine._emit_event("on_summoned_from_hand", owner_idx, card=chosen_uid)
-            if _norm(inst.definition.card_type) == _norm("token"):
+            ctype = _norm(inst.definition.card_type)
+            if ctype == _norm("token"):
                 engine._emit_event("on_token_summoned", owner_idx, token=chosen_uid, summoner=owner_idx)
-            else:
+            elif ctype == _norm("santo"):
                 engine._emit_event("on_opponent_saint_enters_field", 1 - owner_idx, saint=chosen_uid)
             enter_msg = self.resolve_enter(engine, owner_idx, chosen_uid)
             if enter_msg:
@@ -2720,9 +3242,10 @@ class RuntimeCardManager:
                 engine._emit_event("on_summoned_from_graveyard", owner_idx, card=chosen_uid)
             elif actual_from_zone == "hand":
                 engine._emit_event("on_summoned_from_hand", owner_idx, card=chosen_uid)
-            if _norm(inst.definition.card_type) == _norm("token"):
+            ctype = _norm(inst.definition.card_type)
+            if ctype == _norm("token"):
                 engine._emit_event("on_token_summoned", owner_idx, token=chosen_uid, summoner=owner_idx)
-            else:
+            elif ctype == _norm("santo"):
                 engine._emit_event("on_opponent_saint_enters_field", 1 - owner_idx, saint=chosen_uid)
             enter_msg = self.resolve_enter(engine, owner_idx, chosen_uid)
             if enter_msg:
@@ -2836,9 +3359,10 @@ class RuntimeCardManager:
             engine.state.log(f"{player.name} posiziona {inst.definition.name}.")
             engine._emit_event("on_enter_field", owner_idx, card=source, from_zone="hand")
             engine._emit_event("on_summoned_from_hand", owner_idx, card=source)
-            if _norm(inst.definition.card_type) == _norm("token"):
+            ctype = _norm(inst.definition.card_type)
+            if ctype == _norm("token"):
                 engine._emit_event("on_token_summoned", owner_idx, token=source, summoner=owner_idx)
-            else:
+            elif ctype == _norm("santo"):
                 engine._emit_event("on_opponent_saint_enters_field", 1 - owner_idx, saint=source)
             enter_msg = self.resolve_enter(engine, owner_idx, source)
             if enter_msg:
@@ -2847,6 +3371,19 @@ class RuntimeCardManager:
         if action == "request_end_turn":
             runtime_state = engine.state.flags.setdefault("runtime_state", {})
             runtime_state["request_end_turn"] = True
+            return
+        if action == "set_next_turn_draw_override":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            amount = max(0, int(effect.amount or 0))
+            flags = engine.state.flags.setdefault("next_turn_draw_override", {"0": 0, "1": 0})
+            flags[str(target)] = amount
+            return
+        if action == "set_double_cost_next_turn":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            amount = max(0, int(effect.amount or 1))
+            flags = engine.state.flags.setdefault("double_cost_next_turn", {"0": 0, "1": 0})
+            key = str(target)
+            flags[key] = int(flags.get(key, 0)) + amount
             return
         if action == "swap_attack_defense":
             player = engine.state.players[owner_idx]
@@ -3141,6 +3678,11 @@ class RuntimeCardManager:
         hand_size_lte = condition.get("controller_hand_size_lte")
         if hand_size_lte is not None:
             if len(ctx.engine.state.players[owner_idx].hand) > int(hand_size_lte):
+                return False
+        saints_to_graveyard_gte = condition.get("controller_saints_sent_to_graveyard_this_turn_gte")
+        if saints_to_graveyard_gte is not None:
+            counts = ctx.engine.state.flags.get("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})
+            if int(counts.get(str(owner_idx), 0)) < int(saints_to_graveyard_gte):
                 return False
         altare_sigilli_gte = condition.get("controller_altare_sigilli_gte")
         if altare_sigilli_gte is not None:

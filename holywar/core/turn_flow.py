@@ -23,6 +23,8 @@ def initial_setup_draw(engine: "GameEngine") -> None:
         draw_cards(engine, idx, 5)
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["0"] = []
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["1"] = []
+    engine.state.flags.setdefault("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})["0"] = 0
+    engine.state.flags.setdefault("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})["1"] = 0
     engine.state.log("Setup iniziale completato: entrambi i giocatori hanno pescato 5 carte.")
 
 
@@ -110,6 +112,12 @@ def _summon_turn_start_tokens(engine: "GameEngine", current: int) -> None:
 # Resolves the active player's draw phase, including special draw modifiers.
 def _run_draw_phase(engine: "GameEngine", current: int) -> int:
     player = engine.state.players[current]
+    next_draw_override = engine.state.flags.setdefault("next_turn_draw_override", {"0": 0, "1": 0})
+    override_amount = int(next_draw_override.get(str(engine.state.active_player), 0) or 0)
+    if override_amount > 0:
+        next_draw_override[str(engine.state.active_player)] = 0
+        return draw_cards(engine, engine.state.active_player, override_amount)
+
     spore_pending = engine.state.flags.setdefault("spore_pending", {"0": False, "1": False})
     if spore_pending.get(str(engine.state.active_player), False):
         drawn = draw_cards(engine, engine.state.active_player, 8)
@@ -137,6 +145,15 @@ def start_turn(engine: "GameEngine") -> None:
     player = engine.state.players[current]
     runtime_state = ensure_runtime_state(engine)
     runtime_state["battle_phase_started"] = False
+    double_next = engine.state.flags.setdefault("double_cost_next_turn", {"0": 0, "1": 0})
+    pending_double = int(double_next.get(str(current), 0) or 0)
+    # "Next turn" cost taxes must start only on real active turns, never during preparation.
+    if pending_double > 0 and engine.state.phase != "preparation":
+        double_turns = engine.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0})
+        double_turns[str(current)] = int(double_turns.get(str(current), 0)) + pending_double
+        double_next[str(current)] = 0
+    engine.state.flags.setdefault("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})["0"] = 0
+    engine.state.flags.setdefault("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})["1"] = 0
     set_phase(engine, "turn_start")
     engine._emit_event("on_turn_start", current, player=current)
     engine._emit_event("on_my_turn_start", current, player=current)

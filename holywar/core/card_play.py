@@ -331,13 +331,22 @@ def resolve_quick_play_from_hand(engine: "GameEngine", player_idx: int, uid: str
         engine.state.log(f"{player.name} prova a usare {card.definition.name}, ma viene annullata da Barriera Magica.")
         return ActionResult(True, "Attivazione annullata da Barriera Magica.")
     resolved = resolve_card_effect(engine, player_idx, uid, target)
-    moved_elsewhere = (
-        uid in player.hand
-        or uid in player.deck
-        or uid in player.white_deck
-        or uid in player.graveyard
-        or uid in player.excommunicated
-    )
+    moved_elsewhere = False
+    for owner_idx in (0, 1):
+        p = engine.state.players[owner_idx]
+        if (
+            uid in p.hand
+            or uid in p.deck
+            or uid in p.white_deck
+            or uid in p.graveyard
+            or uid in p.excommunicated
+            or uid in p.attack
+            or uid in p.defense
+            or uid in p.artifacts
+            or p.building == uid
+        ):
+            moved_elsewhere = True
+            break
     if not moved_elsewhere:
         engine.send_to_graveyard(player_idx, uid)
     engine._cleanup_zero_faith_saints()
@@ -354,6 +363,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
     card = engine.card_from_hand(player_idx, hand_index)
     if card is None:
         return ActionResult(False, "Indice mano non valido.")
+    script = runtime_cards.get_script(card.definition.name)
 
     ctype = _norm(card.definition.card_type)
     can_play, reason = runtime_cards.can_play(
@@ -369,13 +379,35 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
     if not is_valid:
         return ActionResult(False, error_message)
 
+    paid_inspiration = 0
     if ctype not in QUICK_TYPES:
-        cost = calculate_play_cost(engine, player_idx, hand_index, card)
-        spend_error = spend_inspiration_for_cost(engine, player_idx, cost)
-        if spend_error is not None:
-            return spend_error
+        use_all_remaining = bool(
+            script is not None and bool(script.play_requirements.get("consume_all_remaining_inspiration", False))
+        )
+        if use_all_remaining:
+            paid_inspiration = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
+            spend_error = spend_inspiration_for_cost(engine, player_idx, paid_inspiration)
+            if spend_error is not None:
+                return spend_error
+        else:
+            cost = calculate_play_cost(engine, player_idx, hand_index, card)
+            paid_inspiration = int(cost)
+            spend_error = spend_inspiration_for_cost(engine, player_idx, cost)
+            if spend_error is not None:
+                return spend_error
 
     uid = player.hand.pop(hand_index)
+    if script is not None and ctype in SAINT_TYPES:
+        faith_mult_raw = script.play_requirements.get("set_source_faith_from_paid_inspiration_multiplier")
+        if faith_mult_raw is not None:
+            try:
+                faith_mult = int(faith_mult_raw)
+            except (TypeError, ValueError):
+                faith_mult = 1
+            card.current_faith = max(0, int(paid_inspiration) * max(0, faith_mult))
+        if bool(script.play_requirements.get("store_paid_inspiration_on_source", False)):
+            card.blessed = [tag for tag in card.blessed if not str(tag).startswith("paid_inspiration_on_summon:")]
+            card.blessed.append(f"paid_inspiration_on_summon:{int(paid_inspiration)}")
     scripted_cost_error = _consume_scripted_play_costs(engine, player_idx, card)
     if scripted_cost_error is not None:
         player.hand.insert(hand_index, uid)

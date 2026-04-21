@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-CARD_NAME = """Vucub.Came"""
+CARD_NAME = """Vucub-Came"""
 
 SCRIPT = {
     "on_play_mode": "scripted",

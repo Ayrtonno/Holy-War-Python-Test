@@ -13,6 +13,7 @@ from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
 from holywar.effects.runtime import runtime_cards, _norm
 from holywar.effects.card_scripts_loader import iter_card_scripts
+from holywar.scripting_api import RuleEventContext
 from holywar.data.deck_builder import (
     available_premade_decks,
     available_religions,
@@ -330,6 +331,12 @@ class HolyWarGUI(tk.Tk):
         script = self._card_script(uid)
         if not raw or script is None:
             return []
+        if self.engine is None:
+            return []
+        source_inst = self.engine.state.instances.get(uid)
+        if source_inst is None:
+            return []
+        owner_idx = int(source_inst.owner)
 
         raw_actions = raw.get("on_play_actions", [])
         out = []
@@ -338,8 +345,15 @@ class HolyWarGUI(tk.Tk):
                 break
             if "target" not in raw_action:
                 continue
+            action_spec = script.on_play_actions[i]
+            if action_spec.condition and not runtime_cards._eval_condition_node(  # noqa: SLF001
+                RuleEventContext(engine=self.engine, event="on_play", player_idx=owner_idx, payload={"card": uid}),
+                owner_idx,
+                action_spec.condition,
+            ):
+                continue
             raw_target = raw_action.get("target", {}) or {}
-            t = script.on_play_actions[i].target
+            t = action_spec.target
             ttype = str(t.type or "").strip().lower()
             requires_manual = any(
                 key in raw_target
@@ -898,6 +912,7 @@ class HolyWarGUI(tk.Tk):
             p2_premade_deck_id=p2_deck_id,
             seed=self.seed,
         )
+        self.engine.choose_battle_survival_from_graveyard = self._choose_battle_survival_from_graveyard
         self.rng = random.Random(self.seed)
         self.last_log_idx = 0
         self.turn_started = False
@@ -1028,6 +1043,61 @@ class HolyWarGUI(tk.Tk):
 
     def _is_ai_player(self, player_idx: int) -> bool:
         return self.mode_var.get() == "ai" and player_idx == 1
+    
+    def _choose_battle_survival_from_graveyard(
+        self,
+        player_idx: int,
+        source_uid: str,
+        candidate_uids: list[str],
+    ) -> str | None:
+        if self.engine is None:
+            return None
+
+        if not candidate_uids:
+            return None
+
+        # Se il controllore è AI, usa fallback automatico sulla prima carta valida.
+        if self._is_ai_player(player_idx):
+            return candidate_uids[0]
+
+        source_inst = self.engine.state.instances.get(source_uid)
+        source_name = source_inst.definition.name if source_inst is not None else "questa carta"
+        player_name = self.engine.state.players[player_idx].name
+
+        wants = messagebox.askyesno(
+            "Effetto di sopravvivenza",
+            f"{player_name}: {source_name} è stato sconfitto in battaglia.\n\n"
+            "Vuoi attivare il suo effetto per annullare la distruzione?",
+        )
+        if not wants:
+            return None
+
+        choices: list[tuple[str, str]] = []
+        for g_uid in candidate_uids:
+            inst = self.engine.state.instances.get(g_uid)
+            if inst is None:
+                continue
+            label = inst.definition.name
+            choices.append((label, g_uid))
+
+        if not choices:
+            return None
+
+        canceled, selected = self._open_board_target_picker(
+            title="Scegli carta da scomunicare",
+            prompt="Seleziona quale carta del tuo cimitero scomunicare per salvare Thor.",
+            choices=choices,
+            allow_multi=False,
+            min_targets=1,
+            max_targets=1,
+            allow_none=False,
+            allow_manual=False,
+            card_uid=source_uid,
+        )
+        if canceled or not selected:
+            return None
+
+        return selected
 
     def _prompt_human_chain_decision(self, player_idx: int) -> bool:
         if self.engine is None:
@@ -2476,6 +2546,7 @@ class HolyWarGUI(tk.Tk):
         min_targets, max_targets = self._target_selection_limits(uid, for_activate=True)
         valid_tokens = self._valid_activation_targets(own_idx, source, uid)
         allow_no_target = self._can_activate_target(own_idx, source, None)
+
         valid_tokens = [
             tok
             for tok in valid_tokens
@@ -2484,35 +2555,11 @@ class HolyWarGUI(tk.Tk):
                 or self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
             )
         ]
+
         if not valid_tokens and not allow_no_target:
             messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
             return
-        choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
-        canceled, target = self._open_board_target_picker(
-            title="Attiva Abilita",
-            prompt="Seleziona il bersaglio dell'abilita." if valid_tokens else "Attiva l'abilita senza bersaglio.",
-            choices=choices,
-            allow_multi=(max_targets != 1),
-            min_targets=min_targets,
-            max_targets=max_targets,
-            allow_none=allow_no_target,
-            allow_manual=False,
-            side_hint="auto",
-            card_uid=uid,
-        )
-        if canceled:
-            return
-        valid_tokens = [
-            tok
-            for tok in valid_tokens
-            if (
-                not self._is_board_token(tok)
-                or self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
-            )
-        ]
-        if not valid_tokens and not allow_no_target:
-            messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
-            return
+
         choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
         canceled, target = self._open_board_target_picker(
             title="Attiva Abilita",

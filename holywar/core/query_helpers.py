@@ -4,6 +4,7 @@ import unicodedata
 from typing import TYPE_CHECKING
 
 from holywar.core.state import ARTIFACT_SLOTS, CardInstance
+from holywar.effects.runtime import runtime_cards
 
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
@@ -177,7 +178,24 @@ def first_open(slots: list[str | None]) -> int | None:
 
 
 # Consumes a one-shot barrier blessing if the defender has one active.
-def consume_barrier(defender: CardInstance) -> str | None:
+def consume_barrier(engine: "GameEngine", defender: CardInstance) -> str | None:
+    for i, tag in enumerate(list(defender.blessed)):
+        if isinstance(tag, str) and tag.startswith("barrier_once:"):
+            source_uid = ""
+            parts = tag.split(":")
+            if len(parts) >= 3:
+                source_uid = parts[2].strip()
+            try:
+                defender.blessed.pop(i)
+            except Exception:
+                defender.blessed.remove(tag)
+            if source_uid and source_uid in engine.state.instances:
+                source_owner = int(engine.state.instances[source_uid].owner)
+                source_player = engine.state.players[source_owner]
+                source_in_grave = source_uid in source_player.graveyard
+                if not source_in_grave:
+                    engine.send_to_graveyard(source_owner, source_uid)
+            return "Barriera"
     for barrier_name in ("Barriera Magica",):
         if barrier_name in defender.blessed:
             defender.blessed.remove(barrier_name)
@@ -186,11 +204,39 @@ def consume_barrier(defender: CardInstance) -> str | None:
 
 
 # Applies static damage-prevention effects that reduce or cancel incoming damage.
-def apply_damage_mitigation(engine: "GameEngine", target_owner_idx: int, damage: int) -> int:
+def apply_damage_mitigation(
+    engine: "GameEngine",
+    target_owner_idx: int,
+    damage: int,
+    target_uid: str | None = None,
+) -> int:
     if damage <= 0:
         return 0
-    if has_artifact(engine, target_owner_idx, "Rifugio Sacro") and damage < 3:
-        return 0
+
+    target_type = ""
+    if target_uid and target_uid in engine.state.instances:
+        target_type = _norm(engine.state.instances[target_uid].definition.card_type)
+
+    player = engine.state.players[target_owner_idx]
+    aura_sources: list[str] = []
+    aura_sources.extend([uid for uid in player.artifacts if uid is not None])
+    if player.building is not None:
+        aura_sources.append(player.building)
+
+    for source_uid in aura_sources:
+        if source_uid not in engine.state.instances:
+            continue
+        source_name = engine.state.instances[source_uid].definition.name
+        threshold = runtime_cards.get_prevent_incoming_damage_if_less_than(source_name)
+        if threshold is None:
+            continue
+        allowed_types = {
+            _norm(v) for v in runtime_cards.get_prevent_incoming_damage_to_card_types(source_name)
+        }
+        if allowed_types and target_type and target_type not in allowed_types:
+            continue
+        if damage < int(threshold):
+            return 0
     return damage
 
 

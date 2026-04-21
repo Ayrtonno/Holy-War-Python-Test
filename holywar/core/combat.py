@@ -50,6 +50,8 @@ def validate_attack_preconditions(
         return ActionResult(False, "Giorno 5 puo attaccare solo con Ispirazione rimanente > 2.")
     if attacker_name_key == _norm("Giorno 6: Creature di Terra") and attacker_player.inspiration >= 5:
         return ActionResult(False, "Giorno 6 puo attaccare solo con Ispirazione rimanente < 5.")
+    if not runtime_cards.get_can_attack(attacker.definition.name):
+        return ActionResult(False, f"{attacker.definition.name} non puo attaccare.")
     if engine._is_attacker_blocked_this_turn(attacker):
         return ActionResult(False, f"{attacker.definition.name} non puo attaccare in questo turno.")
     if attacker.exhausted:
@@ -86,7 +88,7 @@ def apply_fiamma_primordiale_after_attack(
         return
     attacker = engine.state.instances[attacker_uid]
     burn = 2 * (2 ** engine._count_artifact(defender_idx, "Incendio"))
-    burn = engine._apply_damage_mitigation(attacker_idx, burn)
+    burn = engine._apply_damage_mitigation(attacker_idx, burn, target_uid=attacker_uid)
     if burn <= 0 or (attacker.current_faith or 0) <= 0:
         return
     before = attacker.current_faith or 0
@@ -201,7 +203,7 @@ def resolve_targeted_attack(
         engine.state.log(
             f"Mitigazione runtime del danno da Santi: {before_damage}->{damage} (divisore {defender_damage_divisor})."
         )
-    damage = engine._apply_damage_mitigation(defender_idx, damage)
+    damage = engine._apply_damage_mitigation(defender_idx, damage, target_uid=defender_uid)
     def_faith = defender.current_faith or 0
     if damage <= 0:
         engine.state.log(
@@ -242,8 +244,6 @@ def resolve_targeted_attack(
         engine._emit_event("on_this_card_kills_in_battle", player_idx, card=attacker_uid, victim=defender_uid)
         if attacker_name_key == _norm("Golem di Pietra"):
             attacker.current_faith = 4
-        if attacker_name_key == _norm("Sequoia"):
-            attacker.definition.strength = (attacker.definition.strength or 0) * 2
         gain = runtime_cards.get_strength_gain_on_lethal_to_enemy_saint(attacker.definition.name)
         if gain:
             attacker.definition.strength = (attacker.definition.strength or 0) + int(gain)
@@ -253,19 +253,6 @@ def resolve_targeted_attack(
             attacker.definition.strength = (attacker.definition.strength or 0) + int(gain)
         if _norm(defender.definition.name) == _norm("Schiavi") and damage > 0:
             defender.current_faith = (defender.current_faith or 0) + 2
-
-    defender_name_key = _norm(defender.definition.name)
-    if not lethal and defender_name_key in {_norm("Stalagmiti"), _norm("Stalattiti")}:
-        retaliation = 3 if defender_name_key == _norm("Stalagmiti") else 2
-        retaliation = engine._apply_damage_mitigation(player_idx, retaliation)
-        before = attacker.current_faith or 0
-        attacker.current_faith = max(0, (attacker.current_faith or 0) - retaliation)
-        after = attacker.current_faith or 0
-        engine.state.log(
-            f"{attacker.definition.name} subisce {retaliation} danni di ritorsione (Fede {before}->{after})."
-        )
-        if (attacker.current_faith or 0) <= 0:
-            engine.destroy_saint_by_uid(engine.state.instances[attacker_uid].owner, attacker_uid, cause="battle")
 
     forced_destroy: list[tuple[int, str]] = []
     attacker_on_board = attacker_uid in (attacker_player.attack + attacker_player.defense)

@@ -8,6 +8,9 @@ if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
 
 
+FIELD_ZONES = {"attack", "defense", "artifact", "building"}
+
+
 # Returns the logical zone of a card for event emission and movement rules.
 def locate_uid_zone(engine: "GameEngine", owner_idx: int, uid: str) -> str:
     player = engine.state.players[owner_idx]
@@ -54,6 +57,63 @@ def remove_from_board(engine: "GameEngine", player: PlayerState, uid: str) -> No
         player.building = None
 
 
+def _equipped_target_uid(engine: "GameEngine", equipment_uid: str) -> str | None:
+    inst = engine.state.instances.get(equipment_uid)
+    if inst is None:
+        return None
+    for tag in inst.blessed:
+        if not isinstance(tag, str) or not tag.startswith("equipped_to:"):
+            continue
+        target_uid = tag.split(":", 1)[1].strip()
+        if target_uid:
+            return target_uid
+    return None
+
+
+def _clear_equipment_link(engine: "GameEngine", equipment_uid: str, target_uid: str | None = None) -> None:
+    equip_inst = engine.state.instances.get(equipment_uid)
+    if equip_inst is None:
+        return
+    if target_uid is None:
+        target_uid = _equipped_target_uid(engine, equipment_uid)
+    equip_inst.blessed = [
+        tag for tag in equip_inst.blessed if not (isinstance(tag, str) and tag.startswith("equipped_to:"))
+    ]
+    if target_uid and target_uid in engine.state.instances:
+        target_inst = engine.state.instances[target_uid]
+        target_inst.blessed = [tag for tag in target_inst.blessed if str(tag) != f"equipped_by:{equipment_uid}"]
+
+
+def cleanup_equipment_links_on_leave_field(engine: "GameEngine", uid: str) -> None:
+    # If the leaving card is equipment, detach it from its host.
+    host_uid = _equipped_target_uid(engine, uid)
+    if host_uid:
+        _clear_equipment_link(engine, uid, host_uid)
+
+    # If the leaving card is a host, destroy attached equipment.
+    attached_uids: list[str] = []
+    for equipment_uid in engine.state.instances:
+        if equipment_uid == uid:
+            continue
+        if _equipped_target_uid(engine, equipment_uid) == uid:
+            attached_uids.append(equipment_uid)
+
+    for equipment_uid in attached_uids:
+        _clear_equipment_link(engine, equipment_uid, uid)
+        equipment_inst = engine.state.instances.get(equipment_uid)
+        if equipment_inst is None:
+            continue
+        equipment_owner = int(equipment_inst.owner)
+        equipment_zone = locate_uid_zone(engine, equipment_owner, equipment_uid)
+        if equipment_zone in FIELD_ZONES:
+            send_to_graveyard(
+                engine,
+                equipment_owner,
+                equipment_uid,
+                from_zone_override=equipment_zone,
+            )
+
+
 # Moves a card to the graveyard while preserving event semantics and runtime cleanup.
 def send_to_graveyard(
     engine: "GameEngine",
@@ -78,8 +138,11 @@ def send_to_graveyard(
                 grave_target_idx = owner_idx
             card.blessed.remove(tag)
 
-    leaving_field = from_zone in {"attack", "defense", "artifact", "building"}
+    leaving_field = from_zone in FIELD_ZONES
     is_token = bool(getattr(card.definition, "is_token", False)) or str(card.definition.card_type).strip().lower() == "token"
+
+    if leaving_field:
+        cleanup_equipment_links_on_leave_field(engine, uid)
 
     if is_token and token_to_white:
         if uid not in engine.state.players[grave_target_idx].white_deck:
@@ -117,7 +180,10 @@ def excommunicate_card(
     player = engine.state.players[board_owner_idx]
     from_zone = from_zone_override or locate_uid_zone(engine, board_owner_idx, uid)
 
-    leaving_field = from_zone in {"attack", "defense", "artifact", "building"}
+    leaving_field = from_zone in FIELD_ZONES
+
+    if leaving_field:
+        cleanup_equipment_links_on_leave_field(engine, uid)
 
     if uid not in player.excommunicated:
         player.excommunicated.append(uid)
@@ -152,9 +218,28 @@ def remove_from_board_no_sin(engine: "GameEngine", owner_idx: int, uid: str) -> 
     if board_owner_idx is None:
         board_owner_idx = owner_idx
     player = engine.state.players[board_owner_idx]
+    from_zone = locate_uid_zone(engine, board_owner_idx, uid)
+    leaving_field = from_zone in FIELD_ZONES
+
+    if leaving_field:
+        cleanup_equipment_links_on_leave_field(engine, uid)
+
     if uid not in player.graveyard:
         player.graveyard.append(uid)
     remove_from_board(engine, player, uid)
+
+    if leaving_field:
+        engine._reset_card_runtime_state(uid)
+
+    engine._emit_event(
+        "on_card_sent_to_graveyard",
+        owner_idx,
+        card=uid,
+        from_zone=from_zone,
+        owner=owner_idx,
+    )
+    if leaving_field:
+        engine._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="graveyard")
 
 
 # Moves a deck card to the hand with the same hand-size constraints used elsewhere.

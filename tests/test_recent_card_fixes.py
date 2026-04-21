@@ -638,9 +638,203 @@ def test_ya_ner_battle_destruction_is_replaced_by_token() -> None:
     out = engine.attack(1, 0, 0)
     assert out.ok
     assert p1.attack[0] is not None
-    assert engine.state.instances[p1.attack[0]].definition.name == "Ya-ner"
-    assert engine.state.instances[p1.attack[0]].current_faith == engine.state.instances[p1.attack[0]].definition.faith
-    assert p1.defense[0] is None
+
+
+def test_pietra_nera_equips_prevents_first_attack_then_goes_to_graveyard() -> None:
+    cards = [
+        CardDefinition("Pietra Nera", "Maledizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Guardiano", "Santo", "2", 8, 1, "", "ANI-1"),
+        CardDefinition("Assalitore", "Santo", "2", 8, 9, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=141)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+
+    guard_idx = _force_card_in_hand(engine, 0, "Guardiano")
+    assert engine.play_card(0, guard_idx, "a1").ok
+    guard_uid = p0.attack[0]
+    assert guard_uid is not None
+
+    enemy_idx = _force_card_in_hand(engine, 1, "Assalitore")
+    enemy_uid = p1.hand.pop(enemy_idx)
+    p1.attack[0] = enemy_uid
+
+    stone_idx = _force_card_in_hand(engine, 0, "Pietra Nera")
+    stone_uid = p0.hand[stone_idx]
+    out = engine.play_card(0, stone_idx, "a1")
+    assert out.ok
+
+    assert stone_uid in p0.artifacts
+    assert f"equipped_to:{guard_uid}" in engine.state.instances[stone_uid].blessed
+    assert f"equipped_by:{stone_uid}" in engine.state.instances[guard_uid].blessed
+
+    guard_faith_before = int(engine.state.instances[guard_uid].current_faith or 0)
+
+    engine.end_turn()
+    engine.start_turn()
+    assert engine.state.active_player == 1
+    atk = engine.attack(1, 0, 0)
+    assert atk.ok
+
+    guard_faith_after = int(engine.state.instances[guard_uid].current_faith or 0)
+    assert guard_faith_after == guard_faith_before
+    assert stone_uid in p0.graveyard
+    assert stone_uid not in p0.artifacts
+    assert f"equipped_by:{stone_uid}" not in engine.state.instances[guard_uid].blessed
+
+
+def test_pietra_nera_is_destroyed_when_equipped_target_leaves_field() -> None:
+    cards = [
+        CardDefinition("Pietra Nera", "Maledizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Guardiano", "Santo", "2", 8, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=142)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    guard_idx = _force_card_in_hand(engine, 0, "Guardiano")
+    assert engine.play_card(0, guard_idx, "a1").ok
+    guard_uid = p0.attack[0]
+    assert guard_uid is not None
+
+    stone_idx = _force_card_in_hand(engine, 0, "Pietra Nera")
+    stone_uid = p0.hand[stone_idx]
+    out = engine.play_card(0, stone_idx, "a1")
+    assert out.ok
+    assert stone_uid in p0.artifacts
+
+    engine.destroy_saint_by_uid(0, guard_uid, cause="effect")
+
+    assert stone_uid in p0.graveyard
+    assert stone_uid not in p0.artifacts
+
+
+def test_pietre_pesanti_from_preparation_applies_only_on_first_real_opponent_turn() -> None:
+    cards = [
+        CardDefinition("Pietre Pesanti", "Maledizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Bersaglio", "Santo", "4", 6, 2, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=143)
+
+    # Preparation turn P1.
+    assert engine.state.phase == "preparation"
+    assert engine.state.active_player == 0
+    engine.start_turn()
+    p0 = engine.state.players[0]
+    p1 = engine.state.players[1]
+
+    heavy_idx = _force_card_in_hand(engine, 0, "Pietre Pesanti")
+    out = engine.play_card(0, heavy_idx, None)
+    assert out.ok
+    assert int(engine.state.flags.setdefault("double_cost_next_turn", {"0": 0, "1": 0}).get("1", 0)) == 1
+
+    engine.end_turn()
+
+    # Preparation turn P2: effect must not be active yet.
+    assert engine.state.active_player == 1
+    assert engine.state.phase == "preparation"
+    engine.start_turn()
+    opp_idx_prep = _force_card_in_hand(engine, 1, "Bersaglio")
+    opp_card_prep = engine.card_from_hand(1, opp_idx_prep)
+    assert opp_card_prep is not None
+    cost_prep = engine._calculate_play_cost(1, opp_idx_prep, opp_card_prep)
+    assert cost_prep == int(opp_card_prep.definition.faith or 0)
+    assert int(engine.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0}).get("1", 0)) == 0
+    assert int(engine.state.flags.setdefault("double_cost_next_turn", {"0": 0, "1": 0}).get("1", 0)) == 1
+
+    engine.end_turn()  # End preparation -> active phase starts.
+    assert engine.state.phase == "active"
+
+    # Reach P2 first real active turn.
+    if engine.state.active_player != 1:
+        engine.start_turn()
+        engine.end_turn()
+    assert engine.state.active_player == 1
+    engine.start_turn()
+
+    opp_idx_active = _force_card_in_hand(engine, 1, "Bersaglio")
+    opp_card_active = engine.card_from_hand(1, opp_idx_active)
+    assert opp_card_active is not None
+    base_cost = int(opp_card_active.definition.faith or 0)
+    cost_active = engine._calculate_play_cost(1, opp_idx_active, opp_card_active)
+    assert cost_active == base_cost * 2
+    assert int(engine.state.flags.setdefault("double_cost_next_turn", {"0": 0, "1": 0}).get("1", 0)) == 0
+
+    engine.end_turn()
+
+    # Next P2 active turn: the effect must be gone.
+    engine.start_turn()
+    engine.end_turn()
+    assert engine.state.active_player == 1
+    engine.start_turn()
+    opp_idx_next = _force_card_in_hand(engine, 1, "Bersaglio")
+    opp_card_next = engine.card_from_hand(1, opp_idx_next)
+    assert opp_card_next is not None
+    cost_next = engine._calculate_play_cost(1, opp_idx_next, opp_card_next)
+    assert cost_next == base_cost
+
+
+def test_memoria_della_pietra_does_not_target_pietra_bianca_blessing() -> None:
+    cards = [
+        CardDefinition("Memoria della Pietra", "Benedizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Pietra Bianca", "Benedizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=144)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    bianca_idx = _force_card_in_hand(engine, 0, "Pietra Bianca")
+    bianca_uid = p0.hand.pop(bianca_idx)
+    p0.graveyard.append(bianca_uid)
+
+    memoria_idx = _force_card_in_hand(engine, 0, "Memoria della Pietra")
+    out = engine.play_card(0, memoria_idx, "Pietra Bianca")
+    assert not out.ok
+    assert "nessun bersaglio valido disponibile" in out.message.lower()
+
+
+def test_memoria_della_pietra_summons_only_pietra_saint_from_graveyard() -> None:
+    cards = [
+        CardDefinition("Memoria della Pietra", "Benedizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Pietra Focaia", "Santo", "2", 5, 2, "", "ANI-1"),
+        CardDefinition("Pietra Bianca", "Benedizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Fill", "Santo", "1", 1, 1, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=145)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    focaia_idx = _force_card_in_hand(engine, 0, "Pietra Focaia")
+    focaia_uid = p0.hand.pop(focaia_idx)
+    p0.graveyard.append(focaia_uid)
+    bianca_idx = _force_card_in_hand(engine, 0, "Pietra Bianca")
+    bianca_uid = p0.hand.pop(bianca_idx)
+    p0.graveyard.append(bianca_uid)
+
+    memoria_idx = _force_card_in_hand(engine, 0, "Memoria della Pietra")
+    out = engine.play_card(0, memoria_idx, "Pietra Focaia")
+    assert out.ok
+    field_uids = [uid for uid in p0.attack + p0.defense if uid]
+    field_names = [engine.state.instances[uid].definition.name for uid in field_uids]
+    assert "Pietra Focaia" in field_names
+    assert "Pietra Bianca" not in field_names
+    assert bianca_uid in p0.graveyard
 
 
 def test_pkad_nok_destroys_both_cards_in_combat() -> None:

@@ -139,6 +139,15 @@ def destroy_saint_by_uid(
 
     if _norm(inst.definition.card_type) != "token":
         sin_gain = max(0, inst.definition.faith or 0)
+        if sin_gain <= 0:
+            for tag in list(inst.blessed):
+                if not isinstance(tag, str) or not tag.startswith("paid_inspiration_on_summon:"):
+                    continue
+                try:
+                    sin_gain = max(0, int(tag.split(":", 1)[1]))
+                except (TypeError, ValueError):
+                    sin_gain = 0
+                break
         if "no_sin_on_death" in inst.blessed:
             sin_gain = 0
         if engine._has_artifact(owner_idx, "Umanit????") and inst.blessed:

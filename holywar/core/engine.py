@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import unicodedata
 from pathlib import Path
+from typing import Callable, Optional
 
 from holywar.core import card_play as card_play_ops
 from holywar.core import combat as combat_ops
@@ -32,6 +33,9 @@ class GameEngine:
     def __init__(self, state: GameState, seed: int | None = None):
         self.state = state
         self.rng = random.Random(seed)
+        self.choose_battle_survival_from_graveyard: Optional[
+            Callable[[int, str, list[str]], Optional[str]]
+        ] = None
         self._bootstrap_runtime_bindings()
         ensure_runtime_state(self)
         refresh_player_flags(self)
@@ -69,6 +73,15 @@ class GameEngine:
 
     # Dispatches a gameplay event to the scripting runtime and aliases.
     def _emit_event(self, event: str, actor_idx: int, **payload) -> None:
+        if event == "on_card_sent_to_graveyard":
+            card_uid = str(payload.get("card", "")).strip()
+            from_zone = str(payload.get("from_zone", "")).strip().lower()
+            if card_uid in self.state.instances and from_zone in {"hand", "attack", "defense", "field"}:
+                inst = self.state.instances[card_uid]
+                if _norm(inst.definition.card_type) in {"santo", "token"}:
+                    counts = self.state.flags.setdefault("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})
+                    owner_key = str(inst.owner)
+                    counts[owner_key] = int(counts.get(owner_key, 0)) + 1
         self.rules_api(actor_idx).emit(event, actor_idx=actor_idx, **payload)
         # Alias English/Italian spellings used by scripted effects.
         if "relicario" in event:
@@ -485,11 +498,11 @@ class GameEngine:
 
     # Consumes a one-shot barrier blessing when the defender has one.
     def _consume_barrier(self, defender: CardInstance) -> str | None:
-        return query_ops.consume_barrier(defender)
+        return query_ops.consume_barrier(self, defender)
 
     # Applies static damage prevention rules before damage is committed.
-    def _apply_damage_mitigation(self, target_owner_idx: int, damage: int) -> int:
-        return query_ops.apply_damage_mitigation(self, target_owner_idx, damage)
+    def _apply_damage_mitigation(self, target_owner_idx: int, damage: int, target_uid: str | None = None) -> int:
+        return query_ops.apply_damage_mitigation(self, target_owner_idx, damage, target_uid=target_uid)
 
     # Checks whether a temporary attack lock still prevents this attacker from acting.
     def _is_attacker_blocked_this_turn(self, attacker: CardInstance) -> bool:
