@@ -5,17 +5,6 @@
 
 PREMADE_DECKS: dict[str, dict] = {
     # Cristianesimo
-    "cristianesimo_sette_sigilli": {
-        "religion": "Cristianesimo",
-        "name": "I Sette Sigilli dell'Apocalisse",
-        "cards": [
-            ("Altare dei Sette Sigilli", 1), ("Primo Sigillo", 3), ("Offerta ai Sigilli", 2),
-            ("Custode dei Sigilli", 3), ("Araldo della Fine", 3), ("Veggente dell'Apocalisse", 1),
-            ("Quarto Sigillo: Morte", 1), ("Secondo Sigillo: Guerra", 2), ("Terzo Sigillo: Carestia", 2),
-            ("Settimo Sigillo: Apocalisse", 1), ("Trombe del Giudizio", 1), ("Preghiera", 2),
-            ("Sacri Vasi", 1), ("Perdono", 2), ("Cura", 3), ("Moribondo", 3), ("Seguace", 3),
-        ],
-    },
     "test_giocatore": {
         "religion": "Cristianesimo",
         "name": "TEST PLAYER",
@@ -27,7 +16,18 @@ PREMADE_DECKS: dict[str, dict] = {
         "religion": "Cristianesimo",
         "name": "TEST NEMICO",
         "cards": [
-            ("Loki", 10), ("Fenrir", 10), ("Jormungandr", 10), ("Skadi", 10), ("Ragnarok", 10),
+            ("Loki", 10), ("Fenrir", 10), ("Yggdrasil", 10), ("Thor", 10), ("Odino", 10),
+        ],
+    },
+    "cristianesimo_sette_sigilli": {
+        "religion": "Cristianesimo",
+        "name": "I Sette Sigilli dell'Apocalisse",
+        "cards": [
+            ("Altare dei Sette Sigilli", 1), ("Primo Sigillo", 3), ("Offerta ai Sigilli", 2),
+            ("Custode dei Sigilli", 3), ("Araldo della Fine", 3), ("Veggente dell'Apocalisse", 1),
+            ("Quarto Sigillo: Morte", 1), ("Secondo Sigillo: Guerra", 2), ("Terzo Sigillo: Carestia", 2),
+            ("Settimo Sigillo: Apocalisse", 1), ("Trombe del Giudizio", 1), ("Preghiera", 2),
+            ("Sacri Vasi", 1), ("Perdono", 2), ("Cura", 3), ("Moribondo", 3), ("Seguace", 3),
         ],
     },
     "cristianesimo_via_martirio": {

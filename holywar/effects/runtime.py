@@ -56,6 +56,7 @@ SUPPORTED_CONDITION_KEYS = {
     "controller_altare_sigilli_gte",
     "controller_drawn_cards_this_turn_gte",
     "controller_has_distinct_saints_gte",
+    "selected_option_in",
     "selected_target_in",
     "selected_target_startswith",
     "event_card_name_is",
@@ -132,6 +133,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "store_target_count",
     "draw_cards_from_flag",
     "choose_targets",
+    "choose_option",
 }
 
 
@@ -202,6 +204,9 @@ class EffectSpec:
     to_zone_if_condition: dict[str, Any] | None = None
     to_zone_if: str | None = None
     shuffle_after: bool = False
+    choice_title: str | None = None
+    choice_prompt: str | None = None
+    choice_options: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -343,6 +348,11 @@ class RuntimeCardManager:
                 ),
                 to_zone_if=(str(raw.get("to_zone_if")) if raw.get("to_zone_if") is not None else None),
                 shuffle_after=bool(raw.get("shuffle_after", False)),
+                choice_title=str(raw.get("choice_title")) if raw.get("choice_title") is not None else None,
+                choice_prompt=str(raw.get("choice_prompt")) if raw.get("choice_prompt") is not None else None,
+                choice_options=[
+                    dict(v) for v in list(raw.get("choice_options", []) or []) if isinstance(v, dict)
+                ],
             )
 
         def _parse_target(raw: dict[str, Any]) -> TargetSpec:
@@ -814,6 +824,7 @@ class RuntimeCardManager:
                 flags["_runtime_effect_source"] = previous_source
             flags.pop("_runtime_source_card", None)
             flags.pop("_runtime_selected_target", None)
+            flags.pop("_runtime_selected_option", None)
 
     def _legacy_removed_message(self, engine: GameEngine, card_name: str, event: str, mode: str) -> str:
         msg = f"{card_name}: effetto non trascritto ({event}, mode={mode or 'auto'}). Legacy disabilitato."
@@ -897,6 +908,7 @@ class RuntimeCardManager:
                 if mode == "activate" and script.activate_once_per_turn:
                     engine.mark_activated_this_turn(source_uid)
                 flags.pop("_runtime_source_card", None)
+                flags.pop("_runtime_selected_option", None)
                 flags.pop("_runtime_resume_source", None)
                 flags.pop("_runtime_resume_owner", None)
                 flags.pop("_runtime_action_index_resume", None)
@@ -2227,6 +2239,74 @@ class RuntimeCardManager:
             target = self._resolve_player_scope(owner_idx, effect.target_player)
             engine.draw_cards(target, max(0, int(effect.amount or 1)))
             return
+
+        if action == "choose_option":
+            flags = engine.state.flags
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+
+            valid_options: list[dict[str, str]] = []
+            for raw_opt in effect.choice_options:
+                value = str(raw_opt.get("value", "")).strip()
+                if not value:
+                    continue
+                label = str(raw_opt.get("label", value)).strip() or value
+                cond = raw_opt.get("condition", {}) or {}
+                if cond:
+                    ok = self._eval_condition_node(
+                        RuleEventContext(
+                            engine=engine,
+                            event="on_activate",
+                            player_idx=owner_idx,
+                            payload={"card": source_uid},
+                        ),
+                        owner_idx,
+                        dict(cond),
+                    )
+                    if not ok:
+                        continue
+                valid_options.append({"value": value, "label": label})
+
+            if choice_ready and choice_source == source_uid:
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                allowed = {opt["value"] for opt in valid_options}
+                flags["_runtime_selected_option"] = selected_raw if selected_raw in allowed else ""
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_values",
+                    "_runtime_choice_labels",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                return
+
+            if not valid_options:
+                flags["_runtime_selected_option"] = ""
+                return
+
+            flags["_runtime_choice_source"] = source_uid
+            flags["_runtime_choice_values"] = ";;".join(opt["value"] for opt in valid_options)
+            flags["_runtime_choice_labels"] = json.dumps(
+                {opt["value"]: opt["label"] for opt in valid_options},
+                ensure_ascii=False,
+            )
+            flags["_runtime_choice_owner"] = str(owner_idx)
+            flags["_runtime_choice_title"] = str(effect.choice_title or "Scegli un'opzione")
+            flags["_runtime_choice_prompt"] = str(effect.choice_prompt or "Scegli una modalità.")
+            flags["_runtime_choice_min_targets"] = "1"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
+
         if action == "choose_targets":
             flags = engine.state.flags
             choice_source = str(flags.get("_runtime_choice_source", "")).strip()
@@ -3074,6 +3154,13 @@ class RuntimeCardManager:
             }
             if len(names) < int(distinct_saints_gte):
                 return False
+        selected_option = _norm(str(ctx.engine.state.flags.get("_runtime_selected_option", "")))
+        selected_option_in = condition.get("selected_option_in")
+        if selected_option_in:
+            allowed = {_norm(v) for v in selected_option_in}
+            if selected_option not in allowed:
+                return False
+
         selected_target = _norm(str(ctx.engine.state.flags.get("_runtime_selected_target", "")))
         selected_target_in = condition.get("selected_target_in")
         if selected_target_in:

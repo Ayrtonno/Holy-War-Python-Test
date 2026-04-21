@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import random
 import tkinter as tk
 from pathlib import Path
@@ -430,10 +431,6 @@ class HolyWarGUI(tk.Tk):
             if runtime_cards.is_activate_once_per_turn(inst.definition.name) and not self.engine.can_activate_once_per_turn(uid):
                 return False
         mode = self._activate_targeting_mode(uid)
-        if mode == "yggdrasil":
-            return True
-        if mode == "veggente":
-            return True
         if self._can_activate_target(player_idx, source, None):
             return True
         return bool(self._valid_activation_targets(player_idx, source, uid))
@@ -1179,6 +1176,8 @@ class HolyWarGUI(tk.Tk):
         self._reveal_prompt_last_uid = reveal_uid
         try:
             choice_candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+            choice_values_raw = str(flags.get("_runtime_choice_values", "")).strip()
+
             if choice_candidates_raw:
                 candidate_uids = [v for v in choice_candidates_raw.split(";;") if v]
                 choice_owner = int(str(flags.get("_runtime_choice_owner", "0")) or "0")
@@ -1188,6 +1187,7 @@ class HolyWarGUI(tk.Tk):
                     if c_inst is None:
                         continue
                     choices.append((self._format_guided_candidate(c_uid, choice_owner), c_uid))
+
                 title = str(flags.get("_runtime_choice_title", "Scegli Carta")) or "Scegli Carta"
                 prompt = (
                     str(flags.get("_runtime_choice_prompt", "")).strip()
@@ -1211,6 +1211,41 @@ class HolyWarGUI(tk.Tk):
                 )
                 flags["_runtime_choice_selected"] = "" if canceled or not selected else str(selected)
                 flags["_runtime_choice_ready"] = True
+
+            elif choice_values_raw:
+                values = [v for v in choice_values_raw.split(";;") if v]
+                labels_raw = str(flags.get("_runtime_choice_labels", "")).strip()
+                try:
+                    labels_map = json.loads(labels_raw) if labels_raw else {}
+                except Exception:
+                    labels_map = {}
+
+                choices: list[tuple[str, str]] = []
+                for value in values:
+                    label = str(labels_map.get(value, value))
+                    choices.append((label, value))
+
+                title = str(flags.get("_runtime_choice_title", "Scegli un'opzione")) or "Scegli un'opzione"
+                prompt = str(flags.get("_runtime_choice_prompt", "")).strip() or "Seleziona una modalità."
+                min_targets = int(str(flags.get("_runtime_choice_min_targets", "1")) or "1")
+                max_targets_raw = str(flags.get("_runtime_choice_max_targets", "1")).strip()
+                max_targets = int(max_targets_raw) if max_targets_raw else 1
+                allow_multi = max_targets != 1
+
+                canceled, selected = self._open_board_target_picker(
+                    title=title,
+                    prompt=prompt,
+                    choices=choices,
+                    allow_multi=allow_multi,
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=False,
+                    allow_manual=False,
+                    card_uid=reveal_uid,
+                )
+                flags["_runtime_choice_selected"] = "" if canceled or not selected else str(selected)
+                flags["_runtime_choice_ready"] = True
+
             else:
                 messagebox.showinfo(
                     "Carta rivelata",
@@ -2159,76 +2194,7 @@ class HolyWarGUI(tk.Tk):
         target = f"monsone:discard={','.join(discard_uids)};return={','.join(return_uids)}"
         return (False, target)
 
-    def _yggdrasil_target_payload(self, uid: str) -> tuple[bool, str | None]:
-        if self.engine is None:
-            return (True, None)
-        own_idx = self.current_human_idx() or 0
-        player = self.engine.state.players[own_idx]
-
-        choices = [
-            ("Potenzia un tuo Santo", "buff"),
-            ("Recupera un Artefatto dal cimitero", "artifact"),
-            ("Pesca 1 carta", "draw"),
-            ("Attiva Warcry", "warcry"),
-        ]
-        canceled, selected = self._open_board_target_picker(
-            title="Yggdrasil - Modalita",
-            prompt="Scegli la modalita di attivazione.",
-            choices=choices,
-            allow_multi=False,
-            min_targets=1,
-            max_targets=1,
-            allow_none=False,
-            allow_manual=False,
-        )
-        if canceled or not selected:
-            return (True, None)
-        mode = selected.strip().lower()
-        if mode == "buff":
-            saint_choices: list[tuple[str, str]] = []
-            for token in self._candidate_slot_tokens():
-                if token.startswith("a") or token.startswith("d"):
-                    widget = self._resolve_highlight_widget(token, own_idx=own_idx, side_hint="own", card_uid=uid)
-                    if widget is not None:
-                        saint_choices.append((self._format_guided_candidate(token, own_idx), token))
-            if not saint_choices:
-                messagebox.showwarning("Yggdrasil", "Nessun santo valido da potenziare.")
-                return (True, None)
-            canceled, saint_target = self._open_board_target_picker(
-                title="Yggdrasil - Bersaglio",
-                prompt="Seleziona un tuo Santo da potenziare.",
-                choices=saint_choices,
-                allow_multi=False,
-                min_targets=1,
-                max_targets=1,
-                allow_none=False,
-                allow_manual=False,
-                card_uid=uid,
-                side_hint="own",
-            )
-            if canceled or not saint_target:
-                return (True, None)
-            return (False, f"buff:{saint_target}")
-        return (False, mode)
-
-    def _veggente_target_payload(self, uid: str) -> tuple[bool, str | None]:
-        choices = [
-            ("Aggiungi 1 Segnalino Sigillo", "add"),
-            ("Rimuovi 3 Segnalini e pesca 1 carta", "draw"),
-        ]
-        canceled, selected = self._open_board_target_picker(
-            title="Veggente dell'Apocalisse",
-            prompt="Scegli la modalita di attivazione.",
-            choices=choices,
-            allow_multi=False,
-            min_targets=1,
-            max_targets=1,
-            allow_none=False,
-            allow_manual=False,
-        )
-        if canceled or not selected:
-            return (True, None)
-        return (False, selected.strip().lower())
+    
     
     def _collect_on_play_action_targets(self, uid: str) -> tuple[bool, str | None]:
         if self.engine is None:
@@ -2507,41 +2473,58 @@ class HolyWarGUI(tk.Tk):
             self.refresh()
             self.begin_turn_if_needed()
             return
-        if mode == "veggente":
-            canceled, target = self._veggente_target_payload(uid)
-            if canceled:
-                return
-        elif mode == "yggdrasil":
-            canceled, target = self._yggdrasil_target_payload(uid)
-            if canceled:
-                return
-        else:
-            min_targets, max_targets = self._target_selection_limits(uid, for_activate=True)
-            valid_tokens = self._valid_activation_targets(own_idx, source, uid)
-            allow_no_target = self._can_activate_target(own_idx, source, None)
-            valid_tokens = [
-                tok
-                for tok in valid_tokens
-                if (
-                    not self._is_board_token(tok)
-                    or self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
-                )
-            ]
-            if not valid_tokens and not allow_no_target:
-                messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
-                return
-            choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
-            canceled, target = self._open_board_target_picker(
-                title="Attiva Abilita",
-                prompt="Seleziona un bersaglio valido per l'abilita dalla lista oppure cliccando sul campo.",
-                choices=choices,
-                allow_multi=(max_targets is None or max_targets > 1),
-                min_targets=min_targets,
-                max_targets=max_targets,
-                allow_none=allow_no_target,
-                allow_manual=False,
-                card_uid=uid,
+        min_targets, max_targets = self._target_selection_limits(uid, for_activate=True)
+        valid_tokens = self._valid_activation_targets(own_idx, source, uid)
+        allow_no_target = self._can_activate_target(own_idx, source, None)
+        valid_tokens = [
+            tok
+            for tok in valid_tokens
+            if (
+                not self._is_board_token(tok)
+                or self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
             )
+        ]
+        if not valid_tokens and not allow_no_target:
+            messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
+            return
+        choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
+        canceled, target = self._open_board_target_picker(
+            title="Attiva Abilita",
+            prompt="Seleziona il bersaglio dell'abilita." if valid_tokens else "Attiva l'abilita senza bersaglio.",
+            choices=choices,
+            allow_multi=(max_targets != 1),
+            min_targets=min_targets,
+            max_targets=max_targets,
+            allow_none=allow_no_target,
+            allow_manual=False,
+            side_hint="auto",
+            card_uid=uid,
+        )
+        if canceled:
+            return
+        valid_tokens = [
+            tok
+            for tok in valid_tokens
+            if (
+                not self._is_board_token(tok)
+                or self._resolve_highlight_widget(tok, own_idx=own_idx, side_hint="auto", card_uid=uid) is not None
+            )
+        ]
+        if not valid_tokens and not allow_no_target:
+            messagebox.showwarning("Abilita non valida", "Nessun bersaglio valido disponibile.")
+            return
+        choices = [(self._format_guided_candidate(c, own_idx), c) for c in valid_tokens]
+        canceled, target = self._open_board_target_picker(
+            title="Attiva Abilita",
+            prompt="Seleziona un bersaglio valido per l'abilita dalla lista oppure cliccando sul campo.",
+            choices=choices,
+            allow_multi=(max_targets is None or max_targets > 1),
+            min_targets=min_targets,
+            max_targets=max_targets,
+            allow_none=allow_no_target,
+            allow_manual=False,
+            card_uid=uid,
+        )
         if canceled:
             return
         res = self.engine.activate_ability(own_idx, source, target)
