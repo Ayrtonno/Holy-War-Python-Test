@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from holywar.core import state
 from holywar.core.state import MAX_HAND
 from holywar.effects.card_scripts_loader import iter_card_scripts
-from holywar.effects import runtime_ported
-from holywar.effects.registry import NOT_HANDLED, get_activate, get_enter, get_play
 from holywar.scripting_api import RuleEventContext
 from holywar.core.state import CardInstance
 from holywar.data.importer import load_cards_json
@@ -47,6 +45,10 @@ SUPPORTED_CONDITION_KEYS = {
     "payload_reason_in",
     "target_current_faith_gte",
     "controller_has_saint_with_name",
+    "controller_has_artifact_with_name",
+    "can_play_by_sacrificing_specific_card_from_field",
+    "controller_has_cards",
+    "can_play_by_sacrificing",
     "controller_has_card_in_hand_with_name",
     "controller_has_card_in_deck_with_name",
     "controller_has_building_with_name",
@@ -99,6 +101,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "remove_sin",
     "add_inspiration",
     "pay_inspiration",
+    "excommunicate_top_cards_from_relicario",
     "remove_from_board_no_sin",
     "summon_card_from_hand",
     "summon_named_card",
@@ -122,6 +125,9 @@ SUPPORTED_EFFECT_ACTIONS = {
     "reveal_stored_card",
     "move_stored_card_to_zone",
     "move_source_to_zone",
+    "optional_draw_from_top_n_then_shuffle",
+    "optional_recover_from_graveyard_then_shuffle",
+    "optional_recover_cards",
 }
 
 
@@ -140,6 +146,7 @@ class TriggerSpec:
 
 @dataclass(slots=True)
 class CardFilterSpec:
+    name_equals: str | None = None
     name_contains: str | None = None
     name_not_contains: str | None = None
     card_type_in: list[str] = field(default_factory=list)
@@ -148,6 +155,7 @@ class CardFilterSpec:
     crosses_gte: int | None = None
     crosses_lte: int | None = None
     drawn_this_turn_only: bool = False
+    top_n_from_zone: int | None = None
 
 
 @dataclass(slots=True)
@@ -174,11 +182,19 @@ class EffectSpec:
     flag: str | None = None
 
     owner: str | None = None
+    from_zone: str | None = None
     zone: str | None = None
     position: str | None = None
     store_as: str | None = None
     stored: str | None = None
     to_zone: str | None = None
+    min_targets: int | None = None
+    max_targets: int | None = None
+    controller_has_saint_with_name: str | None = None
+    to_zone_if_controller_has_saint_with_name: str | None = None
+    to_zone_if_condition: dict[str, Any] | None = None
+    to_zone_if: str | None = None
+    shuffle_after: bool = False
 
 
 @dataclass(slots=True)
@@ -220,6 +236,11 @@ class CardScript:
     strength_bonus_rules: list[dict[str, Any]] = field(default_factory=list)
     sigilli_strength_bonus_threshold: int | None = None
     sigilli_strength_bonus_amount: int | None = None
+    incoming_damage_from_enemy_saints_divisor: int = 1
+    strength_gain_on_damage_to_enemy_saint: int = 0
+    strength_gain_on_lethal_to_enemy_saint: int = 0
+    grants_strength_to_friendly_saints: int = 0
+    grants_strength_to_friendly_saints_except_names: list[str] = field(default_factory=list)
     triggered_effects: list[TriggeredEffectSpec] = field(default_factory=list)
     on_play_actions: list[ActionSpec] = field(default_factory=list)
     on_enter_actions: list[ActionSpec] = field(default_factory=list)
@@ -269,7 +290,15 @@ class RuntimeCardManager:
         return bool(script and script.activate_once_per_turn)
 
     def register_script_from_dict(self, card_name: str, spec: dict[str, Any]) -> None:
+        def _to_int_or_none(value: Any) -> int | None:
+            if value is None:
+                return None
+            return int(value)
+
         def _parse_effect(raw: dict[str, Any]) -> EffectSpec:
+            usage_limit_raw = raw.get("usage_limit_per_turn")
+            min_targets_raw = raw.get("min_targets")
+            max_targets_raw = raw.get("max_targets")
             return EffectSpec(
                 action=str(raw.get("action", "")),
                 amount=int(raw.get("amount", 0)),
@@ -277,27 +306,49 @@ class RuntimeCardManager:
                 amount_multiplier_card_name=str(raw.get("amount_multiplier_card_name"))
                 if raw.get("amount_multiplier_card_name") is not None
                 else None,
-                usage_limit_per_turn=(
-                    int(raw.get("usage_limit_per_turn", 0))
-                    if raw.get("usage_limit_per_turn") is not None
-                    else None
-                ),
+                usage_limit_per_turn=_to_int_or_none(usage_limit_raw),
                 target_player=str(raw.get("target_player")) if raw.get("target_player") is not None else None,
                 card_name=str(raw.get("card_name")) if raw.get("card_name") is not None else None,
                 flag=raw.get("flag"),
                 owner=str(raw.get("owner")) if raw.get("owner") is not None else None,
+                from_zone=str(raw.get("from_zone")) if raw.get("from_zone") is not None else None,
                 zone=str(raw.get("zone")) if raw.get("zone") is not None else None,
                 position=str(raw.get("position")) if raw.get("position") is not None else None,
                 store_as=str(raw.get("store_as")) if raw.get("store_as") is not None else None,
                 stored=str(raw.get("stored")) if raw.get("stored") is not None else None,
                 to_zone=str(raw.get("to_zone")) if raw.get("to_zone") is not None else None,
+                min_targets=_to_int_or_none(min_targets_raw),
+                max_targets=_to_int_or_none(max_targets_raw),
+                controller_has_saint_with_name=(
+                    str(raw.get("controller_has_saint_with_name"))
+                    if raw.get("controller_has_saint_with_name") is not None
+                    else None
+                ),
+                to_zone_if_controller_has_saint_with_name=(
+                    str(raw.get("to_zone_if_controller_has_saint_with_name"))
+                    if raw.get("to_zone_if_controller_has_saint_with_name") is not None
+                    else None
+                ),
+                to_zone_if_condition=(
+                    dict(raw.get("to_zone_if_condition", {}) or {})
+                    if raw.get("to_zone_if_condition") is not None
+                    else None
+                ),
+                to_zone_if=(str(raw.get("to_zone_if")) if raw.get("to_zone_if") is not None else None),
+                shuffle_after=bool(raw.get("shuffle_after", False)),
             )
 
         def _parse_target(raw: dict[str, Any]) -> TargetSpec:
             filt = raw.get("card_filter", {}) or {}
+            crosses_gte_raw = filt.get("crosses_gte")
+            crosses_lte_raw = filt.get("crosses_lte")
+            top_n_raw = filt.get("top_n_from_zone")
+            target_min_raw = raw.get("min_targets")
+            target_max_raw = raw.get("max_targets")
             return TargetSpec(
                 type=str(raw.get("type", "cards_controlled_by_owner")),
                 card_filter=CardFilterSpec(
+                    name_equals=filt.get("name_equals"),
                     name_contains=filt.get("name_contains"),
                     name_not_contains=filt.get("name_not_contains"),
                     card_type_in=list(filt.get("card_type_in", []) or []),
@@ -305,15 +356,16 @@ class RuntimeCardManager:
                     exclude_buildings_if_my_building_zone_occupied=bool(
                         filt.get("exclude_buildings_if_my_building_zone_occupied", False)
                     ),
-                    crosses_gte=(int(filt["crosses_gte"]) if filt.get("crosses_gte") is not None else None),
-                    crosses_lte=(int(filt["crosses_lte"]) if filt.get("crosses_lte") is not None else None),
+                    crosses_gte=_to_int_or_none(crosses_gte_raw),
+                    crosses_lte=_to_int_or_none(crosses_lte_raw),
                     drawn_this_turn_only=bool(filt.get("drawn_this_turn_only", False)),
+                    top_n_from_zone=_to_int_or_none(top_n_raw),
                 ),
                 zone=str(raw.get("zone", "field")),
                 zones=list(raw.get("zones", []) or []),
                 owner=str(raw.get("owner", "me")),
-                min_targets=(int(raw["min_targets"]) if raw.get("min_targets") is not None else None),
-                max_targets=(int(raw["max_targets"]) if raw.get("max_targets") is not None else None),
+                min_targets=_to_int_or_none(target_min_raw),
+                max_targets=_to_int_or_none(target_max_raw),
                 max_targets_from=(dict(raw["max_targets_from"]) if raw.get("max_targets_from") is not None else None),
             )
 
@@ -384,6 +436,16 @@ class RuntimeCardManager:
                     if spec.get("sigilli_strength_bonus_amount") is not None
                     else None
                 ),
+                incoming_damage_from_enemy_saints_divisor=max(
+                    1,
+                    int(spec.get("incoming_damage_from_enemy_saints_divisor", 1) or 1),
+                ),
+                strength_gain_on_damage_to_enemy_saint=int(spec.get("strength_gain_on_damage_to_enemy_saint", 0) or 0),
+                strength_gain_on_lethal_to_enemy_saint=int(spec.get("strength_gain_on_lethal_to_enemy_saint", 0) or 0),
+                grants_strength_to_friendly_saints=int(spec.get("grants_strength_to_friendly_saints", 0) or 0),
+                grants_strength_to_friendly_saints_except_names=[
+                    str(v) for v in list(spec.get("grants_strength_to_friendly_saints_except_names", []) or [])
+                ],
                 play_requirements=dict(spec.get("play_requirements", {}) or {}),
                 triggered_effects=trig_specs,
                 on_play_actions=on_play_actions,
@@ -510,6 +572,36 @@ class RuntimeCardManager:
             return None
         return script.sigilli_strength_bonus_amount
 
+    def get_incoming_damage_from_enemy_saints_divisor(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 1
+        return max(1, int(script.incoming_damage_from_enemy_saints_divisor or 1))
+
+    def get_strength_gain_on_damage_to_enemy_saint(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return int(script.strength_gain_on_damage_to_enemy_saint or 0)
+
+    def get_strength_gain_on_lethal_to_enemy_saint(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return int(script.strength_gain_on_lethal_to_enemy_saint or 0)
+
+    def get_grants_strength_to_friendly_saints(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return int(script.grants_strength_to_friendly_saints or 0)
+
+    def get_grants_strength_to_friendly_saints_except_names(self, card_name: str) -> list[str]:
+        script = self.get_script(card_name)
+        if script is None:
+            return []
+        return [str(v) for v in script.grants_strength_to_friendly_saints_except_names if str(v).strip()]
+
     def migrated_count(self) -> int:
         return len(self._scripts)
     
@@ -594,16 +686,7 @@ class RuntimeCardManager:
                 return f"{inst.definition.name}: effetto risolto via script."
             if is_saint:
                 return f"{inst.definition.name}: nessun effetto scriptato."
-
-            if mode in {"registry", "auto", "custom"}:
-                handler = get_play(inst.definition.name)
-                if handler is not None:
-                    out = handler(engine, player_idx, uid, target)
-                    if out is not NOT_HANDLED:
-                        return str(out)
-            if mode in {"ported", "auto", "runtime"}:
-                return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
-            return runtime_ported.resolve_card_effect(engine, player_idx, uid, target)
+            return self._legacy_removed_message(engine, inst.definition.name, "on_play", mode)
         finally:
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
@@ -647,7 +730,10 @@ class RuntimeCardManager:
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
 
             if flags.get("_runtime_waiting_for_reveal"):
-                flags["_runtime_action_index_resume"] = str(i + 1)
+                if bool(flags.pop("_runtime_resume_same_action", False)):
+                    flags["_runtime_action_index_resume"] = str(i)
+                else:
+                    flags["_runtime_action_index_resume"] = str(i + 1)
                 flags["_runtime_resume_source"] = source_uid
                 flags["_runtime_resume_owner"] = str(owner_idx)
                 break
@@ -678,16 +764,7 @@ class RuntimeCardManager:
                 return f"{inst.definition.name}: effetto di ingresso risolto via script."
             if is_saint:
                 return None
-
-            if mode in {"registry", "auto", "custom"}:
-                handler = get_enter(inst.definition.name)
-                if handler is not None:
-                    out = handler(engine, player_idx, uid)
-                    if out is not NOT_HANDLED:
-                        return str(out)
-            if mode in {"ported", "auto", "runtime"}:
-                return runtime_ported.resolve_enter_effect(engine, player_idx, uid)
-            return runtime_ported.resolve_enter_effect(engine, player_idx, uid)
+            return self._legacy_removed_message(engine, inst.definition.name, "on_enter", mode)
         finally:
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
@@ -710,12 +787,6 @@ class RuntimeCardManager:
         flags["_runtime_selected_target"] = str(target or "")
         try:
             is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
-            if mode in {"registry", "auto", "custom"}:
-                handler = get_activate(inst.definition.name)
-                if handler is not None:
-                    out = handler(engine, player_idx, uid, target)
-                    if out is not NOT_HANDLED:
-                        return str(out)
             if mode in {"scripted", "custom"} and script.on_activate_actions:
                 self._run_activate_actions(engine, player_idx, uid, script.on_activate_actions)
                 if script.activate_once_per_turn and not flags.get("_runtime_waiting_for_reveal"):
@@ -723,9 +794,7 @@ class RuntimeCardManager:
                 return f"{inst.definition.name}: effetto attivato via script."
             if is_saint:
                 return f"{inst.definition.name}: nessun effetto scriptato."
-            if mode in {"ported", "auto", "runtime"}:
-                return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
-            return runtime_ported.resolve_activated_effect(engine, player_idx, uid, target)
+            return self._legacy_removed_message(engine, inst.definition.name, "on_activate", mode)
         finally:
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
@@ -733,6 +802,11 @@ class RuntimeCardManager:
                 flags["_runtime_effect_source"] = previous_source
             flags.pop("_runtime_source_card", None)
             flags.pop("_runtime_selected_target", None)
+
+    def _legacy_removed_message(self, engine: GameEngine, card_name: str, event: str, mode: str) -> str:
+        msg = f"{card_name}: effetto non trascritto ({event}, mode={mode or 'auto'}). Legacy disabilitato."
+        engine.state.log(f"[UNSCRIPTED] {msg}")
+        return msg
 
     def _run_activate_actions(
         self,
@@ -760,7 +834,10 @@ class RuntimeCardManager:
             targets = self._resolve_targets(engine, owner_idx, action.target)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
             if flags.get("_runtime_waiting_for_reveal"):
-                flags["_runtime_action_index_resume"] = str(i + 1)
+                if bool(flags.pop("_runtime_resume_same_action", False)):
+                    flags["_runtime_action_index_resume"] = str(i)
+                else:
+                    flags["_runtime_action_index_resume"] = str(i + 1)
                 flags["_runtime_resume_source"] = source_uid
                 flags["_runtime_resume_owner"] = str(owner_idx)
                 break
@@ -794,6 +871,8 @@ class RuntimeCardManager:
         try:
             if mode == "play":
                 self._run_play_actions(engine, owner_idx, source_uid, script.on_play_actions, start_index=start_index)
+            elif mode == "enter":
+                self._run_enter_actions(engine, owner_idx, source_uid, script.on_enter_actions, start_index=start_index)
             elif mode == "activate":
                 self._run_activate_actions(engine, owner_idx, source_uid, script.on_activate_actions, start_index=start_index)
         finally:
@@ -811,8 +890,24 @@ class RuntimeCardManager:
                 flags.pop("_runtime_action_index_resume", None)
                 flags.pop("_runtime_pending_mode", None)
 
-    def _run_enter_actions(self, engine: GameEngine, owner_idx: int, source_uid: str, actions: list[ActionSpec]) -> None:
-        for action in actions:
+    def _run_enter_actions(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        source_uid: str,
+        actions: list[ActionSpec],
+        start_index: int = 0,
+    ) -> None:
+        flags = engine.state.flags
+        flags["_runtime_pending_mode"] = "enter"
+        for i in range(start_index, len(actions)):
+            if flags.get("_runtime_waiting_for_reveal"):
+                flags["_runtime_action_index_resume"] = str(i)
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                break
+            action = actions[i]
+            flags["_runtime_action_index"] = str(i)
             if action.condition and not self._eval_condition_node(
                 RuleEventContext(engine=engine, event="on_enter", player_idx=owner_idx, payload={"card": source_uid}),
                 owner_idx,
@@ -821,6 +916,17 @@ class RuntimeCardManager:
                 continue
             targets = self._resolve_targets(engine, owner_idx, action.target)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
+            if flags.get("_runtime_waiting_for_reveal"):
+                if bool(flags.pop("_runtime_resume_same_action", False)):
+                    flags["_runtime_action_index_resume"] = str(i)
+                else:
+                    flags["_runtime_action_index_resume"] = str(i + 1)
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                break
+        flags.pop("_runtime_action_index", None)
+        if not flags.get("_runtime_waiting_for_reveal"):
+            flags.pop("_runtime_pending_mode", None)
 
     def on_enter_bind_triggers(self, engine: GameEngine, owner_idx: int, source_uid: str) -> None:
         self.ensure_all_cards_migrated(engine)
@@ -1004,7 +1110,7 @@ class RuntimeCardManager:
 
     def _required_min_targets_for_manual_target(self, target: TargetSpec) -> int:
         configured = int(target.min_targets) if target.min_targets is not None else 1
-        return max(1, configured)
+        return max(0, configured)
 
     def _target_requires_manual_selection(self, target: TargetSpec) -> bool:
         ttype = _norm(target.type)
@@ -1012,7 +1118,8 @@ class RuntimeCardManager:
             return False
         has_explicit_zone = bool(target.zones) or _norm(target.zone) != "field"
         has_filter = bool(
-            (target.card_filter.name_contains or "").strip()
+            (target.card_filter.name_equals or "").strip()
+            or (target.card_filter.name_contains or "").strip()
             or (target.card_filter.name_not_contains or "").strip()
             or target.card_filter.card_type_in
             or target.card_filter.exclude_event_card
@@ -1020,6 +1127,7 @@ class RuntimeCardManager:
             or target.card_filter.crosses_gte is not None
             or target.card_filter.crosses_lte is not None
             or target.card_filter.drawn_this_turn_only
+            or target.card_filter.top_n_from_zone is not None
         )
         has_limits = (
             target.min_targets is not None
@@ -1059,9 +1167,15 @@ class RuntimeCardManager:
         type_filter = {_norm(v) for v in target.card_filter.card_type_in}
         event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
         source_uid = str(engine.state.flags.get("_runtime_source_card", ""))
+        top_n = target.card_filter.top_n_from_zone
+        top_n_allowed: set[str] | None = None
+        if top_n is not None and int(top_n) > 0:
+            top_n_allowed = set(pool[-int(top_n):])
         out: list[str] = []
         for uid in pool:
             if uid not in engine.state.instances:
+                continue
+            if top_n_allowed is not None and uid not in top_n_allowed:
                 continue
             if target.card_filter.exclude_event_card:
                 if event_uid and uid == event_uid:
@@ -1069,6 +1183,9 @@ class RuntimeCardManager:
                 if not event_uid and source_uid and uid == source_uid:
                     continue
             inst = engine.state.instances[uid]
+            needle_eq = _norm(target.card_filter.name_equals or "")
+            if needle_eq and _norm(inst.definition.name) != needle_eq:
+                continue
             if needle and needle not in _norm(inst.definition.name):
                 continue
             needle_not = _norm(target.card_filter.name_not_contains or "")
@@ -1139,7 +1256,7 @@ class RuntimeCardManager:
                     return (False, empty_pool_message)
 
                 raw_for_action = self._selected_target_raw_for_current_action(engine)
-                if not raw_for_action:
+                if required_min > 0 and not raw_for_action:
                     return (False, missing_selection_message)
 
                 resolved = self._resolve_targets(engine, owner_idx, action.target)
@@ -2079,6 +2196,192 @@ class RuntimeCardManager:
             target = self._resolve_player_scope(owner_idx, effect.target_player)
             engine.draw_cards(target, max(0, int(effect.amount or 1)))
             return
+        if action == "optional_draw_from_top_n_then_shuffle":
+            top_n = max(1, int(effect.amount or 1))
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            flags = engine.state.flags
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            if choice_ready and choice_source == source_uid:
+                selected_uid = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                if selected_uid and selected_uid in candidates and selected_uid in player.deck:
+                    self._move_uid_to_zone(engine, selected_uid, "hand", target)
+                engine.rng.shuffle(player.deck)
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                return
+
+            candidates = list(player.deck[-top_n:]) if player.deck else []
+            flags["_runtime_choice_source"] = source_uid
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = "Scegli Carta"
+            flags["_runtime_choice_prompt"] = "Scegli una carta tra le prime del reliquiario oppure Nessuna."
+            flags["_runtime_choice_min_targets"] = "0"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
+        if action == "optional_recover_from_graveyard_then_shuffle":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            flags = engine.state.flags
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            if choice_ready and choice_source == source_uid:
+                selected_uid = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                if selected_uid and selected_uid in candidates and selected_uid in player.graveyard:
+                    has_odino = any(
+                        _norm(engine.state.instances[uid].definition.name) == _norm("Odino")
+                        for uid in engine.all_saints_on_field(target)
+                    )
+                    to_zone = "hand" if has_odino else "relicario"
+                    moved = self._move_uid_to_zone(engine, selected_uid, to_zone, target)
+                    if not moved and to_zone == "hand":
+                        self._move_uid_to_zone(engine, selected_uid, "relicario", target)
+                engine.rng.shuffle(player.deck)
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                return
+
+            candidates = list(player.graveyard)
+            if not candidates:
+                engine.rng.shuffle(player.deck)
+                return
+            has_odino = any(
+                _norm(engine.state.instances[uid].definition.name) == _norm("Odino")
+                for uid in engine.all_saints_on_field(target)
+            )
+            flags["_runtime_choice_source"] = source_uid
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = "Cimitero"
+            if has_odino:
+                flags["_runtime_choice_prompt"] = "Scegli una carta dal tuo cimitero da aggiungere alla mano, oppure Nessuna."
+            else:
+                flags["_runtime_choice_prompt"] = "Scegli una carta dal tuo cimitero da mettere nel reliquiario, oppure Nessuna."
+            flags["_runtime_choice_min_targets"] = "0"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
+        if action == "optional_recover_cards":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            flags = engine.state.flags
+
+            from_zone = _norm(effect.from_zone or effect.zone or "graveyard")
+            to_zone = str(effect.to_zone or "relicario").strip() or "relicario"
+            min_targets = max(0, int(effect.min_targets if effect.min_targets is not None else 0))
+            max_targets = int(effect.max_targets if effect.max_targets is not None else 1)
+            max_targets = max(min_targets, max_targets)
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            if choice_ready and choice_source == source_uid:
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                selected_uids = [uid for uid in selected_uids if uid in candidates]
+                if max_targets >= 0:
+                    selected_uids = selected_uids[:max_targets]
+
+                actual_to_zone = to_zone
+                generic_cond = effect.to_zone_if_condition if isinstance(effect.to_zone_if_condition, dict) else None
+                generic_to_zone = str(effect.to_zone_if or "").strip()
+                if generic_cond and generic_to_zone:
+                    cond_ctx = RuleEventContext(engine=engine, event="on_effect", player_idx=target, payload={"card": source_uid})
+                    if self._eval_condition_node(cond_ctx, target, generic_cond):
+                        actual_to_zone = generic_to_zone
+                else:
+                    condition_name = _norm(effect.controller_has_saint_with_name or "")
+                    conditional_to = str(effect.to_zone_if_controller_has_saint_with_name or "").strip()
+                    if condition_name and conditional_to:
+                        has_required = any(
+                            _norm(engine.state.instances[uid].definition.name) == condition_name
+                            for uid in engine.all_saints_on_field(target)
+                        )
+                        actual_to_zone = conditional_to if has_required else to_zone
+
+                for selected_uid in selected_uids:
+                    still_available = selected_uid in self._get_zone_cards(engine, target, from_zone)
+                    if not still_available:
+                        continue
+                    moved = self._move_uid_to_zone(engine, selected_uid, actual_to_zone, target)
+                    if not moved and _norm(actual_to_zone) == "hand":
+                        self._move_uid_to_zone(engine, selected_uid, "relicario", target)
+
+                if effect.shuffle_after:
+                    engine.rng.shuffle(player.deck)
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                return
+
+            candidates = self._get_zone_cards(engine, target, from_zone)
+            if not candidates:
+                if effect.shuffle_after:
+                    engine.rng.shuffle(player.deck)
+                return
+
+            default_title = "Scegli Carta"
+            if from_zone == "graveyard":
+                default_title = "Cimitero"
+            flags["_runtime_choice_source"] = source_uid
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = default_title
+            flags["_runtime_choice_prompt"] = (
+                f"Scegli da {from_zone} una o piu carte (min {min_targets}, max {max_targets}) oppure Nessuna."
+            )
+            flags["_runtime_choice_min_targets"] = str(min_targets)
+            flags["_runtime_choice_max_targets"] = str(max_targets)
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
         if action == "inflict_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             engine.gain_sin(target, max(0, int(effect.amount)))
@@ -2119,6 +2422,16 @@ class RuntimeCardManager:
                 if inst is None:
                     continue
                 engine.destroy_saint_by_uid(inst.owner, t_uid, excommunicate=True, cause="effect")
+            return
+        if action == "excommunicate_top_cards_from_relicario":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            count = max(1, int(effect.amount or 1))
+            for _ in range(count):
+                player = engine.state.players[target]
+                if not player.deck:
+                    break
+                top_uid = player.deck[-1]
+                engine.excommunicate_card(target, top_uid, from_zone_override="relicario")
             return
         if action == "remove_from_board_no_sin":
             for t_uid in targets:
@@ -2573,6 +2886,37 @@ class RuntimeCardManager:
                 for uid in ctx.engine.all_saints_on_field(owner_idx)
             ):
                 return False
+        artifact_name = condition.get("controller_has_artifact_with_name")
+        if artifact_name:
+            wanted = _norm(str(artifact_name))
+            if not any(
+                a_uid and _norm(ctx.engine.state.instances[a_uid].definition.name) == wanted
+                for a_uid in ctx.engine.state.players[owner_idx].artifacts
+            ):
+                return False
+        controller_has_cards = condition.get("controller_has_cards")
+        if isinstance(controller_has_cards, dict):
+            min_count = max(0, int(controller_has_cards.get("min_count", 1) or 1))
+            if len(self._collect_cards_for_requirement(ctx.engine, owner_idx, controller_has_cards)) < min_count:
+                return False
+        sacrifice_name = condition.get("can_play_by_sacrificing_specific_card_from_field")
+        if sacrifice_name:
+            wanted = _norm(str(sacrifice_name))
+            p = ctx.engine.state.players[owner_idx]
+            found = False
+            for zone_uid in p.attack + p.defense + p.artifacts:
+                if zone_uid and _norm(ctx.engine.state.instances[zone_uid].definition.name) == wanted:
+                    found = True
+                    break
+            if not found and p.building:
+                found = _norm(ctx.engine.state.instances[p.building].definition.name) == wanted
+            if not found:
+                return False
+        can_play_by_sacrificing = condition.get("can_play_by_sacrificing")
+        if isinstance(can_play_by_sacrificing, dict):
+            count = max(1, int(can_play_by_sacrificing.get("count", 1) or 1))
+            if len(self._collect_cards_for_requirement(ctx.engine, owner_idx, can_play_by_sacrificing)) < count:
+                return False
 
         hand_name = condition.get("controller_has_card_in_hand_with_name")
         if hand_name:
@@ -2717,6 +3061,45 @@ class RuntimeCardManager:
             if reason not in allowed_reason:
                 return False
         return True
+
+    def _collect_cards_for_requirement(self, engine: GameEngine, owner_idx: int, requirement: dict[str, Any]) -> list[str]:
+        owner_key = str(requirement.get("owner", "me"))
+        zones = list(requirement.get("zones", []) or [])
+        if not zones:
+            zones = [str(requirement.get("zone", "field"))]
+
+        card_filter = dict(requirement.get("card_filter", {}) or {})
+        raw_crosses_gte = card_filter.get("crosses_gte")
+        raw_crosses_lte = card_filter.get("crosses_lte")
+        crosses_gte: int | None = None
+        crosses_lte: int | None = None
+        if raw_crosses_gte is not None:
+            crosses_gte = int(raw_crosses_gte)
+        if raw_crosses_lte is not None:
+            crosses_lte = int(raw_crosses_lte)
+        target = TargetSpec(
+            type="cards_controlled_by_owner",
+            owner=owner_key,
+            zone=str(zones[0]) if zones else "field",
+            zones=[str(z) for z in zones],
+            card_filter=CardFilterSpec(
+                name_equals=str(card_filter.get("name_equals")) if card_filter.get("name_equals") is not None else None,
+                name_contains=str(card_filter.get("name_contains")) if card_filter.get("name_contains") is not None else None,
+                name_not_contains=(
+                    str(card_filter.get("name_not_contains")) if card_filter.get("name_not_contains") is not None else None
+                ),
+                card_type_in=[str(v) for v in list(card_filter.get("card_type_in", []) or [])],
+                crosses_gte=crosses_gte,
+                crosses_lte=crosses_lte,
+            ),
+        )
+
+        pool: list[str] = []
+        for scoped_owner in self._target_owner_indices(owner_idx, owner_key):
+            for zone_name in target.zones if target.zones else [target.zone]:
+                pool.extend(self._get_zone_cards(engine, scoped_owner, zone_name))
+        deduped_pool = list(dict.fromkeys(pool))
+        return self._filter_target_pool(engine, owner_idx, target, deduped_pool)
 
 
 runtime_cards = RuntimeCardManager()

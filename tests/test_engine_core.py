@@ -186,6 +186,39 @@ def test_pianta_carnivora_gets_bonus_with_insetto_della_palude() -> None:
     assert engine.get_effective_strength(pianta_uid) == 5
 
 
+def test_jordh_halves_incoming_damage_from_enemy_saints() -> None:
+    cards = [
+        CardDefinition("Attaccante", "Santo", "3", 10, 7, "", "NOR-1"),
+        CardDefinition("Jordh", "Santo", "3", 8, 2, "", "NOR-1"),
+        CardDefinition("Difensore", "Santo", "3", 10, 1, "", "NOR-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NOR-1", "NOR-1", seed=77)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    i_att = _force_card_in_hand(engine, 0, "Attaccante")
+    assert engine.play_card(0, i_att, "a1").ok
+
+    engine.end_turn()
+    engine.start_turn()
+    engine.state.players[1].inspiration = 20
+    i_jordh = _force_card_in_hand(engine, 1, "Jordh")
+    assert engine.play_card(1, i_jordh, "a1").ok
+    i_def = _force_card_in_hand(engine, 1, "Difensore")
+    assert engine.play_card(1, i_def, "a2").ok
+    defender_uid = engine.state.players[1].attack[1]
+    assert defender_uid is not None
+    before = engine.state.instances[defender_uid].current_faith
+
+    engine.end_turn()
+    engine.start_turn()
+    out = engine.attack(0, 0, 1)
+    assert out.ok
+    assert engine.state.instances[defender_uid].current_faith == max(0, (before or 0) - 3)
+
+
 def test_loki_activate_sacrifices_without_sin_and_summons_from_hand() -> None:
     cards = [
         CardDefinition("Loki", "Santo", "5", 6, 2, "", "NOR-1"),

@@ -17,17 +17,17 @@ PREMADE_DECKS: dict[str, dict] = {
         ],
     },
     "test_giocatore": {
-        "religion": "Animismo",
+        "religion": "Cristianesimo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Frate Curatore", 10), ("Vulcano", 10), ("Terremoto: Magnitudo 10", 10),
+            ("Muninn", 10), ("Odino", 10), ("Huginn", 10),
         ],
     },
     "test_nemico": {
-        "religion": "Animismo",
+        "religion": "Cristianesimo",
         "name": "TEST NEMICO",
         "cards": [
-            ("Vescovo della Città Buia", 10), ("vescovo della Città Lucente", 10), ("deriu-hebet", 10),
+            ("Vescovo della Città Buia", 10), ("vescovo della Città Lucente", 10), ("Frammento dello Specchio", 10),
         ],
     },
     "cristianesimo_via_martirio": {

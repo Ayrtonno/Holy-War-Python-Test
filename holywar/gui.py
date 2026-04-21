@@ -1173,10 +1173,44 @@ class HolyWarGUI(tk.Tk):
         self._reveal_prompt_open = True
         self._reveal_prompt_last_uid = reveal_uid
         try:
-            messagebox.showinfo(
-                "Carta rivelata",
-                f"Hai rivelato: {inst.definition.name}\n\nPremi OK per continuare la risoluzione dell'effetto.",
-            )
+            choice_candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+            if choice_candidates_raw:
+                candidate_uids = [v for v in choice_candidates_raw.split(";;") if v]
+                choice_owner = int(str(flags.get("_runtime_choice_owner", "0")) or "0")
+                choices: list[tuple[str, str]] = []
+                for c_uid in candidate_uids:
+                    c_inst = self.engine.state.instances.get(c_uid)
+                    if c_inst is None:
+                        continue
+                    choices.append((self._format_guided_candidate(c_uid, choice_owner), c_uid))
+                title = str(flags.get("_runtime_choice_title", "Scegli Carta")) or "Scegli Carta"
+                prompt = (
+                    str(flags.get("_runtime_choice_prompt", "")).strip()
+                    or "Scegli una carta tra le prime del reliquiario oppure Nessuna."
+                )
+                min_targets = int(str(flags.get("_runtime_choice_min_targets", "0")) or "0")
+                max_targets_raw = str(flags.get("_runtime_choice_max_targets", "1")).strip()
+                max_targets = int(max_targets_raw) if max_targets_raw else 1
+                allow_multi = max_targets != 1
+
+                canceled, selected = self._open_board_target_picker(
+                    title=title,
+                    prompt=prompt,
+                    choices=choices,
+                    allow_multi=allow_multi,
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=True,
+                    allow_manual=False,
+                    card_uid=reveal_uid,
+                )
+                flags["_runtime_choice_selected"] = "" if canceled or not selected else str(selected)
+                flags["_runtime_choice_ready"] = True
+            else:
+                messagebox.showinfo(
+                    "Carta rivelata",
+                    f"Hai rivelato: {inst.definition.name}\n\nPremi OK per continuare la risoluzione dell'effetto.",
+                )
         finally:
             self._reveal_prompt_open = False
 
@@ -1359,15 +1393,15 @@ class HolyWarGUI(tk.Tk):
         inst = self.engine.state.instances[uid]
         ctype = inst.definition.card_type.lower().strip()
         target: str | None = None
+        if self._card_requires_target(uid):
+            self.ask_guided_quick_target(uid)
+            return
         if ctype in {"santo", "token"}:
             play_owner = self._play_owner_idx(uid)
             target = self._first_open_slot(play_owner, "a") or self._first_open_slot(play_owner, "d")
             if target is None:
                 messagebox.showwarning("Campo pieno", "Nessuno slot libero in Attacco/Difesa.")
                 return
-        elif self._card_requires_target(uid):
-            self.ask_guided_quick_target(uid)
-            return
         self.play_uid(uid, target)
 
     def show_board_card_detail(self, relative_player: int, zone: str, idx: int) -> None:

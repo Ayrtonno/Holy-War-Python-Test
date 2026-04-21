@@ -48,17 +48,7 @@ def validate_play_constraints(
         if current is not None:
             return False, "Slot occupato.", place_owner_idx, zone, slot
     elif ctype == "artefatto":
-        if _norm(card.definition.name) == _norm("Mjolnir"):
-            req_idx = next(
-                (
-                    i
-                    for i, a_uid in enumerate(player.artifacts)
-                    if a_uid and _norm(engine.state.instances[a_uid].definition.name) == _norm("Járngreipr")
-                ),
-                None,
-            )
-            if req_idx is None:
-                return False, "Per giocare Mjolnir devi mandare Járngreipr dal terreno al cimitero.", place_owner_idx, zone, slot
+        pass
     elif ctype == "edificio":
         if player.building:
             return False, "Hai gia un Edificio. Va distrutto prima di giocarne un altro.", place_owner_idx, zone, slot
@@ -73,6 +63,110 @@ def validate_play_constraints(
                 return False, "Per giocare Sfinge servono Cheope, Chefren e Micerino sul campo.", place_owner_idx, zone, slot
 
     return True, "", place_owner_idx, zone, slot
+
+
+def _find_owned_field_uid_by_name(engine: "GameEngine", owner_idx: int, card_name: str) -> str | None:
+    wanted = _norm(card_name)
+    player = engine.state.players[owner_idx]
+    for uid in player.attack + player.defense + player.artifacts:
+        if uid and _norm(engine.state.instances[uid].definition.name) == wanted:
+            return uid
+    if player.building and _norm(engine.state.instances[player.building].definition.name) == wanted:
+        return player.building
+    return None
+
+
+def _zone_uids_for_owner(engine: "GameEngine", owner_idx: int, zone_name: str) -> list[str]:
+    player = engine.state.players[owner_idx]
+    zone = _norm(zone_name)
+    if zone == "field":
+        out = [uid for uid in player.attack + player.defense + player.artifacts if uid]
+        if player.building:
+            out.append(player.building)
+        return out
+    if zone == "attack":
+        return [uid for uid in player.attack if uid]
+    if zone == "defense":
+        return [uid for uid in player.defense if uid]
+    if zone in {"artifact", "artifacts"}:
+        return [uid for uid in player.artifacts if uid]
+    if zone == "building":
+        return [player.building] if player.building else []
+    if zone == "hand":
+        return list(player.hand)
+    if zone in {"deck", "relicario"}:
+        return list(player.deck)
+    if zone == "graveyard":
+        return list(player.graveyard)
+    if zone == "excommunicated":
+        return list(player.excommunicated)
+    return []
+
+
+def _match_requirement_filter(engine: "GameEngine", uid: str, card_filter: dict) -> bool:
+    inst = engine.state.instances.get(uid)
+    if inst is None:
+        return False
+    name_eq = _norm(str(card_filter.get("name_equals", "")))
+    if name_eq and _norm(inst.definition.name) != name_eq:
+        return False
+    name_contains = _norm(str(card_filter.get("name_contains", "")))
+    if name_contains and name_contains not in _norm(inst.definition.name):
+        return False
+    name_not_contains = _norm(str(card_filter.get("name_not_contains", "")))
+    if name_not_contains and name_not_contains in _norm(inst.definition.name):
+        return False
+    type_filter = {_norm(str(v)) for v in list(card_filter.get("card_type_in", []) or [])}
+    if type_filter and _norm(inst.definition.card_type) not in type_filter:
+        return False
+    return True
+
+
+def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement: dict) -> list[str]:
+    owner_key = _norm(str(requirement.get("owner", "me")))
+    if owner_key in {"opponent", "enemy", "other"}:
+        owners = [1 - owner_idx]
+    elif owner_key in {"any", "both", "all", "either"}:
+        owners = [owner_idx, 1 - owner_idx]
+    else:
+        owners = [owner_idx]
+
+    zones = list(requirement.get("zones", []) or [])
+    if not zones:
+        zones = [str(requirement.get("zone", "field"))]
+    card_filter = dict(requirement.get("card_filter", {}) or {})
+
+    out: list[str] = []
+    for real_owner in owners:
+        for zone_name in zones:
+            for uid in _zone_uids_for_owner(engine, real_owner, str(zone_name)):
+                if _match_requirement_filter(engine, uid, card_filter):
+                    out.append(uid)
+    return list(dict.fromkeys(out))
+
+
+def _consume_scripted_play_costs(engine: "GameEngine", player_idx: int, card: "CardInstance") -> ActionResult | None:
+    script = runtime_cards.get_script(card.definition.name)
+    if script is None:
+        return None
+    requirement_cfg = script.play_requirements.get("can_play_by_sacrificing")
+    if isinstance(requirement_cfg, dict):
+        count = max(1, int(requirement_cfg.get("count", 1) or 1))
+        candidates = _collect_requirement_cards(engine, player_idx, requirement_cfg)
+        if len(candidates) < count:
+            return ActionResult(False, f"Per giocare {card.definition.name} non ci sono abbastanza carte da sacrificare.")
+        for uid in candidates[:count]:
+            owner = engine.state.instances[uid].owner
+            engine.send_to_graveyard(owner, uid)
+        return None
+
+    legacy_requirement = str(script.play_requirements.get("can_play_by_sacrificing_specific_card_from_field", "")).strip()
+    if legacy_requirement:
+        sacrifice_uid = _find_owned_field_uid_by_name(engine, player_idx, legacy_requirement)
+        if not sacrifice_uid:
+            return ActionResult(False, f"Per giocare {card.definition.name} devi sacrificare {legacy_requirement} dal tuo campo.")
+        engine.send_to_graveyard(player_idx, sacrifice_uid)
+    return None
 
 
 # Computes the final Inspiration cost after all card-specific modifiers.
@@ -197,23 +291,6 @@ def handle_saint_play(
 def handle_artifact_play(engine: "GameEngine", player_idx: int, uid: str) -> ActionResult:
     player = engine.state.players[player_idx]
     card = engine.state.instances[uid]
-
-    if _norm(card.definition.name) == _norm("Mjolnir"):
-        req_idx = next(
-            (
-                i
-                for i, a_uid in enumerate(player.artifacts)
-                if a_uid and _norm(engine.state.instances[a_uid].definition.name) == _norm("Járngreipr")
-            ),
-            None,
-        )
-        if req_idx is None:
-            player.hand.append(uid)
-            return ActionResult(False, "Per giocare Mjolnir devi mandare JÃ¡rngreipr dal terreno al cimitero.")
-        req_uid = player.artifacts[req_idx]
-        if req_uid:
-            engine.send_to_graveyard(player_idx, req_uid)
-
     blocked = min(ARTIFACT_SLOTS - 1, engine._count_artifact(1 - player_idx, "Gggnag'ljep"))
     usable_slots = list(range(ARTIFACT_SLOTS - blocked))
     slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
@@ -299,6 +376,10 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
             return spend_error
 
     uid = player.hand.pop(hand_index)
+    scripted_cost_error = _consume_scripted_play_costs(engine, player_idx, card)
+    if scripted_cost_error is not None:
+        player.hand.insert(hand_index, uid)
+        return scripted_cost_error
     emit_play_events(engine, player_idx, uid, ctype, target)
 
     if ctype in SAINT_TYPES:
@@ -348,3 +429,5 @@ def quick_play(engine: "GameEngine", player_idx: int, hand_index: int, target: s
         engine.check_win_conditions()
         return ActionResult(True, f"{player.name} scomunica Moribondo e protegge {target_card.definition.name}.")
     return resolve_quick_play_from_hand(engine, player_idx, uid, target)
+
+

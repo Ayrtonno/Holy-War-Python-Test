@@ -6,18 +6,9 @@ SCRIPT = {
     "on_play_mode": "noop",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "triggered_effects": [
-        {
-            "trigger": {"event": "on_this_card_deals_damage", "frequency": "each_turn"},
-            "target": {"type": "event_card"},
-            "effect": {"action": "increase_strength", "amount": 1},
-        },
-        {
-            "trigger": {"event": "on_this_card_kills_in_battle", "frequency": "each_turn"},
-            "target": {"type": "event_card"},
-            "effect": {"action": "increase_strength", "amount": 2},
-        },
-    ],
+    "strength_gain_on_damage_to_enemy_saint": 1,
+    "strength_gain_on_lethal_to_enemy_saint": 2,
+    "triggered_effects": [],
     "on_play_actions": [],
 }
 

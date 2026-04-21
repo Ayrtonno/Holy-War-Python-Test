@@ -194,14 +194,23 @@ def resolve_targeted_attack(
 
     base_strength = max(0, attacker.definition.strength or 0)
     damage = engine.get_effective_strength(attacker_uid)
-    jordh_active = any(
-        uid and _norm(engine.state.instances[uid].definition.name) == _norm("Jordh")
-        for uid in defender_player.attack + defender_player.defense
-    )
-    if jordh_active:
+    attacker_type_key = _norm(attacker.definition.card_type)
+    defender_damage_divisor = 1
+    if attacker_type_key in {"santo", "token"}:
+        for uid in defender_player.attack + defender_player.defense:
+            if not uid:
+                continue
+            aura_divisor = runtime_cards.get_incoming_damage_from_enemy_saints_divisor(
+                engine.state.instances[uid].definition.name
+            )
+            if aura_divisor > defender_damage_divisor:
+                defender_damage_divisor = aura_divisor
+    if defender_damage_divisor > 1:
         before_damage = damage
-        damage = max(0, damage // 2)
-        engine.state.log(f"Jordh modifica il danno: {before_damage}->{damage}.")
+        damage = max(0, damage // defender_damage_divisor)
+        engine.state.log(
+            f"Mitigazione runtime del danno da Santi: {before_damage}->{damage} (divisore {defender_damage_divisor})."
+        )
     damage = engine._apply_damage_mitigation(defender_idx, damage)
     def_faith = defender.current_faith or 0
     if damage <= 0:
@@ -245,11 +254,13 @@ def resolve_targeted_attack(
             attacker.current_faith = 4
         if attacker_name_key == _norm("Sequoia"):
             attacker.definition.strength = (attacker.definition.strength or 0) * 2
-        if attacker_name_key == _norm("Odino"):
-            attacker.definition.strength = (attacker.definition.strength or 0) + 2
-    elif attacker_name_key == _norm("Odino"):
-        attacker.definition.strength = (attacker.definition.strength or 0) + 1
+        gain = runtime_cards.get_strength_gain_on_lethal_to_enemy_saint(attacker.definition.name)
+        if gain:
+            attacker.definition.strength = (attacker.definition.strength or 0) + int(gain)
     else:
+        gain = runtime_cards.get_strength_gain_on_damage_to_enemy_saint(attacker.definition.name)
+        if gain:
+            attacker.definition.strength = (attacker.definition.strength or 0) + int(gain)
         if _norm(defender.definition.name) == _norm("Schiavi") and damage > 0:
             defender.current_faith = (defender.current_faith or 0) + 2
 

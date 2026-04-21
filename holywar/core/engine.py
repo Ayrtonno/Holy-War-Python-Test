@@ -239,10 +239,25 @@ class GameEngine:
                     strength += int(tag.split(":", 1)[1])
                 except ValueError:
                     pass
-        if self._has_artifact(owner, "Járngreipr"):
-            strength += 2
         if self._has_artifact(owner, "Gungnir"):
             strength += 1
+        zone = self._locate_uid_zone(owner, uid)
+        if _norm(inst.definition.card_type) in {"santo", "token"} and zone in {"attack", "defense"}:
+            for a_uid in self.state.players[owner].artifacts:
+                if not a_uid:
+                    continue
+                aura = runtime_cards.get_grants_strength_to_friendly_saints(
+                    self.state.instances[a_uid].definition.name
+                )
+                if aura:
+                    excluded = {
+                        _norm(name)
+                        for name in runtime_cards.get_grants_strength_to_friendly_saints_except_names(
+                            self.state.instances[a_uid].definition.name
+                        )
+                    }
+                    if _norm(inst.definition.name) not in excluded:
+                        strength += int(aura)
         for rule in runtime_cards.get_strength_bonus_rules(inst.definition.name):
             artifact_name = str(rule.get("artifact_name", "")).strip()
             if not artifact_name or not self._has_artifact(owner, artifact_name):
