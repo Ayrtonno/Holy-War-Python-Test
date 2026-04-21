@@ -722,8 +722,16 @@ class RuntimeCardManager:
         self.ensure_all_cards_migrated(engine)
         inst = engine.state.instances[uid]
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+
+        mode = _norm(script.on_activate_mode)
+
+        # Nessuna abilità attivabile manualmente
+        if mode not in {"scripted", "custom"}:
+            return (False, "Questa carta non ha un effetto attivabile.")
+
         if not script.on_activate_actions:
-            return (True, None)
+            return (False, "Questa carta non ha un effetto attivabile.")
+
         return self._validate_manual_target_actions(
             engine=engine,
             owner_idx=player_idx,
@@ -2974,7 +2982,11 @@ class RuntimeCardManager:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
                     continue
-                engine.destroy_saint_by_uid(inst.owner, t_uid, excommunicate=True, cause="effect")
+                ctype = _norm(inst.definition.card_type)
+                if ctype in {"santo", "token"}:
+                    engine.destroy_saint_by_uid(inst.owner, t_uid, excommunicate=True, cause="effect")
+                else:
+                    engine.excommunicate_card(inst.owner, t_uid)
             return
         if action == "excommunicate_card_no_sin":
             for t_uid in targets:

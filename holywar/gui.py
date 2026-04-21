@@ -283,6 +283,8 @@ class HolyWarGUI(tk.Tk):
             "nessun effetto attivabile",
             "effetto registrato",
             "in sviluppo",
+            "effetto non trascritto",
+            "legacy disabilitato",
         ]
         return not any(m in text for m in blocked_markers)
 
@@ -440,11 +442,22 @@ class HolyWarGUI(tk.Tk):
         uid = self.engine.resolve_board_uid(player_idx, source)
         if uid is None:
             return False
+
+        script = self._card_script(uid)
+        if script is None:
+            return False
+
+        mode = str(getattr(script, "on_activate_mode", "auto") or "auto").strip().lower()
+        if mode not in {"scripted", "custom"}:
+            return False
+        if not getattr(script, "on_activate_actions", None):
+            return False
+
         inst = self.engine.state.instances.get(uid)
         if inst is not None:
             if runtime_cards.is_activate_once_per_turn(inst.definition.name) and not self.engine.can_activate_once_per_turn(uid):
                 return False
-        mode = self._activate_targeting_mode(uid)
+
         if self._can_activate_target(player_idx, source, None):
             return True
         return bool(self._valid_activation_targets(player_idx, source, uid))
@@ -1407,7 +1420,10 @@ class HolyWarGUI(tk.Tk):
         menu = tk.Menu(self, tearoff=0)
         if self._is_monsone_card(uid):
             menu.add_command(label="Gioca Effetto...", command=lambda uu=uid: self.ask_guided_quick_target(uu))
-            menu.tk_popup(event.x_root, event.y_root)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
             return
         if self.chain_active and (ctype in {"benedizione", "maledizione"} or is_moribondo):
             valid_targets = self._valid_play_targets(own_idx, idx, uid, quick=True)
@@ -1454,7 +1470,10 @@ class HolyWarGUI(tk.Tk):
             menu.add_command(label="Gioca", command=lambda uu=uid: self.play_uid(uu, None))
 
         menu.bind("<Unmap>", lambda _e: self._clear_slot_highlights())
-        menu.tk_popup(event.x_root, event.y_root)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def on_hand_select(self, _event) -> None:
         if self.engine is None:
@@ -2451,7 +2470,10 @@ class HolyWarGUI(tk.Tk):
         else:
             menu.add_command(label="Attiva abilita", state="disabled")
         menu.bind("<Unmap>", lambda _e: self._clear_slot_highlights())
-        menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
+        try:
+            menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
+        finally:
+            menu.grab_release()
 
     def do_attack(self, from_slot: int, target_slot: int | None) -> None:
         if self.engine is None or not self.can_human_act():

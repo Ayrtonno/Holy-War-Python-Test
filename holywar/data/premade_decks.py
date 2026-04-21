@@ -6,7 +6,7 @@ PREMADE_DECKS: dict[str, dict] = {
         "religion": "Cristianesimo",
         "name": "TEST PLAYER",
         "cards": [
-            ("Pietra Nera", 7), ("Pietra Focaia", 7), ("Pietra Levigata", 7), ("Pietre Aguzze", 7), ("Albero di Pietra", 7),
+            ("Albero Fortunato", 10), ("Diboscamento", 10), ("Inverno", 10),
         ],
     },
     "test_nemico": {
