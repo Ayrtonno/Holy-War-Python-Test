@@ -23,6 +23,75 @@ def _emit_end_turn_events(engine: "GameEngine", current: int) -> None:
     engine._emit_event("on_my_turn_end", current, player=current)
     engine._emit_event("on_opponent_turn_end", 1 - current, opponent=current)
 
+def _is_preparation_context(engine: "GameEngine") -> bool:
+    return int(engine.state.turn_number) == 0 and int(engine.state.preparation_turns_done) < 2
+
+
+def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) -> bool:
+    player = engine.state.players[player_idx]
+    if uid not in player.hand:
+        return False
+    if uid not in engine.state.instances:
+        return False
+
+    flags = engine.state.flags
+    previous_source = flags.get("_runtime_source_card")
+    previous_selected = flags.get("_runtime_selected_target")
+
+    flags["_runtime_source_card"] = uid
+    flags["_runtime_selected_target"] = ""
+    try:
+        runtime_cards._apply_effect(
+            engine,
+            player_idx,
+            uid,
+            [uid],
+            EffectSpec(action="move_source_to_board"),
+        )
+    finally:
+        if previous_source is None:
+            flags.pop("_runtime_source_card", None)
+        else:
+            flags["_runtime_source_card"] = previous_source
+        if previous_selected is None:
+            flags.pop("_runtime_selected_target", None)
+        else:
+            flags["_runtime_selected_target"] = previous_selected
+
+    zone_now = engine._locate_uid_zone(player_idx, uid)
+    return uid not in player.hand and zone_now in {"attack", "defense", "artifacts", "artifact", "building"}
+
+
+def _resolve_deferred_auto_play_on_turn_start(engine: "GameEngine", current: int) -> bool:
+    runtime_state = ensure_runtime_state(engine)
+    deferred = runtime_state.setdefault("deferred_auto_play_on_turn_start", {"0": [], "1": []})
+    pending_uids = list(deferred.get(str(current), []) or [])
+    if not pending_uids:
+        return False
+
+    player = engine.state.players[current]
+
+    for uid in pending_uids:
+        if uid not in engine.state.instances:
+            continue
+        if uid not in player.hand:
+            continue
+
+        card_name = engine.state.instances[uid].definition.name
+        if not runtime_cards.get_auto_play_on_draw(card_name):
+            continue
+
+        played = _try_auto_play_from_hand(engine, current, uid)
+
+        deferred[str(current)] = [x for x in deferred.get(str(current), []) if x != uid]
+
+        if not played:
+            return False
+
+        if runtime_cards.get_end_turn_on_draw(card_name):
+            return True
+
+    return False
 
 # Performs the initial setup draw for both players at match start.
 def initial_setup_draw(engine: "GameEngine") -> None:
@@ -72,53 +141,23 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
                 f"mano_size={len(player.hand)} deck_size={len(player.deck)}"
             )
 
+        auto_play_succeeded = False
+
         if runtime_cards.get_auto_play_on_draw(card_name):
-            flags = engine.state.flags
-            previous_source = flags.get("_runtime_source_card")
-            previous_selected = flags.get("_runtime_selected_target")
+            is_controller_turn = int(player_idx) == int(engine.state.active_player)
 
-            if _norm(card_name) == _norm("Albero Sacro"):
-                engine.state.log(
-                    f"in_hand={drawn_uid in player.hand}"
-                )
+            if is_controller_turn:
+                auto_play_succeeded = _try_auto_play_from_hand(engine, player_idx, drawn_uid)
+            else:
+                runtime_state = engine.state.flags.setdefault("runtime_state", {})
+                deferred = runtime_state.setdefault("deferred_auto_play_on_turn_start", {"0": [], "1": []})
+                if drawn_uid in player.hand and drawn_uid not in deferred[str(player_idx)]:
+                    deferred[str(player_idx)].append(drawn_uid)
 
-            flags["_runtime_source_card"] = drawn_uid
-            flags["_runtime_selected_target"] = ""
-            try:
-                runtime_cards._apply_effect(engine, player_idx, drawn_uid, [drawn_uid], EffectSpec(action="move_source_to_board"))
-            finally:
-                if previous_source is None:
-                    flags.pop("_runtime_source_card", None)
-                else:
-                    flags["_runtime_source_card"] = previous_source
-                if previous_selected is None:
-                    flags.pop("_runtime_selected_target", None)
-                else:
-                    flags["_runtime_selected_target"] = previous_selected
-
-            if _norm(card_name) == _norm("Albero Sacro"):
-                zone_now = engine._locate_uid_zone(player_idx, drawn_uid)
-                engine.state.log(
-                    f"in_hand={drawn_uid in player.hand}"
-                )
-
-        if runtime_cards.get_end_turn_on_draw(card_name):
+        if runtime_cards.get_end_turn_on_draw(card_name) and auto_play_succeeded:
             runtime_state = engine.state.flags.setdefault("runtime_state", {})
-            current_phase = str(engine.state.phase).strip().lower()
-            is_preparation_draw = current_phase == "preparation"
-            is_real_turn_draw = (
-                int(player_idx) == int(engine.state.active_player)
-                and current_phase in {"draw", "main", "active", "turn_start"}
-            )
 
-            if _norm(card_name) == _norm("Albero Sacro"):
-                engine.state.log(
-                    f"is_preparation_draw={is_preparation_draw} "
-                    f"is_real_turn_draw={is_real_turn_draw} "
-                    f"active_player={engine.state.active_player} phase={engine.state.phase}"
-                )
-
-            if is_preparation_draw:
+            if _is_preparation_context(engine):
                 pending = runtime_state.setdefault("preparation_end_turn_pending", [])
                 if player_idx not in pending:
                     pending.append(player_idx)
@@ -127,7 +166,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
                 if player_idx not in prep_auto_end:
                     prep_auto_end.append(player_idx)
 
-            elif is_real_turn_draw:
+            elif int(player_idx) == int(engine.state.active_player):
                 runtime_state["request_end_turn_player"] = player_idx
 
         engine._emit_event("after_card_drawn_from_deck", player_idx, card=drawn_uid)
@@ -239,6 +278,18 @@ def start_turn(engine: "GameEngine") -> None:
     current = engine.state.active_player
     player = engine.state.players[current]
     runtime_state = ensure_runtime_state(engine)
+    if _resolve_deferred_auto_play_on_turn_start(engine, current):
+        if _is_preparation_context(engine):
+            prep_auto_end = runtime_state.setdefault("request_end_preparation_players", [])
+            if current not in prep_auto_end:
+                prep_auto_end.append(current)
+            engine.state.log(f"{player.name} termina immediatamente la preparazione.")
+            end_turn(engine)
+            return
+
+        engine.state.log(f"{player.name} termina immediatamente il turno.")
+        end_turn(engine)
+        return
     runtime_state["battle_phase_started"] = False
     stale_player = runtime_state.get("request_end_turn_player", None)
     if stale_player is not None and stale_player not in {0, 1}:
