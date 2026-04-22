@@ -94,6 +94,15 @@ class GameEngine:
             self.rules_api(actor_idx).emit(event.replace("relicario", "reliquiary"), actor_idx=actor_idx, **payload)
         elif "reliquiary" in event:
             self.rules_api(actor_idx).emit(event.replace("reliquiary", "relicario"), actor_idx=actor_idx, **payload)
+        if event in {
+            "on_enter_field",
+            "on_summoned_from_hand",
+            "on_token_summoned",
+            "on_card_sent_to_graveyard",
+            "on_card_excommunicated",
+        }:
+            runtime_cards.refresh_conditional_faith_bonuses(self, 0)
+            runtime_cards.refresh_conditional_faith_bonuses(self, 1)
 
     # Returns the current zone string for a card uid owned by a player.
     def _locate_uid_zone(self, owner_idx: int, uid: str) -> str:

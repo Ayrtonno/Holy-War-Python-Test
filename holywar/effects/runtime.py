@@ -862,6 +862,85 @@ class RuntimeCardManager:
         if script is None:
             return []
         return [dict(rule) for rule in script.strength_bonus_rules]
+    
+    def get_faith_bonus_rules(self, card_name: str) -> list[dict]:
+        script = self.get_script(card_name)
+        if script is None:
+            return []
+        raw = getattr(script, "faith_bonus_rules", None)
+        if isinstance(raw, list):
+            return [dict(item) for item in raw if isinstance(item, dict)]
+        return []
+    
+    def refresh_conditional_faith_bonuses(self, engine: "GameEngine", owner_idx: int) -> None:
+        player = engine.state.players[owner_idx]
+        field_uids = [uid for uid in (player.attack + player.defense) if uid]
+
+        for uid in field_uids:
+            inst = engine.state.instances[uid]
+            base_faith = inst.definition.faith if inst.definition.faith is not None else 0
+
+            old_bonus = 0
+            kept_tags: list[str] = []
+            for tag in inst.blessed:
+                if isinstance(tag, str) and tag.startswith("conditional_faith_bonus:"):
+                    try:
+                        old_bonus += int(tag.split(":", 1)[1])
+                    except ValueError:
+                        pass
+                else:
+                    kept_tags.append(tag)
+            inst.blessed = kept_tags
+
+            new_bonus = 0
+            for rule in self.get_faith_bonus_rules(inst.definition.name):
+                required_name = str(rule.get("controller_has_card_with_name", "")).strip()
+                required_zone = str(rule.get("controller_has_card_zone", "field")).strip().lower() or "field"
+                required_self_name = str(rule.get("if_card_name", "")).strip()
+
+                if required_self_name and _norm(inst.definition.name) != _norm(required_self_name):
+                    continue
+
+                in_zone = False
+                if required_name:
+                    if required_zone == "field":
+                        in_zone = any(
+                            _norm(engine.state.instances[f_uid].definition.name) == _norm(required_name)
+                            for f_uid in field_uids
+                        )
+                    elif required_zone == "hand":
+                        in_zone = any(
+                            _norm(engine.state.instances[h_uid].definition.name) == _norm(required_name)
+                            for h_uid in player.hand
+                        )
+                    elif required_zone in {"deck", "relicario"}:
+                        in_zone = any(
+                            _norm(engine.state.instances[d_uid].definition.name) == _norm(required_name)
+                            for d_uid in player.deck
+                        )
+                    elif required_zone == "graveyard":
+                        in_zone = any(
+                            _norm(engine.state.instances[g_uid].definition.name) == _norm(required_name)
+                            for g_uid in player.graveyard
+                        )
+                    elif required_zone == "excommunicated":
+                        in_zone = any(
+                            _norm(engine.state.instances[e_uid].definition.name) == _norm(required_name)
+                            for e_uid in player.excommunicated
+                        )
+
+                    if not in_zone:
+                        continue
+
+                new_bonus += int(rule.get("self_bonus", 0) or 0)
+
+            current_faith = inst.current_faith if inst.current_faith is not None else base_faith
+            delta = new_bonus - old_bonus
+            if delta != 0:
+                inst.current_faith = max(0, current_faith + delta)
+
+            if new_bonus:
+                inst.blessed.append(f"conditional_faith_bonus:{new_bonus}")
 
     def get_sigilli_strength_bonus_threshold(self, card_name: str) -> int | None:
         script = self.get_script(card_name)
