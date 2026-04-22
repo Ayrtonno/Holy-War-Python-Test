@@ -104,9 +104,103 @@ class HolyWarGUI(tk.Tk):
         self.resource_deck_labels: list[ttk.Label] = []
         self.resource_sin_bars: list[ttk.Progressbar] = []
         self._slot_highlights: list[tuple[tk.Widget, dict[str, str]]] = []
+        self._setup_deck_builder_styles()
         self._load_premades_into_runtime()
         self._build_ui()
         self.show_main_menu()
+
+    def _setup_deck_builder_styles(self) -> None:
+        self._deck_palette = {
+            "bg": "#f3f7fc",
+            "surface": "#ffffff",
+            "surface_alt": "#f7fbff",
+            "line": "#d6e2f0",
+            "text": "#1f2d3d",
+            "muted": "#5f748c",
+            "accent": "#0078d4",
+            "accent_soft": "#e8f2ff",
+        }
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        p = self._deck_palette
+        style.configure("DeckRoot.TFrame", background=p["bg"])
+        style.configure("DeckSurface.TFrame", background=p["surface"])
+        style.configure("DeckHero.TFrame", background=p["bg"])
+        style.configure("DeckHeroTitle.TLabel", background=p["bg"], foreground=p["text"], font=("Segoe UI Semibold", 18))
+        style.configure("DeckHeroSub.TLabel", background=p["bg"], foreground=p["muted"], font=("Segoe UI", 10))
+        style.configure("DeckCard.TLabelframe", background=p["surface"], bordercolor=p["line"], borderwidth=1, relief="solid")
+        style.configure("DeckCard.TLabelframe.Label", background=p["bg"], foreground=p["text"], font=("Segoe UI Semibold", 10))
+        style.configure("DeckText.TLabel", background=p["surface"], foreground=p["text"], font=("Segoe UI", 10))
+        style.configure("DeckMuted.TLabel", background=p["surface"], foreground=p["muted"], font=("Segoe UI", 9))
+        style.configure("DeckTitle.TLabel", background=p["surface"], foreground=p["text"], font=("Segoe UI", 9))
+        style.configure("Deck.TEntry", fieldbackground=p["surface"], background=p["surface"], foreground=p["text"], bordercolor=p["line"], lightcolor=p["line"], darkcolor=p["line"], relief="solid", borderwidth=1, padding=(5, 3))
+        style.configure("Deck.TCombobox", fieldbackground=p["surface"], background=p["surface"], foreground=p["text"], bordercolor=p["line"], lightcolor=p["line"], darkcolor=p["line"], arrowsize=13, relief="solid", borderwidth=1, padding=(4, 3))
+        style.map("Deck.TCombobox", fieldbackground=[("readonly", p["surface"])], background=[("readonly", p["surface"])], foreground=[("readonly", p["text"])])
+        style.configure("DeckPrimary.TButton", font=("Segoe UI", 9), padding=(8, 3), foreground="#ffffff", background=p["accent"], bordercolor="#006ab9", lightcolor=p["accent"], darkcolor=p["accent"], relief="solid", borderwidth=1)
+        style.map("DeckPrimary.TButton", background=[("active", "#0a84dd"), ("pressed", "#006cbe"), ("disabled", "#c7d7e8")], foreground=[("disabled", "#f4f7fb")])
+        style.configure("DeckPrimaryInline.TButton", font=("Segoe UI", 9), padding=(8, 3), foreground="#ffffff", background=p["accent"], bordercolor="#006ab9", lightcolor=p["accent"], darkcolor=p["accent"], relief="solid", borderwidth=1)
+        style.map("DeckPrimaryInline.TButton", background=[("active", "#0a84dd"), ("pressed", "#006cbe"), ("disabled", "#c7d7e8")], foreground=[("disabled", "#f4f7fb")])
+        style.configure("DeckGhost.TButton", font=("Segoe UI", 9), padding=(8, 3), borderwidth=1, relief="solid", bordercolor=p["line"], lightcolor=p["line"], darkcolor=p["line"], background=p["surface"], foreground=p["text"])
+        style.map("DeckGhost.TButton", background=[("active", "#f2f8ff"), ("pressed", "#e6f1ff")], foreground=[("disabled", "#9aa8b7")])
+        style.configure(
+            "Deck.Vertical.TScrollbar",
+            background="#bfd4ea",
+            troughcolor="#edf4fb",
+            bordercolor="#edf4fb",
+            arrowcolor="#6f89a3",
+            lightcolor="#edf4fb",
+            darkcolor="#edf4fb",
+            relief="flat",
+            gripcount=0,
+            width=11,
+        )
+        style.configure(
+            "Deck.Horizontal.TScrollbar",
+            background="#bfd4ea",
+            troughcolor="#edf4fb",
+            bordercolor="#edf4fb",
+            arrowcolor="#6f89a3",
+            lightcolor="#edf4fb",
+            darkcolor="#edf4fb",
+            relief="flat",
+            gripcount=0,
+            width=11,
+        )
+        style.layout(
+            "Deck.Vertical.TScrollbar",
+            [("Vertical.Scrollbar.trough", {"sticky": "ns", "children": [("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})],
+        )
+        style.layout(
+            "Deck.Horizontal.TScrollbar",
+            [("Horizontal.Scrollbar.trough", {"sticky": "we", "children": [("Horizontal.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})],
+        )
+        style.configure(
+            "Deck.Treeview",
+            background=p["surface"],
+            fieldbackground=p["surface"],
+            foreground=p["text"],
+            rowheight=30,
+            borderwidth=1,
+            relief="solid",
+            font=("Segoe UI", 9),
+        )
+        style.map(
+            "Deck.Treeview",
+            background=[("selected", p["accent_soft"])],
+            foreground=[("selected", p["text"])],
+        )
+        style.configure(
+            "Deck.Treeview.Heading",
+            background=p["surface_alt"],
+            foreground=p["text"],
+            relief="flat",
+            borderwidth=1,
+            font=("Segoe UI Semibold", 9),
+        )
+        style.map("Deck.Treeview.Heading", background=[("active", "#f3f0ff")])
 
     def _center_toplevel(self, win: tk.Toplevel, width: int, height: int) -> None:
         win.update_idletasks()
@@ -250,47 +344,68 @@ class HolyWarGUI(tk.Tk):
         self._build_deck_manager_ui()
 
     def _build_deck_manager_ui(self) -> None:
-        top = ttk.Frame(self.deck_manager_frame)
-        top.pack(fill="x", padx=10, pady=10)
-        ttk.Button(top, text="Menu", command=self.show_main_menu).pack(side="left")
-        ttk.Label(top, text="Deck Manager", font=("Segoe UI", 16, "bold")).pack(side="left", padx=12)
+        p = self._deck_palette
+        self.deck_manager_frame.configure(style="DeckRoot.TFrame")
+        top = ttk.Frame(self.deck_manager_frame, style="DeckHero.TFrame")
+        top.pack(fill="x", padx=18, pady=(16, 10))
+        ttk.Button(top, text="Menu", command=self.show_main_menu, style="DeckGhost.TButton").pack(side="left")
+        hero_text = ttk.Frame(top, style="DeckHero.TFrame")
+        hero_text.pack(side="left", padx=12)
+        ttk.Label(hero_text, text="Deck Builder", style="DeckHeroTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            hero_text,
+            text="Crea, filtra e rifinisci i deck con regole visibili in tempo reale",
+            style="DeckHeroSub.TLabel",
+        ).pack(anchor="w", pady=(2, 0))
 
-        body = ttk.Frame(self.deck_manager_frame)
-        body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        body = ttk.Frame(self.deck_manager_frame, style="DeckRoot.TFrame")
+        body.pack(fill="both", expand=True, padx=18, pady=(0, 16))
         body.columnconfigure(0, weight=1, minsize=340)
         body.columnconfigure(1, weight=4)
         body.rowconfigure(0, weight=1)
 
-        left = ttk.LabelFrame(body, text="Deck Creati")
+        left = ttk.LabelFrame(body, text="Deck Salvati", style="DeckCard.TLabelframe", padding=(10, 8))
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         left.columnconfigure(0, weight=1)
         left.rowconfigure(0, weight=1)
-        left_list_wrap = ttk.Frame(left)
+        left_list_wrap = ttk.Frame(left, style="DeckSurface.TFrame")
         left_list_wrap.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         left_list_wrap.columnconfigure(0, weight=1)
         left_list_wrap.rowconfigure(0, weight=1)
         self.deck_listbox = tk.Listbox(left_list_wrap, height=30, width=42)
         self.deck_listbox.grid(row=0, column=0, sticky="nsew")
-        self.deck_list_scroll = ttk.Scrollbar(left_list_wrap, orient="vertical", command=self.deck_listbox.yview)
+        self.deck_listbox.configure(
+            bg=p["surface"],
+            fg=p["text"],
+            selectbackground=p["accent_soft"],
+            selectforeground=p["text"],
+            highlightthickness=0,
+            highlightbackground=p["line"],
+            relief="flat",
+            bd=0,
+            activestyle="none",
+            font=("Segoe UI", 10),
+        )
+        self.deck_list_scroll = ttk.Scrollbar(left_list_wrap, orient="vertical", style="Deck.Vertical.TScrollbar", command=self.deck_listbox.yview)
         self.deck_list_scroll.grid(row=0, column=1, sticky="ns")
         self.deck_listbox.configure(yscrollcommand=self.deck_list_scroll.set)
         self.deck_listbox.bind("<<ListboxSelect>>", self._on_deck_manager_select)
-        left_btns = ttk.Frame(left)
+        left_btns = ttk.Frame(left, style="DeckSurface.TFrame")
         left_btns.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
-        ttk.Button(left_btns, text="Nuovo", command=self._deck_manager_new).pack(side="left", padx=(0, 6))
-        ttk.Button(left_btns, text="Elimina", command=self._deck_manager_delete).pack(side="left")
+        ttk.Button(left_btns, text="Nuovo", command=self._deck_manager_new, style="DeckGhost.TButton").pack(side="left", padx=(0, 6))
+        ttk.Button(left_btns, text="Elimina", command=self._deck_manager_delete, style="DeckGhost.TButton").pack(side="left")
 
-        right = ttk.Frame(body)
+        right = ttk.Frame(body, style="DeckRoot.TFrame")
         right.grid(row=0, column=1, sticky="nsew")
         right.columnconfigure(0, weight=1)
         right.rowconfigure(1, weight=1)
 
-        hdr = ttk.Frame(right)
+        hdr = ttk.LabelFrame(right, text="Identita Deck", style="DeckCard.TLabelframe", padding=(10, 8))
         hdr.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        ttk.Label(hdr, text="Nome Deck").grid(row=0, column=0, sticky="w")
+        ttk.Label(hdr, text="Nome Deck", style="DeckTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.deck_name_var = tk.StringVar()
-        ttk.Entry(hdr, textvariable=self.deck_name_var, width=36).grid(row=0, column=1, sticky="w", padx=6)
-        ttk.Label(hdr, text="Religione").grid(row=0, column=2, sticky="w", padx=(14, 0))
+        ttk.Entry(hdr, textvariable=self.deck_name_var, width=36, style="Deck.TEntry").grid(row=0, column=1, sticky="w", padx=6)
+        ttk.Label(hdr, text="Religione", style="DeckTitle.TLabel").grid(row=0, column=2, sticky="w", padx=(14, 0))
         self.deck_religion_var = tk.StringVar(value=self.religions[0] if self.religions else "Animismo")
         ttk.Combobox(
             hdr,
@@ -298,9 +413,10 @@ class HolyWarGUI(tk.Tk):
             values=self.religions,
             width=24,
             state="readonly",
+            style="Deck.TCombobox",
         ).grid(row=0, column=3, sticky="w", padx=6)
 
-        pick = ttk.LabelFrame(right, text="Aggiungi Carte")
+        pick = ttk.LabelFrame(right, text="Catalogo e Composizione", style="DeckCard.TLabelframe", padding=(8, 8))
         pick.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
         pick.columnconfigure(0, weight=1)
         pick.columnconfigure(1, weight=1)
@@ -308,11 +424,11 @@ class HolyWarGUI(tk.Tk):
 
         self.deck_search_var = tk.StringVar()
         self.deck_search_var.trace_add("write", lambda *_: self._refresh_deck_card_candidates())
-        search_row = ttk.Frame(pick)
+        search_row = ttk.Frame(pick, style="DeckSurface.TFrame")
         search_row.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=(8, 4))
-        ttk.Label(search_row, text="Cerca").pack(side="left")
-        ttk.Entry(search_row, textvariable=self.deck_search_var, width=36).pack(side="left", padx=6)
-        ttk.Label(search_row, text="Espansione").pack(side="left", padx=(12, 0))
+        ttk.Label(search_row, text="Cerca", style="DeckTitle.TLabel").pack(side="left")
+        ttk.Entry(search_row, textvariable=self.deck_search_var, width=36, style="Deck.TEntry").pack(side="left", padx=6)
+        ttk.Label(search_row, text="Espansione", style="DeckTitle.TLabel").pack(side="left", padx=(12, 0))
         self.deck_filter_expansion_var = tk.StringVar(value="Tutte")
         self.deck_filter_expansion_combo = ttk.Combobox(
             search_row,
@@ -320,13 +436,14 @@ class HolyWarGUI(tk.Tk):
             values=["Tutte"],
             width=14,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_filter_expansion_combo.pack(side="left", padx=6)
         self.deck_filter_expansion_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
 
-        filter_row = ttk.Frame(pick)
+        filter_row = ttk.Frame(pick, style="DeckSurface.TFrame")
         filter_row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=8, pady=(0, 4))
-        ttk.Label(filter_row, text="Tipo").pack(side="left")
+        ttk.Label(filter_row, text="Tipo", style="DeckTitle.TLabel").pack(side="left")
         self.deck_filter_type_var = tk.StringVar(value="Tutti")
         self.deck_filter_type_combo = ttk.Combobox(
             filter_row,
@@ -334,11 +451,12 @@ class HolyWarGUI(tk.Tk):
             values=["Tutti", "Santo", "Artefatto", "Edificio", "Benedizione", "Maledizione", "Innata"],
             width=12,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_filter_type_combo.pack(side="left", padx=6)
         self.deck_filter_type_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
 
-        ttk.Label(filter_row, text="Rarita").pack(side="left")
+        ttk.Label(filter_row, text="Rarita", style="DeckTitle.TLabel").pack(side="left")
         self.deck_filter_rarity_var = tk.StringVar(value="Tutte")
         self.deck_filter_rarity_combo = ttk.Combobox(
             filter_row,
@@ -346,11 +464,12 @@ class HolyWarGUI(tk.Tk):
             values=["Tutte", "1-3", "4-6", "7-9", "10", "Bianca"],
             width=8,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_filter_rarity_combo.pack(side="left", padx=6)
         self.deck_filter_rarity_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
 
-        ttk.Label(filter_row, text="Croci").pack(side="left")
+        ttk.Label(filter_row, text="Croci", style="DeckTitle.TLabel").pack(side="left")
         self.deck_filter_cross_op_var = tk.StringVar(value=">=")
         self.deck_filter_cross_op = ttk.Combobox(
             filter_row,
@@ -358,15 +477,16 @@ class HolyWarGUI(tk.Tk):
             values=["<", "<=", "=", ">=", ">"],
             width=3,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_filter_cross_op.pack(side="left", padx=(4, 2))
         self.deck_filter_cross_op.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
         self.deck_filter_cross_val_var = tk.StringVar(value="")
-        self.deck_filter_cross_val = ttk.Entry(filter_row, textvariable=self.deck_filter_cross_val_var, width=4)
+        self.deck_filter_cross_val = ttk.Entry(filter_row, textvariable=self.deck_filter_cross_val_var, width=4, style="Deck.TEntry")
         self.deck_filter_cross_val.pack(side="left", padx=(0, 8))
         self.deck_filter_cross_val_var.trace_add("write", lambda *_: self._refresh_deck_card_candidates())
 
-        ttk.Label(filter_row, text="Forza").pack(side="left")
+        ttk.Label(filter_row, text="Forza", style="DeckTitle.TLabel").pack(side="left")
         self.deck_filter_strength_op_var = tk.StringVar(value=">=")
         self.deck_filter_strength_op = ttk.Combobox(
             filter_row,
@@ -374,15 +494,16 @@ class HolyWarGUI(tk.Tk):
             values=["<", "<=", "=", ">=", ">"],
             width=3,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_filter_strength_op.pack(side="left", padx=(4, 2))
         self.deck_filter_strength_op.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
         self.deck_filter_strength_val_var = tk.StringVar(value="")
-        self.deck_filter_strength_val = ttk.Entry(filter_row, textvariable=self.deck_filter_strength_val_var, width=4)
+        self.deck_filter_strength_val = ttk.Entry(filter_row, textvariable=self.deck_filter_strength_val_var, width=4, style="Deck.TEntry")
         self.deck_filter_strength_val.pack(side="left", padx=(0, 8))
         self.deck_filter_strength_val_var.trace_add("write", lambda *_: self._refresh_deck_card_candidates())
 
-        ttk.Label(filter_row, text="Fede").pack(side="left")
+        ttk.Label(filter_row, text="Fede", style="DeckTitle.TLabel").pack(side="left")
         self.deck_filter_faith_op_var = tk.StringVar(value=">=")
         self.deck_filter_faith_op = ttk.Combobox(
             filter_row,
@@ -390,15 +511,16 @@ class HolyWarGUI(tk.Tk):
             values=["<", "<=", "=", ">=", ">"],
             width=3,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_filter_faith_op.pack(side="left", padx=(4, 2))
         self.deck_filter_faith_op.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
         self.deck_filter_faith_val_var = tk.StringVar(value="")
-        self.deck_filter_faith_val = ttk.Entry(filter_row, textvariable=self.deck_filter_faith_val_var, width=4)
+        self.deck_filter_faith_val = ttk.Entry(filter_row, textvariable=self.deck_filter_faith_val_var, width=4, style="Deck.TEntry")
         self.deck_filter_faith_val.pack(side="left", padx=(0, 8))
         self.deck_filter_faith_val_var.trace_add("write", lambda *_: self._refresh_deck_card_candidates())
 
-        ttk.Label(filter_row, text="Ordina").pack(side="left")
+        ttk.Label(filter_row, text="Ordina", style="DeckTitle.TLabel").pack(side="left")
         self.deck_sort_var = tk.StringVar(value="Nome A-Z")
         self.deck_sort_combo = ttk.Combobox(
             filter_row,
@@ -415,6 +537,7 @@ class HolyWarGUI(tk.Tk):
             ],
             width=11,
             state="readonly",
+            style="Deck.TCombobox",
         )
         self.deck_sort_combo.pack(side="left", padx=6)
         self.deck_sort_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_deck_card_candidates())
@@ -428,13 +551,12 @@ class HolyWarGUI(tk.Tk):
             columns=("nome", "tipo", "croci", "forza", "fede", "espansione", "max", "nel_deck"),
             show="headings",
             height=16,
+            style="Deck.Treeview",
         )
         self.deck_candidates.grid(row=0, column=0, sticky="nsew")
-        self.deck_candidates_y = ttk.Scrollbar(cand_wrap, orient="vertical", command=self.deck_candidates.yview)
+        self.deck_candidates_y = ttk.Scrollbar(cand_wrap, orient="vertical", style="Deck.Vertical.TScrollbar", command=self.deck_candidates.yview)
         self.deck_candidates_y.grid(row=0, column=1, sticky="ns")
-        self.deck_candidates_x = ttk.Scrollbar(cand_wrap, orient="horizontal", command=self.deck_candidates.xview)
-        self.deck_candidates_x.grid(row=1, column=0, sticky="ew")
-        self.deck_candidates.configure(yscrollcommand=self.deck_candidates_y.set, xscrollcommand=self.deck_candidates_x.set)
+        self.deck_candidates.configure(yscrollcommand=self.deck_candidates_y.set)
         self.deck_candidates.heading("nome", text="Nome", command=lambda: self._sort_deck_candidates_by("nome"))
         self.deck_candidates.heading("tipo", text="Tipo", command=lambda: self._sort_deck_candidates_by("tipo"))
         self.deck_candidates.heading("croci", text="Croci", command=lambda: self._sort_deck_candidates_by("croci"))
@@ -462,13 +584,12 @@ class HolyWarGUI(tk.Tk):
             columns=("nome", "tipo", "croci", "forza", "fede", "espansione", "qta"),
             show="headings",
             height=16,
+            style="Deck.Treeview",
         )
         self.deck_current.grid(row=0, column=0, sticky="nsew")
-        self.deck_current_y = ttk.Scrollbar(cur_wrap, orient="vertical", command=self.deck_current.yview)
+        self.deck_current_y = ttk.Scrollbar(cur_wrap, orient="vertical", style="Deck.Vertical.TScrollbar", command=self.deck_current.yview)
         self.deck_current_y.grid(row=0, column=1, sticky="ns")
-        self.deck_current_x = ttk.Scrollbar(cur_wrap, orient="horizontal", command=self.deck_current.xview)
-        self.deck_current_x.grid(row=1, column=0, sticky="ew")
-        self.deck_current.configure(yscrollcommand=self.deck_current_y.set, xscrollcommand=self.deck_current_x.set)
+        self.deck_current.configure(yscrollcommand=self.deck_current_y.set)
         self.deck_current.heading("nome", text="Nome", command=lambda: self._sort_deck_current_by("nome"))
         self.deck_current.heading("tipo", text="Tipo", command=lambda: self._sort_deck_current_by("tipo"))
         self.deck_current.heading("croci", text="Croci", command=lambda: self._sort_deck_current_by("croci"))
@@ -485,49 +606,65 @@ class HolyWarGUI(tk.Tk):
         self.deck_current.column("qta", width=52, anchor="center")
         self.deck_current.bind("<<TreeviewSelect>>", self._on_deck_current_select)
 
-        ctrls = ttk.Frame(right)
+        ctrls = ttk.Frame(right, style="DeckRoot.TFrame")
         ctrls.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         self.deck_qty_var = tk.StringVar(value="1")
-        ttk.Label(ctrls, text="Quantita").pack(side="left")
-        ttk.Entry(ctrls, textvariable=self.deck_qty_var, width=5).pack(side="left", padx=6)
-        ttk.Button(ctrls, text="Aggiungi", command=self._deck_add_selected_card).pack(side="left", padx=(0, 10))
-        ttk.Button(ctrls, text="+1", command=lambda: self._deck_adjust_selected_card(1)).pack(side="left", padx=(0, 6))
-        ttk.Button(ctrls, text="-1", command=lambda: self._deck_adjust_selected_card(-1)).pack(side="left", padx=(0, 6))
-        ttk.Button(ctrls, text="Rimuovi", command=self._deck_remove_selected_card).pack(side="left")
+        ttk.Label(ctrls, text="Quantita", style="DeckTitle.TLabel").pack(side="left")
+        ttk.Entry(ctrls, textvariable=self.deck_qty_var, width=5, style="Deck.TEntry").pack(side="left", padx=6)
+        ttk.Button(ctrls, text="Aggiungi", command=self._deck_add_selected_card, style="DeckPrimaryInline.TButton").pack(side="left", padx=(0, 10))
+        ttk.Button(ctrls, text="+1", command=lambda: self._deck_adjust_selected_card(1), style="DeckGhost.TButton").pack(side="left", padx=(0, 6))
+        ttk.Button(ctrls, text="-1", command=lambda: self._deck_adjust_selected_card(-1), style="DeckGhost.TButton").pack(side="left", padx=(0, 6))
+        ttk.Button(ctrls, text="Rimuovi", command=self._deck_remove_selected_card, style="DeckGhost.TButton").pack(side="left")
         ttk.Button(
             ctrls,
             text="Filtro Colonne (Carte)",
             command=lambda: self._open_excel_like_filter_dialog("candidates"),
+            style="DeckGhost.TButton",
         ).pack(side="left", padx=(12, 6))
         ttk.Button(
             ctrls,
             text="Filtro Colonne (Deck)",
             command=lambda: self._open_excel_like_filter_dialog("current"),
+            style="DeckGhost.TButton",
         ).pack(side="left", padx=(0, 6))
 
+        rules_box = ttk.LabelFrame(right, text="Regole e Validazione", style="DeckCard.TLabelframe", padding=(8, 6))
+        rules_box.grid(row=3, column=0, sticky="ew")
+        rules_box.columnconfigure(0, weight=1)
         self.deck_rules_label = ttk.Label(
-            right,
+            rules_box,
             text="",
             justify="left",
             anchor="w",
             wraplength=900,
+            style="DeckMuted.TLabel",
         )
-        self.deck_rules_label.grid(row=3, column=0, sticky="ew")
+        self.deck_rules_label.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
 
-        bottom = ttk.Frame(right)
+        bottom = ttk.Frame(right, style="DeckRoot.TFrame")
         bottom.grid(row=4, column=0, sticky="ew", pady=(8, 0))
-        ttk.Button(bottom, text="Salva Deck", command=self._deck_manager_save).pack(side="left")
-        ttk.Button(bottom, text="Pulisci filtri", command=self._reset_deck_filters).pack(side="left", padx=(8, 0))
+        ttk.Button(bottom, text="Salva Deck", command=self._deck_manager_save, style="DeckPrimary.TButton").pack(side="left")
+        ttk.Button(bottom, text="Pulisci filtri", command=self._reset_deck_filters, style="DeckGhost.TButton").pack(side="left", padx=(8, 0))
 
-        details = ttk.LabelFrame(right, text="Dettaglio Effetto Carta")
+        details = ttk.LabelFrame(right, text="Dettaglio Effetto Carta", style="DeckCard.TLabelframe", padding=(8, 6))
         details.grid(row=5, column=0, sticky="nsew", pady=(8, 0))
         details.columnconfigure(0, weight=1)
         details.rowconfigure(0, weight=1)
         self.deck_effect_text = tk.Text(details, wrap="word", height=6)
         self.deck_effect_text.grid(row=0, column=0, sticky="nsew")
-        self.deck_effect_scroll = ttk.Scrollbar(details, orient="vertical", command=self.deck_effect_text.yview)
+        self.deck_effect_scroll = ttk.Scrollbar(details, orient="vertical", style="Deck.Vertical.TScrollbar", command=self.deck_effect_text.yview)
         self.deck_effect_scroll.grid(row=0, column=1, sticky="ns")
-        self.deck_effect_text.configure(yscrollcommand=self.deck_effect_scroll.set, state="disabled")
+        self.deck_effect_text.configure(
+            yscrollcommand=self.deck_effect_scroll.set,
+            state="disabled",
+            relief="flat",
+            bd=0,
+            bg=p["surface"],
+            fg=p["text"],
+            insertbackground=p["text"],
+            padx=8,
+            pady=8,
+        )
 
     def show_main_menu(self) -> None:
         self.game_screen.pack_forget()
@@ -1000,6 +1137,12 @@ class HolyWarGUI(tk.Tk):
         key = self._deck_candidate_iid_to_key.get(str(selected[0]))
         self._show_deck_effect_from_key(key)
 
+    def _apply_treeview_zebra(self, tree: ttk.Treeview) -> None:
+        tree.tag_configure("even", background=self._deck_palette["surface"])
+        tree.tag_configure("odd", background="#fdfcff")
+        for pos, item_id in enumerate(tree.get_children("")):
+            tree.item(item_id, tags=("even" if (pos % 2 == 0) else "odd",))
+
     def _refresh_deck_card_candidates(self) -> None:
         txt = self._norm(self.deck_search_var.get())
         ctype_filter = str(self.deck_filter_type_var.get() or "Tutti").strip().lower()
@@ -1123,10 +1266,10 @@ class HolyWarGUI(tk.Tk):
             if keep:
                 filtered_rows.append(row)
 
+        allowed_keys = {r["key"] for r in filtered_rows}
+        visible_idx = 0
         for idx, (key, card, _ctype, _cross_sort, strength, faith) in enumerate(rows):
-            # keep only value-filtered rows
-            row = next((r for r in filtered_rows if r["key"] == key), None)
-            if row is None:
+            if key not in allowed_keys:
                 continue
             qty_now = int(self._deck_editor_cards.get(key, 0))
             max_copy = self._max_copies_for_crosses(str(card.crosses))
@@ -1136,6 +1279,7 @@ class HolyWarGUI(tk.Tk):
                 "",
                 "end",
                 iid=iid,
+                tags=("even" if (visible_idx % 2 == 0) else "odd",),
                 values=(
                     str(card.name),
                     str(card.card_type),
@@ -1147,6 +1291,8 @@ class HolyWarGUI(tk.Tk):
                     str(qty_now),
                 ),
             )
+            visible_idx += 1
+        self._apply_treeview_zebra(self.deck_candidates)
 
     def _refresh_deck_current_list(self) -> None:
         by_name = self._deck_name_to_def()
@@ -1232,6 +1378,7 @@ class HolyWarGUI(tk.Tk):
                         break
                 if not keep:
                     self.deck_current.delete(item_id)
+        self._apply_treeview_zebra(self.deck_current)
         self._refresh_deck_card_candidates()
         self._render_deck_rules()
 
