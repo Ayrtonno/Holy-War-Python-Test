@@ -188,7 +188,7 @@ def run_game(engine: GameEngine, mode: str, seed: int, ai_delay: float) -> None:
             op = parts[0].lower()
 
             if op == "help":
-                print("Comandi: state, hand, play <idx> [a1|a2|a3|d1|d2|d3|r1..r4|b], attack <a1..a3> [t1..t3], activate <a1|a2|a3|d1|d2|d3|r1|r2|r3|r4|b> [target], swap <a1..a3> <a1..a3>, quick <idx> [target], save <path>, log <path>, end, quit")
+                print("Comandi: state, hand, play <idx> [a1|a2|a3|d1|d2|d3|r1..r4|b], attack <a1..a3|d1..d3> [t1..t3], activate <a1|a2|a3|d1|d2|d3|r1|r2|r3|r4|b> [target], swap <a1..a3> <a1..a3>, quick <idx> [target], save <path>, log <path>, end, quit")
                 continue
             if op == "state":
                 print_state(engine)
@@ -218,7 +218,14 @@ def run_game(engine: GameEngine, mode: str, seed: int, ai_delay: float) -> None:
                     print(res.message)
                     continue
             if op == "attack" and len(parts) >= 2:
-                from_slot = int(parts[1][1]) - 1 if parts[1].startswith("a") else -1
+                source = parts[1].strip().lower()
+                from_slot = -99
+                if len(source) >= 2 and source[1].isdigit():
+                    slot = int(source[1]) - 1
+                    if source[0] == "a":
+                        from_slot = slot
+                    elif source[0] == "d":
+                        from_slot = -(slot + 1)
                 target_slot = None
                 if len(parts) >= 3 and parts[2].startswith("t"):
                     target_slot = int(parts[2][1]) - 1

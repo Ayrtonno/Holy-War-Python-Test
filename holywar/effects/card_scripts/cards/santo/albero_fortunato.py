@@ -9,10 +9,11 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {
-                "event": "on_this_card_leaves_field",
+                "event": "on_card_sent_to_graveyard",
             },
             "condition": {
-                "payload_to_zone_in": ["graveyard"],
+                "event_card_name_is": "Albero Fortunato",
+                "event_card_owner": "me",
             },
             "target": {
                 "type": "source_card",

@@ -1,14 +1,28 @@
 from __future__ import annotations
 
+import unicodedata
 from typing import TYPE_CHECKING
 
-from holywar.core.state import ARTIFACT_SLOTS, ATTACK_SLOTS, DEFENSE_SLOTS, MAX_HAND, PlayerState
+from holywar.core.state import (
+    ARTIFACT_SLOTS,
+    ATTACK_SLOTS,
+    DEFENSE_SLOTS,
+    PlayerState,
+    hand_has_space_for_non_innata,
+    is_innata_card_type,
+)
 
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
 
 
 FIELD_ZONES = {"attack", "defense", "artifact", "building"}
+
+
+def _norm(text: str) -> str:
+    value = unicodedata.normalize("NFKD", str(text or ""))
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    return value.strip().lower()
 
 
 # Returns the logical zone of a card for event emission and movement rules.
@@ -65,6 +79,24 @@ def remove_from_board(engine: "GameEngine", player: PlayerState, uid: str) -> No
             engine.state.log(
                 f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
             )
+
+
+def promote_defense_frontline(engine: "GameEngine", player_idx: int) -> None:
+    player = engine.state.players[player_idx]
+    for i in range(min(ATTACK_SLOTS, DEFENSE_SLOTS)):
+        if player.attack[i] is not None:
+            continue
+        back_uid = player.defense[i]
+        if back_uid is None:
+            continue
+        inst = engine.state.instances.get(back_uid)
+        if inst is None:
+            continue
+        if _norm(inst.definition.card_type) not in {"santo", "token"}:
+            continue
+        player.attack[i] = back_uid
+        player.defense[i] = None
+        engine.state.log(f"{inst.definition.name} avanza dalla difesa all'attacco.")
 
 
 def _equipped_target_uid(engine: "GameEngine", equipment_uid: str) -> str | None:
@@ -257,7 +289,9 @@ def move_deck_card_to_hand(engine: "GameEngine", player_idx: int, uid: str) -> b
     player = engine.state.players[player_idx]
     if uid not in player.deck:
         return False
-    if len(player.hand) >= MAX_HAND:
+    inst = engine.state.instances.get(uid)
+    is_innata = inst is not None and is_innata_card_type(inst.definition.card_type)
+    if not is_innata and not hand_has_space_for_non_innata(player, engine.state.instances):
         return False
     player.deck.remove(uid)
     player.hand.append(uid)
@@ -267,7 +301,11 @@ def move_deck_card_to_hand(engine: "GameEngine", player_idx: int, uid: str) -> b
 # Moves a graveyard card to the hand if there is available space.
 def move_graveyard_card_to_hand(engine: "GameEngine", player_idx: int, uid: str) -> bool:
     player = engine.state.players[player_idx]
-    if uid not in player.graveyard or len(player.hand) >= MAX_HAND:
+    if uid not in player.graveyard:
+        return False
+    inst = engine.state.instances.get(uid)
+    is_innata = inst is not None and is_innata_card_type(inst.definition.card_type)
+    if not is_innata and not hand_has_space_for_non_innata(player, engine.state.instances):
         return False
     player.graveyard.remove(uid)
     player.hand.append(uid)
@@ -277,7 +315,9 @@ def move_graveyard_card_to_hand(engine: "GameEngine", player_idx: int, uid: str)
 # Returns a board card to the hand and resets runtime-only state when appropriate.
 def move_board_card_to_hand(engine: "GameEngine", owner_idx: int, uid: str) -> bool:
     player = engine.state.players[owner_idx]
-    if len(player.hand) >= MAX_HAND:
+    inst = engine.state.instances.get(uid)
+    is_innata = inst is not None and is_innata_card_type(inst.definition.card_type)
+    if not is_innata and not hand_has_space_for_non_innata(player, engine.state.instances):
         return False
 
     was_on_field = False
@@ -336,6 +376,7 @@ def place_card_from_uid(engine: "GameEngine", player_idx: int, uid: str, zone: s
         if not (0 <= slot < DEFENSE_SLOTS) or player.defense[slot] is not None:
             return False
         player.defense[slot] = uid
+        promote_defense_frontline(engine, player_idx)
         return True
     if z in {"artifact", "artifacts"}:
         if not (0 <= slot < ARTIFACT_SLOTS) or player.artifacts[slot] is not None:

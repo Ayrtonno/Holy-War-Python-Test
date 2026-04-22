@@ -80,11 +80,10 @@ def has_building(engine: "GameEngine", player_idx: int, name: str) -> bool:
 
 # Counts how many pyramid artifacts the player currently has in play.
 def count_pyramids(engine: "GameEngine", player_idx: int) -> int:
-    pyramid_names = {_norm("Piramide: Chefren"), _norm("Piramide: Cheope"), _norm("Piramide: Micerino")}
     return sum(
         1
         for uid in engine.state.players[player_idx].artifacts
-        if uid and _norm(engine.state.instances[uid].definition.name) in pyramid_names
+        if uid and runtime_cards.get_is_pyramid(engine.state.instances[uid].definition.name)
     )
 
 
@@ -94,7 +93,7 @@ def get_altare_sigilli(engine: "GameEngine", player_idx: int) -> int:
     if uid is None:
         return 0
     inst = engine.state.instances[uid]
-    if _norm(inst.definition.name) != _norm("Altare dei Sette Sigilli"):
+    if not runtime_cards.get_is_altare_sigilli(inst.definition.name):
         return 0
     for tag in inst.blessed:
         if tag.startswith("sigilli:"):
@@ -111,7 +110,7 @@ def set_altare_sigilli(engine: "GameEngine", player_idx: int, value: int) -> Non
     if uid is None:
         return
     inst = engine.state.instances[uid]
-    if _norm(inst.definition.name) != _norm("Altare dei Sette Sigilli"):
+    if not runtime_cards.get_is_altare_sigilli(inst.definition.name):
         return
     inst.blessed = [t for t in inst.blessed if not t.startswith("sigilli:")]
     inst.blessed.append(f"sigilli:{max(0, value)}")
@@ -121,13 +120,16 @@ def set_altare_sigilli(engine: "GameEngine", player_idx: int, value: int) -> Non
 # Recomputes the Custode dei Sigilli bonus based on the current seal count.
 def refresh_custode_sigilli_bonus(engine: "GameEngine", player_idx: int) -> None:
     seals = get_altare_sigilli(engine, player_idx)
-    level = seals // 6
-    if level <= 0:
-        return
     for uid in all_saints_on_field(engine, player_idx):
         inst = engine.state.instances[uid]
-        if _norm(inst.definition.name) != _norm("Custode dei Sigilli"):
+        level_size = runtime_cards.get_seals_level_size(inst.definition.name)
+        faith_per_level = runtime_cards.get_seals_faith_per_level(inst.definition.name)
+        strength_per_level = runtime_cards.get_seals_strength_per_level(inst.definition.name)
+        if level_size is None or level_size <= 0:
             continue
+        if faith_per_level is None and strength_per_level is None:
+            continue
+        level = seals // int(level_size)
         current_level = 0
         keep: list[str] = []
         for tag in inst.blessed:
@@ -140,8 +142,10 @@ def refresh_custode_sigilli_bonus(engine: "GameEngine", player_idx: int) -> None
             keep.append(tag)
         if level > current_level:
             delta = level - current_level
-            inst.current_faith = (inst.current_faith or 0) + delta * 3
-            keep.extend([f"buff_str:3"] * delta)
+            if faith_per_level is not None:
+                inst.current_faith = (inst.current_faith or 0) + delta * int(faith_per_level)
+            if strength_per_level is not None and int(strength_per_level) != 0:
+                keep.extend([f"buff_str:{int(strength_per_level)}"] * delta)
             keep.append(f"custode_bonus:{level}")
             inst.blessed = keep
         else:

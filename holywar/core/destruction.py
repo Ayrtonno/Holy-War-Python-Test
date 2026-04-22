@@ -3,6 +3,7 @@ from __future__ import annotations
 import unicodedata
 from typing import TYPE_CHECKING
 
+from holywar.core import zones as zone_ops
 from holywar.effects.runtime import runtime_cards
 
 if TYPE_CHECKING:
@@ -120,6 +121,7 @@ def destroy_saint_by_uid(
                     board_player.attack[attack_slot] = uid
                 elif defense_slot is not None:
                     board_player.defense[defense_slot] = uid
+                zone_ops.promote_defense_frontline(engine, board_owner_idx)
                 engine.state.log(f"{inst.definition.name} evita la distruzione sacrificando {token_name}.")
                 return
         if survival_mode == "excommunicate_card_from_graveyard":
@@ -137,6 +139,7 @@ def destroy_saint_by_uid(
                     board_player.attack[attack_slot] = uid
                 elif defense_slot is not None:
                     board_player.defense[defense_slot] = uid
+                zone_ops.promote_defense_frontline(engine, board_owner_idx)
                 inst.current_faith = max(
                     0,
                     runtime_cards.get_battle_survival_restore_faith(inst.definition.name) or (inst.definition.faith or 0),
@@ -173,6 +176,7 @@ def destroy_saint_by_uid(
         "on_this_card_destroyed",
         owner_idx,
         card=uid,
+        controller=board_owner_idx,
         by_whom=by_whom,
         source=by_whom,
         reason=cause,
@@ -181,6 +185,7 @@ def destroy_saint_by_uid(
         "on_card_destroyed_on_field",
         owner_idx,
         card=uid,
+        controller=board_owner_idx,
         by_whom=by_whom,
         source=by_whom,
         reason=cause,
@@ -198,10 +203,24 @@ def destroy_saint_by_uid(
                 f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
             )
     if cause == "battle":
-        engine._emit_event("on_saint_defeated_in_battle", owner_idx, saint=uid, by_whom=by_whom, source=by_whom)
+        engine._emit_event(
+            "on_saint_defeated_in_battle",
+            owner_idx,
+            saint=uid,
+            controller=board_owner_idx,
+            by_whom=by_whom,
+            source=by_whom,
+        )
     else:
-        engine._emit_event("on_saint_destroyed_by_effect", owner_idx, saint=uid, by_whom=by_whom, source=by_whom)
-    engine._emit_event("on_saint_defeated_or_destroyed", owner_idx, saint=uid, reason=cause)
+        engine._emit_event(
+            "on_saint_destroyed_by_effect",
+            owner_idx,
+            saint=uid,
+            controller=board_owner_idx,
+            by_whom=by_whom,
+            source=by_whom,
+        )
+    engine._emit_event("on_saint_defeated_or_destroyed", owner_idx, saint=uid, controller=board_owner_idx, reason=cause)
 
 
 # Routes card destruction based on its type so callers can use one entry point.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import copy
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -173,3 +174,30 @@ class GameState:
     def load(cls, path: str | Path) -> "GameState":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return cls.from_dict(data)
+
+
+def _norm(text: str) -> str:
+    value = unicodedata.normalize("NFKD", str(text or ""))
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    return value.strip().lower()
+
+
+def is_innata_card_type(card_type: str | None) -> bool:
+    return _norm(card_type or "") == "innata"
+
+
+def hand_count_for_limit(player: PlayerState, instances: dict[str, CardInstance]) -> int:
+    total = 0
+    for uid in player.hand:
+        inst = instances.get(uid)
+        if inst is None:
+            total += 1
+            continue
+        if is_innata_card_type(inst.definition.card_type):
+            continue
+        total += 1
+    return total
+
+
+def hand_has_space_for_non_innata(player: PlayerState, instances: dict[str, CardInstance]) -> bool:
+    return hand_count_for_limit(player, instances) < MAX_HAND

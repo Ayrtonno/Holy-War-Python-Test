@@ -347,17 +347,30 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
     attacker_player = engine.state.players[player_idx]
     defender_idx = 1 - player_idx
     defender_player = engine.state.players[defender_idx]
-    if not (0 <= from_slot < ATTACK_SLOTS):
+    requested_defense = from_slot < 0
+    slot_idx = (-from_slot - 1) if requested_defense else from_slot
+    if not (0 <= slot_idx < ATTACK_SLOTS):
         return ActionResult(False, "Slot attacco non valido.")
-    attacker_uid = attacker_player.attack[from_slot]
-    if attacker_uid is None:
-        defense_uid = attacker_player.defense[from_slot]
+
+    attacker_uid = None
+    if requested_defense:
+        defense_uid = attacker_player.defense[slot_idx]
         if defense_uid is None:
             return ActionResult(False, "Nessun Santo in quello slot.")
         defense_inst = engine.state.instances[defense_uid]
         if not runtime_cards.get_can_attack_from_defense(defense_inst.definition.name):
             return ActionResult(False, "Nessun Santo in quello slot.")
         attacker_uid = defense_uid
+    else:
+        attacker_uid = attacker_player.attack[slot_idx]
+        if attacker_uid is None:
+            defense_uid = attacker_player.defense[slot_idx]
+            if defense_uid is None:
+                return ActionResult(False, "Nessun Santo in quello slot.")
+            defense_inst = engine.state.instances[defense_uid]
+            if not runtime_cards.get_can_attack_from_defense(defense_inst.definition.name):
+                return ActionResult(False, "Nessun Santo in quello slot.")
+            attacker_uid = defense_uid
 
     attacker = engine.state.instances[attacker_uid]
     engine._emit_event(

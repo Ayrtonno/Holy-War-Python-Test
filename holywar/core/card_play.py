@@ -41,6 +41,34 @@ def _name_haystack(inst: "CardInstance") -> str:
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
 
+def _has_unplayed_innate_in_hand(engine: "GameEngine", player_idx: int) -> bool:
+    player = engine.state.players[player_idx]
+    active_innate = set(engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).get(str(player_idx), []) or [])
+    for uid in player.hand:
+        inst = engine.state.instances.get(uid)
+        if inst is None:
+            continue
+        if _norm(inst.definition.card_type) == "innata" and uid not in active_innate:
+            return True
+    return False
+
+
+def _remove_unplayed_innate_from_hand(engine: "GameEngine", player_idx: int) -> None:
+    player = engine.state.players[player_idx]
+    active_innate = set(engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).get(str(player_idx), []) or [])
+    removed = engine.state.flags.setdefault("innate_removed_uids", {"0": [], "1": []}).setdefault(str(player_idx), [])
+    kept_hand: list[str] = []
+    for uid in player.hand:
+        inst = engine.state.instances.get(uid)
+        if inst is None or _norm(inst.definition.card_type) != "innata" or uid in active_innate:
+            kept_hand.append(uid)
+            continue
+        if uid not in removed:
+            removed.append(uid)
+        engine.state.log(f"{player.name}: {inst.definition.name} (Innata) eliminata perche e stata giocata prima un'altra carta.")
+    player.hand = kept_hand
+
+
 # Validates whether the card can be played in the requested zone and context.
 def validate_play_constraints(
     engine: "GameEngine",
@@ -57,8 +85,6 @@ def validate_play_constraints(
     if ctype in SAINT_TYPES:
         if _norm(runtime_cards.get_play_owner(card.definition.name)) in {"opponent", "enemy", "other"}:
             place_owner_idx = 1 - player_idx
-        if _norm(card.definition.name) == _norm("Brigante") and not engine.all_saints_on_field(player_idx):
-            return False, "Per giocare Brigante devi sacrificare un tuo santo sul terreno.", place_owner_idx, zone, slot
         zone, slot = engine._parse_zone_target(target)
         if zone not in {"attack", "defense"}:
             return False, "Per un Santo/Token indica zona: a1..a3 o d1..d3", place_owner_idx, zone, slot
@@ -70,15 +96,6 @@ def validate_play_constraints(
     elif ctype == "edificio":
         if player.building:
             return False, "Hai gia un Edificio. Va distrutto prima di giocarne un altro.", place_owner_idx, zone, slot
-        if _norm(card.definition.name) == _norm("Sfinge"):
-            needed = {_norm("Piramide: Cheope"), _norm("Piramide: Chefren"), _norm("Piramide: Micerino")}
-            present = {
-                _norm(engine.state.instances[a_uid].definition.name)
-                for a_uid in player.artifacts
-                if a_uid is not None
-            }
-            if not needed.issubset(present):
-                return False, "Per giocare Sfinge servono Cheope, Chefren e Micerino sul campo.", place_owner_idx, zone, slot
 
     return True, "", place_owner_idx, zone, slot
 
@@ -165,28 +182,42 @@ def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement
     return list(dict.fromkeys(out))
 
 
-def _consume_scripted_play_costs(engine: "GameEngine", player_idx: int, card: "CardInstance") -> ActionResult | None:
+def _consume_scripted_play_costs(
+    engine: "GameEngine",
+    player_idx: int,
+    card: "CardInstance",
+) -> tuple[ActionResult | None, int]:
     script = runtime_cards.get_script(card.definition.name)
     if script is None:
-        return None
+        return None, 0
+    sacrificed_total_faith = 0
+    mark_sacrifices_no_sin = bool(script.play_requirements.get("play_sacrifices_no_sin_on_death", False))
     requirement_cfg = script.play_requirements.get("can_play_by_sacrificing")
     if isinstance(requirement_cfg, dict):
         count = max(1, int(requirement_cfg.get("count", 1) or 1))
         candidates = _collect_requirement_cards(engine, player_idx, requirement_cfg)
         if len(candidates) < count:
-            return ActionResult(False, f"Per giocare {card.definition.name} non ci sono abbastanza carte da sacrificare.")
+            return ActionResult(False, f"Per giocare {card.definition.name} non ci sono abbastanza carte da sacrificare."), 0
         for uid in candidates[:count]:
-            owner = engine.state.instances[uid].owner
+            sacr_inst = engine.state.instances[uid]
+            owner = sacr_inst.owner
+            sacrificed_total_faith += max(0, int(sacr_inst.definition.faith or 0))
+            if mark_sacrifices_no_sin and "no_sin_on_death" not in sacr_inst.blessed:
+                sacr_inst.blessed.append("no_sin_on_death")
             engine.send_to_graveyard(owner, uid)
-        return None
+        return None, sacrificed_total_faith
 
     legacy_requirement = str(script.play_requirements.get("can_play_by_sacrificing_specific_card_from_field", "")).strip()
     if legacy_requirement:
         sacrifice_uid = _find_owned_field_uid_by_name(engine, player_idx, legacy_requirement)
         if not sacrifice_uid:
-            return ActionResult(False, f"Per giocare {card.definition.name} devi sacrificare {legacy_requirement} dal tuo campo.")
+            return ActionResult(False, f"Per giocare {card.definition.name} devi sacrificare {legacy_requirement} dal tuo campo."), 0
+        sacr_inst = engine.state.instances[sacrifice_uid]
+        sacrificed_total_faith += max(0, int(sacr_inst.definition.faith or 0))
+        if mark_sacrifices_no_sin and "no_sin_on_death" not in sacr_inst.blessed:
+            sacr_inst.blessed.append("no_sin_on_death")
         engine.send_to_graveyard(player_idx, sacrifice_uid)
-    return None
+    return None, sacrificed_total_faith
 
 
 # Computes the final Inspiration cost after all card-specific modifiers.
@@ -194,36 +225,58 @@ def calculate_play_cost(engine: "GameEngine", player_idx: int, hand_index: int, 
     player = engine.state.players[player_idx]
     ctype = _norm(card.definition.card_type)
     cost = card.definition.faith or 0
-    name_key = _norm(card.definition.name)
 
     if ctype in SAINT_TYPES:
-        if name_key == _norm("Atum"):
-            cost = 0
-        if name_key == _norm("Ra"):
-            if any(_norm(engine.state.instances[s_uid].definition.name) == _norm("Nun") for s_uid in engine.all_saints_on_field(player_idx)):
+        fixed = runtime_cards.get_play_cost_fixed(card.definition.name)
+        if fixed is not None:
+            cost = max(0, int(fixed))
+        required_saint = runtime_cards.get_play_cost_zero_if_controller_has_saint_with_name(card.definition.name)
+        if required_saint:
+            has_required = any(
+                _norm(engine.state.instances[s_uid].definition.name) == _norm(required_saint)
+                for s_uid in engine.all_saints_on_field(player_idx)
+            )
+            if has_required:
                 cost = 0
-        if name_key == _norm("Impostore") and not engine.all_saints_on_field(player_idx):
-            cost = 0
-        if name_key == _norm("Geb"):
-            has_building_in_hand = any(
-                _norm(engine.state.instances[h_uid].definition.card_type) == "edificio"
+        if runtime_cards.get_play_cost_zero_if_controller_has_no_saints(card.definition.name):
+            if not engine.all_saints_on_field(player_idx):
+                cost = 0
+        reduction_types = {
+            _norm(v)
+            for v in runtime_cards.get_play_cost_reduction_if_controller_has_card_type_in_hand(card.definition.name)
+            if str(v).strip()
+        }
+        if reduction_types:
+            has_type_in_hand = any(
+                _norm(engine.state.instances[h_uid].definition.card_type) in reduction_types
                 for i, h_uid in enumerate(player.hand)
                 if i != hand_index
             )
-            if has_building_in_hand:
+            if has_type_in_hand:
                 cost = max(0, cost - 1)
-        atum_on_field = any(
-            _norm(engine.state.instances[s_uid].definition.name) == _norm("Atum")
-            for s_uid in engine.all_saints_on_field(player_idx)
-        )
-        if atum_on_field and name_key != _norm("Atum"):
+        for s_uid in engine.all_saints_on_field(player_idx):
+            aura_name = engine.state.instances[s_uid].definition.name
+            if not runtime_cards.get_halves_friendly_saint_play_cost(aura_name):
+                continue
+            if (
+                runtime_cards.get_halve_friendly_saint_play_cost_excludes_self(aura_name)
+                and _norm(aura_name) == _norm(card.definition.name)
+            ):
+                continue
             cost = max(0, (cost + 1) // 2)
+            break
 
     double_turns = engine.state.flags.setdefault("double_cost_turns", {"0": 0, "1": 0})
     if int(double_turns.get(str(player_idx), 0)) > 0:
         cost *= 2
-    if engine._has_building(1 - player_idx, "Sfinge"):
-        cost *= 2
+    opponent = engine.state.players[1 - player_idx]
+    enemy_field_uids = [uid for uid in opponent.attack + opponent.defense + opponent.artifacts if uid]
+    if opponent.building:
+        enemy_field_uids.append(opponent.building)
+    for enemy_uid in enemy_field_uids:
+        enemy_name = engine.state.instances[enemy_uid].definition.name
+        if runtime_cards.get_doubles_enemy_play_cost(enemy_name):
+            cost *= 2
     return cost
 
 
@@ -265,31 +318,31 @@ def handle_saint_play(
 ) -> ActionResult:
     player = engine.state.players[player_idx]
     card = engine.state.instances[uid]
-    sacrificed_faith_for_brigante = 0
 
-    if _norm(card.definition.name) == _norm("Brigante"):
-        own_saints = engine.all_saints_on_field(player_idx)
-        if own_saints:
-            sacr_uid = own_saints[0]
-            sacr = engine.state.instances[sacr_uid]
-            sacrificed_faith_for_brigante = max(0, sacr.definition.faith or 0)
-            sacr.blessed.append("no_sin_on_death")
-            engine.destroy_saint_by_uid(engine.state.instances[sacr_uid].owner, sacr_uid, cause="effect")
-
-    if zone == "attack":
-        engine.state.players[place_owner_idx].attack[slot] = uid
-    elif zone == "defense":
-        engine.state.players[place_owner_idx].defense[slot] = uid
-    else:
+    if zone not in {"attack", "defense"}:
         player.hand.append(uid)
         return ActionResult(False, "Zona non valida per il posizionamento del santo.")
+    if not engine.place_card_from_uid(place_owner_idx, uid, zone, slot):
+        player.hand.append(uid)
+        return ActionResult(False, "Slot occupato.")
 
     card.exhausted = False
-    if engine._count_pyramids(player_idx) >= 2:
-        card.current_faith = (card.current_faith or 0) + max(0, card.definition.faith or 0)
-    if _norm(card.definition.name) == _norm("Brigante") and sacrificed_faith_for_brigante > 0:
-        card.current_faith = (card.current_faith or 0) + sacrificed_faith_for_brigante
-        card.blessed.append("no_sin_on_death")
+    bonus_multiplier = runtime_cards.get_context_bonus_amount(
+        engine,
+        player_idx,
+        context="summon_faith",
+        amount_mode="base_faith_multiplier",
+    )
+    if bonus_multiplier > 0:
+        card.current_faith = (card.current_faith or 0) + max(0, card.definition.faith or 0) * bonus_multiplier
+    bonus_flat = runtime_cards.get_context_bonus_amount(
+        engine,
+        player_idx,
+        context="summon_faith",
+        amount_mode="flat",
+    )
+    if bonus_flat > 0:
+        card.current_faith = (card.current_faith or 0) + int(bonus_flat)
 
     zone_label = "Attacco" if zone == "attack" else "Difesa"
     engine.state.log(f"{player.name} posiziona {card.definition.name} in {zone_label} {slot + 1}.")
@@ -383,9 +436,25 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
     card = engine.card_from_hand(player_idx, hand_index)
     if card is None:
         return ActionResult(False, "Indice mano non valido.")
+    selected_uid = player.hand[hand_index]
     script = runtime_cards.get_script(card.definition.name)
 
     ctype = _norm(card.definition.card_type)
+    if ctype == "innata":
+        if engine.state.phase != "preparation":
+            return ActionResult(False, "Le carte Innata si possono giocare solo nel turno di preparazione.")
+    elif engine.state.phase == "preparation" and _has_unplayed_innate_in_hand(engine, player_idx):
+        _remove_unplayed_innate_from_hand(engine, player_idx)
+        player = engine.state.players[player_idx]
+        if selected_uid not in player.hand:
+            return ActionResult(False, "La carta selezionata non e piu valida dopo l'eliminazione della carta Innata.")
+        hand_index = player.hand.index(selected_uid)
+        card = engine.card_from_hand(player_idx, hand_index)
+        if card is None:
+            return ActionResult(False, "Indice mano non valido.")
+        script = runtime_cards.get_script(card.definition.name)
+        ctype = _norm(card.definition.card_type)
+
     can_play, reason = runtime_cards.can_play(
         engine,
         player_idx,
@@ -428,10 +497,16 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
         if bool(script.play_requirements.get("store_paid_inspiration_on_source", False)):
             card.blessed = [tag for tag in card.blessed if not str(tag).startswith("paid_inspiration_on_summon:")]
             card.blessed.append(f"paid_inspiration_on_summon:{int(paid_inspiration)}")
-    scripted_cost_error = _consume_scripted_play_costs(engine, player_idx, card)
+    scripted_cost_error, sacrificed_total_faith = _consume_scripted_play_costs(engine, player_idx, card)
     if scripted_cost_error is not None:
         player.hand.insert(hand_index, uid)
         return scripted_cost_error
+    if script is not None and ctype in SAINT_TYPES:
+        if bool(script.play_requirements.get("gain_faith_from_play_sacrifices", False)) and sacrificed_total_faith > 0:
+            card.current_faith = (card.current_faith or 0) + int(sacrificed_total_faith)
+            if bool(script.play_requirements.get("grant_no_sin_on_death_if_gained_faith_from_sacrifices", False)):
+                if "no_sin_on_death" not in card.blessed:
+                    card.blessed.append("no_sin_on_death")
     emit_play_events(engine, player_idx, uid, ctype, target)
 
     if ctype in SAINT_TYPES:
@@ -440,6 +515,14 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
         result = handle_artifact_play(engine, player_idx, uid)
     elif ctype == "edificio":
         result = handle_building_play(engine, player_idx, uid)
+    elif ctype == "innata":
+        resolved = resolve_card_effect(engine, player_idx, uid, target)
+        active_innate = engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).setdefault(str(player_idx), [])
+        if uid not in active_innate:
+            active_innate.append(uid)
+        runtime_cards.on_enter_bind_triggers(engine, player_idx, uid)
+        engine.state.log(f"{player.name} attiva Innata {card.definition.name}. L'effetto resta perenne.")
+        result = ActionResult(True, resolved)
     elif ctype in QUICK_TYPES:
         return resolve_quick_play_from_hand(engine, player_idx, uid, target)
     else:

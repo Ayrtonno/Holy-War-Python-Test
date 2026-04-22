@@ -50,6 +50,11 @@ class GameEngine:
                     runtime_cards.on_enter_bind_triggers(self, controller_idx, uid)
             if player.building is not None:
                 runtime_cards.on_enter_bind_triggers(self, controller_idx, player.building)
+        active_innate = self.state.flags.get("innate_active_uids", {})
+        for controller_idx in (0, 1):
+            for uid in list(active_innate.get(str(controller_idx), []) or []):
+                if uid in self.state.instances:
+                    runtime_cards.on_enter_bind_triggers(self, controller_idx, uid)
 
     # Builds the scripting API wrapper for the selected controller.
     def rules_api(self, controller_idx: int) -> RuleAPI:
@@ -131,7 +136,7 @@ class GameEngine:
         deck_warnings: list[str] = []
 
         # Builds and shuffles the main deck and white deck for one player.
-        def build_decks(owner: int, expansion: str, premade_deck_id: str | None) -> tuple[list[str], list[str]]:
+        def build_decks(owner: int, expansion: str, premade_deck_id: str | None) -> tuple[list[str], list[str], list[str]]:
             if premade_deck_id:
                 premade = build_premade_deck(cards, premade_deck_id)
                 built = premade.deck
@@ -140,16 +145,19 @@ class GameEngine:
                 built = build_test_deck(cards, expansion)
             deck: list[str] = []
             white: list[str] = []
+            innate: list[str] = []
             for cdef in built.main_deck:
                 deck.append(copy_card(cdef, owner))
             for cdef in built.white_deck:
                 white.append(copy_card(cdef, owner))
+            for cdef in built.innate_deck:
+                innate.append(copy_card(cdef, owner))
             rng.shuffle(deck)
             rng.shuffle(white)
-            return deck, white
+            return deck, white, innate
 
-        p1_deck, p1_white = build_decks(0, p1_expansion, p1_premade_deck_id)
-        p2_deck, p2_white = build_decks(1, p2_expansion, p2_premade_deck_id)
+        p1_deck, p1_white, p1_innate = build_decks(0, p1_expansion, p1_premade_deck_id)
+        p2_deck, p2_white, p2_innate = build_decks(1, p2_expansion, p2_premade_deck_id)
 
         p1 = PlayerState.empty(p1_name)
         p1.deck = p1_deck
@@ -175,6 +183,10 @@ class GameEngine:
                 "bonus_inspiration_next_turn": {"0": 0, "1": 0},
                 "counter_spell_ready": {"0": 0, "1": 0},
                 "cards_drawn_this_turn": {"0": [], "1": []},
+                "innate_pending_setup": {"0": list(p1_innate), "1": list(p2_innate)},
+                "innate_active_uids": {"0": [], "1": []},
+                "innate_removed_uids": {"0": [], "1": []},
+                "preparation_non_innate_played": {"0": False, "1": False},
             },
         )
         engine = GameEngine(state, seed=seed)
@@ -252,8 +264,6 @@ class GameEngine:
                     strength += int(tag.split(":", 1)[1])
                 except ValueError:
                     pass
-        if self._has_artifact(owner, "Gungnir"):
-            strength += 1
         zone = self._locate_uid_zone(owner, uid)
         if _norm(inst.definition.card_type) in {"santo", "token"} and zone in {"attack", "defense"}:
             for a_uid in self.state.players[owner].artifacts:
@@ -274,13 +284,53 @@ class GameEngine:
         for rule in runtime_cards.get_strength_bonus_rules(inst.definition.name):
             artifact_name = str(rule.get("artifact_name", "")).strip()
             if not artifact_name or not self._has_artifact(owner, artifact_name):
-                continue
+                if artifact_name:
+                    continue
+            required_controller_name = str(rule.get("controller_has_card_with_name", "")).strip()
+            if required_controller_name:
+                controller_zone = str(rule.get("controller_has_card_zone", "field")).strip().lower() or "field"
+                if controller_zone == "field":
+                    in_zone = (
+                        _norm(required_controller_name)
+                        in {
+                            _norm(self.state.instances[z_uid].definition.name)
+                            for z_uid in (self.state.players[owner].attack + self.state.players[owner].defense + self.state.players[owner].artifacts)
+                            if z_uid is not None
+                        }
+                    ) or (
+                        self.state.players[owner].building is not None
+                        and _norm(self.state.instances[self.state.players[owner].building].definition.name)
+                        == _norm(required_controller_name)
+                    )
+                elif controller_zone in {"hand"}:
+                    in_zone = any(
+                        _norm(self.state.instances[h_uid].definition.name) == _norm(required_controller_name)
+                        for h_uid in self.state.players[owner].hand
+                    )
+                elif controller_zone in {"deck", "relicario"}:
+                    in_zone = any(
+                        _norm(self.state.instances[d_uid].definition.name) == _norm(required_controller_name)
+                        for d_uid in self.state.players[owner].deck
+                    )
+                elif controller_zone == "graveyard":
+                    in_zone = any(
+                        _norm(self.state.instances[g_uid].definition.name) == _norm(required_controller_name)
+                        for g_uid in self.state.players[owner].graveyard
+                    )
+                elif controller_zone == "excommunicated":
+                    in_zone = any(
+                        _norm(self.state.instances[e_uid].definition.name) == _norm(required_controller_name)
+                        for e_uid in self.state.players[owner].excommunicated
+                    )
+                else:
+                    in_zone = False
+                if not in_zone:
+                    continue
             required_name = str(rule.get("if_card_name", "")).strip()
             if required_name and _norm(inst.definition.name) != _norm(required_name):
                 continue
             strength += int(rule.get("self_bonus", 0) or 0)
-        if self._count_pyramids(owner) >= 1:
-            strength += 5
+        strength += runtime_cards.get_context_bonus_amount(self, owner, context="strength", amount_mode="flat")
         sigilli_threshold = runtime_cards.get_sigilli_strength_bonus_threshold(inst.definition.name)
         sigilli_amount = runtime_cards.get_sigilli_strength_bonus_amount(inst.definition.name)
         if sigilli_threshold is not None and sigilli_amount is not None and self._get_altare_sigilli(owner) >= int(sigilli_threshold):
@@ -564,30 +614,6 @@ class GameEngine:
     # Destroys any card type using the shared destruction logic.
     def destroy_any_card(self, owner_idx: int, uid: str) -> None:
         destruction_ops.destroy_any_card(self, owner_idx, uid)
-
-    # Resolves the recurring Cataclisma Ciclico destruction effect.
-    def _apply_cataclisma_ciclico(self, active_idx: int) -> None:
-        if not self._has_artifact(active_idx, "Cataclisma Ciclico"):
-            return
-        own_saints = self.all_saints_on_field(active_idx)
-        opp_idx = 1 - active_idx
-        opp_saints = self.all_saints_on_field(opp_idx)
-        if not own_saints and not opp_saints:
-            return
-        if opp_saints:
-            target_uid = opp_saints[0]
-            target_owner = opp_idx
-        else:
-            target_uid = own_saints[0]
-            target_owner = active_idx
-        target_name = self.state.instances[target_uid].definition.name
-        self.destroy_saint_by_uid(self.state.instances[target_uid].owner, target_uid, cause="effect")
-        if target_owner == active_idx:
-            self.gain_sin(opp_idx, 2)
-            self.state.log(f"Cataclisma Ciclico distrugge {target_name}: +2 Peccato a {self.state.players[opp_idx].name}.")
-        else:
-            self.reduce_sin(active_idx, 1)
-            self.state.log(f"Cataclisma Ciclico distrugge {target_name}: {self.state.players[active_idx].name} perde 1 Peccato.")
 
     # Finds a matching card by name inside the player's deck.
     def find_card_uid_in_deck(self, player_idx: int, name: str) -> str | None:

@@ -45,6 +45,7 @@ TYPE_PRIORITY = {
 class DeckBuildResult:
     main_deck: list[CardDefinition]
     white_deck: list[CardDefinition]
+    innate_deck: list[CardDefinition]
 
 
 @dataclass(slots=True)
@@ -221,6 +222,10 @@ def build_test_deck(cards: list[CardDefinition], religion: str) -> DeckBuildResu
         if c.card_type.lower() not in {"token", "innata"}
     ]
     white_pool = [c for c in religion_cards if c.card_type.lower() == "token"]
+    innate_pool = [
+        c for c in religion_cards + neutral_cards
+        if c.card_type.lower() == "innata"
+    ]
 
     base_pool = _sort_cards(base_pool)
     by_name: dict[str, CardDefinition] = {}
@@ -284,7 +289,7 @@ def build_test_deck(cards: list[CardDefinition], religion: str) -> DeckBuildResu
         for _ in range(5):
             white_deck.append(token)
 
-    return DeckBuildResult(main_deck=chosen[:45], white_deck=white_deck)
+    return DeckBuildResult(main_deck=chosen[:45], white_deck=white_deck, innate_deck=_sort_cards(innate_pool))
 
 
 def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuild:
@@ -298,13 +303,20 @@ def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuil
 
     main: list[CardDefinition] = []
     white: list[CardDefinition] = []
+    innate: list[CardDefinition] = []
 
     def add_card(name: str, qty: int, source: str) -> None:
         card = by_name.get(_norm(name))
         if card is None:
             warnings.append(f"{source}: carta non trovata -> {name}")
             return
-        target = white if card.card_type.lower() == "token" else main
+        ctype = card.card_type.lower()
+        if ctype == "token":
+            target = white
+        elif ctype == "innata":
+            target = innate
+        else:
+            target = main
         for _ in range(max(0, qty)):
             target.append(card)
 
@@ -317,7 +329,7 @@ def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuil
             if len(main) >= 45:
                 break
             card = by_name.get(_norm(name))
-            if card is None or card.card_type.lower() == "token":
+            if card is None or card.card_type.lower() in {"token", "innata"}:
                 continue
             for _ in range(qty):
                 if len(main) >= 45:
@@ -334,7 +346,10 @@ def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuil
         if len(main) < 45:
             warnings.append(f"{cfg['name']}: deck incompleto ({len(main)}/45)")
 
-    return PremadeBuild(deck=DeckBuildResult(main_deck=main[:45], white_deck=white), warnings=warnings)
+    return PremadeBuild(
+        deck=DeckBuildResult(main_deck=main[:45], white_deck=white, innate_deck=innate),
+        warnings=warnings,
+    )
 
 
 def export_test_decks(cards: list[CardDefinition], output_dir: str | Path) -> list[Path]:

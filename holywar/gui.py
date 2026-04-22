@@ -1233,12 +1233,12 @@ class HolyWarGUI(tk.Tk):
 
         self._set_slot_widgets(self.own_attack, own.attack)
         self._set_slot_widgets(self.own_defense, own.defense)
-        self._set_slot_widgets(self.own_artifacts, own.artifacts)
+        self._set_slot_widgets(self.own_artifacts, own.artifacts, hide_equipped=True)
         self.own_building.configure(text=self.card_label(own.building))
 
         self._set_slot_widgets(self.enemy_attack, enemy.attack)
         self._set_slot_widgets(self.enemy_defense, enemy.defense)
-        self._set_slot_widgets(self.enemy_artifacts, enemy.artifacts)
+        self._set_slot_widgets(self.enemy_artifacts, enemy.artifacts, hide_equipped=True)
         self.enemy_building.configure(text=self.card_label(enemy.building))
 
         self.hand_list.delete(0, tk.END)
@@ -1399,9 +1399,54 @@ class HolyWarGUI(tk.Tk):
             p_txt = f" | P:{self.engine.get_effective_strength(uid)}"
         return f"[{hand_idx}] {c.name} ({c.card_type}) | {f_txt}{p_txt}"
 
-    def _set_slot_widgets(self, widgets, slots) -> None:
+    def _set_slot_widgets(self, widgets, slots, *, hide_equipped: bool = False) -> None:
         for i, uid in enumerate(slots):
-            widgets[i].configure(text=self.card_label(uid))
+            widget = widgets[i]
+            display_uid = uid
+            if hide_equipped and self._is_equipment_card_equipped(uid):
+                display_uid = None
+            widget.configure(text=self.card_label(display_uid))
+            self._apply_equipment_highlight(widget, display_uid)
+
+    def _equipped_uids_for(self, uid: str | None) -> list[str]:
+        if self.engine is None or not uid:
+            return []
+        inst = self.engine.state.instances.get(uid)
+        if inst is None:
+            return []
+        out: list[str] = []
+        for tag in list(inst.blessed):
+            if not isinstance(tag, str) or not tag.startswith("equipped_by:"):
+                continue
+            eq_uid = tag.split(":", 1)[1].strip()
+            if not eq_uid or eq_uid not in self.engine.state.instances:
+                continue
+            if eq_uid not in out:
+                out.append(eq_uid)
+        return out
+
+    def _is_equipment_card_equipped(self, uid: str | None) -> bool:
+        if self.engine is None or not uid:
+            return False
+        inst = self.engine.state.instances.get(uid)
+        if inst is None:
+            return False
+        for tag in list(inst.blessed):
+            if isinstance(tag, str) and tag.startswith("equipped_to:"):
+                return True
+        return False
+
+    def _apply_equipment_highlight(self, widget, uid: str | None) -> None:
+        has_equipment = bool(self._equipped_uids_for(uid))
+        color = "red" if has_equipment else "black"
+        # tk.Button uses "fg", ttk widgets generally use "foreground".
+        try:
+            widget.configure(fg=color)
+        except tk.TclError:
+            try:
+                widget.configure(foreground=color)
+            except tk.TclError:
+                pass
 
     def _append_new_logs(self) -> None:
         if self.engine is None:
@@ -1584,7 +1629,19 @@ class HolyWarGUI(tk.Tk):
         inst = self.engine.state.instances[uid]
         c = inst.definition
         effect = (c.effect_text or "").strip() or "Nessun effetto testuale disponibile."
-        detail = effect if effect_only else f"{c.name}\n\n{effect}"
+        equipped_uids = self._equipped_uids_for(uid)
+        equipped_section = ""
+        if equipped_uids:
+            lines = []
+            for eq_uid in equipped_uids:
+                eq_inst = self.engine.state.instances.get(eq_uid)
+                if eq_inst is None:
+                    continue
+                eq_effect = (eq_inst.definition.effect_text or "").strip() or "Nessun effetto testuale disponibile."
+                lines.append(f"- {eq_inst.definition.name}: {eq_effect}")
+            if lines:
+                equipped_section = "\n\nCarte equipaggiate:\n" + "\n".join(lines)
+        detail = effect if effect_only else f"{c.name}\n\n{effect}{equipped_section}"
         self.card_detail_text.configure(state="normal")
         self.card_detail_text.delete("1.0", tk.END)
         self.card_detail_text.insert(tk.END, detail)
@@ -2477,17 +2534,19 @@ class HolyWarGUI(tk.Tk):
         if uid is None:
             return
         menu = tk.Menu(self, tearoff=0)
-        if source.startswith("a"):
+        can_open_attack_menu = source.startswith("a") or source.startswith("d")
+        if can_open_attack_menu:
             slot = int(source[1])
+            from_slot = slot - 1 if source.startswith("a") else -slot
             m_attack = tk.Menu(menu, tearoff=0)
-            valid_slots = self._valid_attack_targets(own_idx, slot - 1)
+            valid_slots = self._valid_attack_targets(own_idx, from_slot)
             hl_tokens: list[str] = []
             for t_slot in valid_slots:
                 if t_slot is None:
-                    m_attack.add_command(label="Attacco diretto", command=lambda s=slot: self.do_attack(s - 1, None))
+                    m_attack.add_command(label="Attacco diretto", command=lambda fs=from_slot: self.do_attack(fs, None))
                 else:
                     t = t_slot + 1
-                    m_attack.add_command(label=f"Target t{t}", command=lambda s=slot, tt=t: self.do_attack(s - 1, tt - 1))
+                    m_attack.add_command(label=f"Target t{t}", command=lambda fs=from_slot, tt=t: self.do_attack(fs, tt - 1))
                     hl_tokens.append(f"a{t}")
             if not valid_slots:
                 m_attack.add_command(label="Nessun bersaglio attaccabile", state="disabled")
@@ -2499,6 +2558,21 @@ class HolyWarGUI(tk.Tk):
             menu.add_command(label="Attiva abilita", command=lambda src=source: self.do_activate(src))
         else:
             menu.add_command(label="Attiva abilita", state="disabled")
+        equipped_uids = self._equipped_uids_for(uid)
+        if equipped_uids:
+            m_equipped = tk.Menu(menu, tearoff=0)
+            for eq_uid in equipped_uids:
+                eq_inst = self.engine.state.instances.get(eq_uid)
+                if eq_inst is None:
+                    continue
+                eq_name = eq_inst.definition.name
+                m_equipped.add_command(
+                    label=eq_name,
+                    command=lambda e_uid=eq_uid: self.show_card_detail(e_uid),
+                )
+            if m_equipped.index("end") is not None:
+                menu.add_separator()
+                menu.add_cascade(label="Carte Equipaggiate", menu=m_equipped)
         menu.bind("<Unmap>", lambda _e: self._clear_slot_highlights())
         try:
             menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())

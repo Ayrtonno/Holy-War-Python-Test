@@ -1345,7 +1345,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Gioca questa carta solo se l'avversario non ha Santi in difesa. Evoca 3 Token Sacrificali nelle zone difensive dell'avversario.",
+    "effect_text": "Gioca questa carta solo se l'avversario non ha Santi in difesa. Evoca 3 Token Sacrificali nelle zone difensive dell'avversario. Quando un Token Sacrificale viene distrutto, il giocatore che lo controllava guadagna 5 Peccato.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -1464,7 +1464,7 @@
     "crosses": "",
     "faith": 5,
     "strength": 0,
-    "effect_text": "(nessun effetto)",
+    "effect_text": "Quando questa carta viene distrutta, il giocatore che la controllava guadagna 5 Peccato.",
     "expansion": "ANI-1",
     "is_token": true
   },
@@ -3967,7 +3967,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Gioca questa carta solo se l'avversario non ha Santi in difesa. Evoca 3 Token Sacrificali nelle zone difensive dell'avversario.",
+    "effect_text": "Gioca questa carta solo se l'avversario non ha Santi in difesa. Evoca 3 Token Sacrificali nelle zone difensive dell'avversario. Quando un Token Sacrificale viene distrutto, il giocatore che lo controllava guadagna 5 Peccato.",
     "expansion": "ANI-1",
     "is_token": false
   },
@@ -4086,7 +4086,7 @@
     "crosses": "",
     "faith": 5,
     "strength": 0,
-    "effect_text": "(nessun effetto)",
+    "effect_text": "Quando questa carta viene distrutta, il giocatore che la controllava guadagna 5 Peccato.",
     "expansion": "ANI-1",
     "is_token": true
   },

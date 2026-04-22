@@ -6,6 +6,9 @@ SCRIPT = {
     "on_play_mode": "noop",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
+    "seals_level_size": 6,
+    "seals_faith_per_level": 3,
+    "seals_strength_per_level": 3,
     "triggered_effects": [
         {
             "trigger": {"event": "on_enter_field", "frequency": "each_turn"},

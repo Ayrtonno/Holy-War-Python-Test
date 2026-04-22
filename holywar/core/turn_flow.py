@@ -3,7 +3,7 @@ from __future__ import annotations
 import unicodedata
 from typing import TYPE_CHECKING
 
-from holywar.core.state import TURN_INSPIRATION, MAX_HAND
+from holywar.core.state import TURN_INSPIRATION, hand_has_space_for_non_innata, is_innata_card_type
 from holywar.effects.runtime import EffectSpec, runtime_cards
 from holywar.effects.state_flags import ensure_runtime_state, refresh_player_flags, set_phase
 
@@ -21,6 +21,20 @@ def _norm(text: str) -> str:
 def initial_setup_draw(engine: "GameEngine") -> None:
     for idx in (0, 1):
         draw_cards(engine, idx, 5)
+        pending = list(
+            engine.state.flags.setdefault("innate_pending_setup", {"0": [], "1": []}).get(str(idx), []) or []
+        )
+        player = engine.state.players[idx]
+        for uid in pending:
+            if uid not in engine.state.instances:
+                continue
+            for pool_name in ("deck", "white_deck", "graveyard", "excommunicated"):
+                pool = getattr(player, pool_name)
+                if uid in pool:
+                    pool.remove(uid)
+            if uid not in player.hand:
+                player.hand.append(uid)
+        engine.state.flags.setdefault("innate_pending_setup", {"0": [], "1": []})[str(idx)] = []
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["0"] = []
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["1"] = []
     engine.state.flags.setdefault("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})["0"] = 0
@@ -33,7 +47,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
     player = engine.state.players[player_idx]
     drawn = 0
     for _ in range(amount):
-        if len(player.hand) >= MAX_HAND:
+        if not hand_has_space_for_non_innata(player, engine.state.instances):
             break
         if not player.deck:
             break
@@ -66,6 +80,36 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
         engine._emit_event("on_opponent_draws", 1 - player_idx, card=drawn_uid, opponent=player_idx)
     refresh_player_flags(engine)
     return drawn
+
+
+def _remove_unplayed_innate_cards(engine: "GameEngine", player_idx: int) -> None:
+    player = engine.state.players[player_idx]
+    active = set(engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).get(str(player_idx), []) or [])
+    removed = engine.state.flags.setdefault("innate_removed_uids", {"0": [], "1": []}).setdefault(str(player_idx), [])
+    for uid, inst in engine.state.instances.items():
+        if int(inst.owner) != int(player_idx):
+            continue
+        if not is_innata_card_type(inst.definition.card_type):
+            continue
+        if uid in active:
+            continue
+        removed_any = False
+        for pool_name in ("hand", "deck", "white_deck", "graveyard", "excommunicated"):
+            pool = getattr(player, pool_name)
+            if uid in pool:
+                pool.remove(uid)
+                removed_any = True
+        for zone in (player.attack, player.defense, player.artifacts):
+            for i, z_uid in enumerate(zone):
+                if z_uid == uid:
+                    zone[i] = None
+                    removed_any = True
+        if player.building == uid:
+            player.building = None
+            removed_any = True
+        if removed_any and uid not in removed:
+            removed.append(uid)
+            engine.state.log(f"{player.name}: {inst.definition.name} (Innata) non giocata in preparazione e stata eliminata.")
 
 
 # Resets resources and per-turn board state for the active player.
@@ -105,8 +149,12 @@ def _summon_turn_start_tokens(engine: "GameEngine", current: int) -> None:
             if token_uid:
                 break
         if token_uid is not None and player.defense[i] is None:
-            player.defense[i] = token_uid
-            engine.state.log(f"{player.name} evoca {token_name} dietro {engine.state.instances[a_uid].definition.name}.")
+            if engine.place_card_from_uid(current, token_uid, "defense", i):
+                final_zone = engine._locate_uid_zone(current, token_uid)
+                if final_zone == "defense":
+                    engine.state.log(f"{player.name} evoca {token_name} dietro {engine.state.instances[a_uid].definition.name}.")
+                else:
+                    engine.state.log(f"{player.name} evoca {token_name} in attacco.")
 
 
 # Resolves the active player's draw phase, including special draw modifiers.
@@ -124,18 +172,12 @@ def _run_draw_phase(engine: "GameEngine", current: int) -> int:
         spore_pending[str(engine.state.active_player)] = False
         return drawn
 
-    bonus_draw = 0
-    pyramid_count = sum(
-        1
-        for uid in player.artifacts
-        if uid and _norm(engine.state.instances[uid].definition.name) in {
-            _norm("Piramide: Chefren"),
-            _norm("Piramide: Cheope"),
-            _norm("Piramide: Micerino"),
-        }
+    bonus_draw = runtime_cards.get_context_bonus_amount(
+        engine,
+        engine.state.active_player,
+        context="turn_draw",
+        amount_mode="flat",
     )
-    if pyramid_count >= 3:
-        bonus_draw += 2
     return draw_cards(engine, engine.state.active_player, 3 + bonus_draw)
 
 
@@ -201,6 +243,7 @@ def end_turn(engine: "GameEngine") -> None:
     if engine.state.winner is not None:
         return
     if engine.state.phase == "preparation":
+        _remove_unplayed_innate_cards(engine, current)
         engine.state.preparation_turns_done += 1
         if engine.state.preparation_turns_done >= 2:
             engine.state.phase = "active"

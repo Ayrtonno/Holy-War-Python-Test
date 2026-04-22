@@ -7,5 +7,18 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "triggered_effects": [],
-    "on_play_actions": [],
+    "play_targeting": "guided",
+    "on_play_actions": [
+        {
+            "target": {
+                "type": "selected_target",
+                "owner": "opponent",
+                "zone": "field",
+                "card_filter": {"card_type_in": ["santo", "token"]},
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+            "effect": {"action": "prevent_specific_card_from_activating", "amount": 1},
+        }
+    ],
 }
