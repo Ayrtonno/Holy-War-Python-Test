@@ -4,6 +4,7 @@ import argparse
 import json
 import random
 import traceback
+from typing import Any, cast
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -105,6 +106,7 @@ class HolyWarGUI(tk.Tk):
         self.resource_sin_bars: list[ttk.Progressbar] = []
         self._slot_highlights: list[tuple[tk.Widget, dict[str, str]]] = []
         self._setup_deck_builder_styles()
+        self._setup_game_styles()
         self._load_premades_into_runtime()
         self._build_ui()
         self.show_main_menu()
@@ -169,11 +171,11 @@ class HolyWarGUI(tk.Tk):
             gripcount=0,
             width=11,
         )
-        style.layout(
+        cast(Any, style).layout(
             "Deck.Vertical.TScrollbar",
             [("Vertical.Scrollbar.trough", {"sticky": "ns", "children": [("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})],
         )
-        style.layout(
+        cast(Any, style).layout(
             "Deck.Horizontal.TScrollbar",
             [("Horizontal.Scrollbar.trough", {"sticky": "we", "children": [("Horizontal.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})],
         )
@@ -201,6 +203,195 @@ class HolyWarGUI(tk.Tk):
             font=("Segoe UI Semibold", 9),
         )
         style.map("Deck.Treeview.Heading", background=[("active", "#f3f0ff")])
+
+    def _setup_game_styles(self) -> None:
+        self._game_palette = {
+            "bg": "#f7f8fa",
+            "surface": "#ffffff",
+            "surface_soft": "#fbfbfc",
+            "line": "#d9dde3",
+            "text": "#1f2328",
+            "muted": "#5b6573",
+            "green": "#2fb34a",
+            "green_dark": "#25933c",
+            "green_soft": "#eaf8ee",
+        }
+
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        p = self._game_palette
+
+        style.configure("Game.TFrame", background=p["bg"])
+        style.configure("Game.TLabel", background=p["bg"], foreground=p["text"])
+
+        style.configure(
+            "Game.TLabelframe",
+            background=p["bg"],
+            bordercolor=p["line"],
+            borderwidth=1,
+            relief="solid",
+        )
+        style.configure(
+            "Game.TLabelframe.Label",
+            background=p["bg"],
+            foreground=p["text"],
+        )
+
+        style.configure(
+            "Game.TButton",
+            background=p["surface"],
+            foreground=p["text"],
+            bordercolor=p["line"],
+            lightcolor=p["surface"],
+            darkcolor=p["surface"],
+            relief="solid",
+            borderwidth=1,
+            padding=(8, 3),
+        )
+        style.map(
+            "Game.TButton",
+            background=[("active", p["surface_soft"]), ("pressed", "#eef1f4")],
+            foreground=[("disabled", "#9aa3ad")],
+        )
+
+        style.configure(
+            "Game.TEntry",
+            fieldbackground=p["surface"],
+            background=p["surface"],
+            foreground=p["text"],
+            bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            relief="solid",
+            borderwidth=1,
+            padding=(4, 3),
+        )
+
+        style.configure(
+            "Game.TCombobox",
+            fieldbackground=p["surface"],
+            background=p["surface"],
+            foreground=p["text"],
+            bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            arrowsize=13,
+            relief="solid",
+            borderwidth=1,
+            padding=(4, 3),
+        )
+        style.map(
+            "Game.TCombobox",
+            fieldbackground=[("readonly", p["surface"])],
+            background=[("readonly", p["surface"])],
+            foreground=[("readonly", p["text"])],
+        )
+
+        style.configure(
+            "Game.Vertical.TScrollbar",
+            background="#cfd6dd",
+            troughcolor=p["surface"],
+            bordercolor=p["surface"],
+            arrowcolor="#5b6573",
+            lightcolor=p["surface"],
+            darkcolor=p["surface"],
+            relief="flat",
+            gripcount=0,
+            width=11,
+        )
+
+        style.configure(
+            "Game.Horizontal.TScrollbar",
+            background="#cfd6dd",
+            troughcolor=p["surface"],
+            bordercolor=p["surface"],
+            arrowcolor="#5b6573",
+            lightcolor=p["surface"],
+            darkcolor=p["surface"],
+            relief="flat",
+            gripcount=0,
+            width=11,
+        )
+
+        style.configure(
+            "Game.Horizontal.TProgressbar",
+            background=p["green"],
+            troughcolor="#ffffff",
+            bordercolor=p["line"],
+            lightcolor=p["green"],
+            darkcolor=p["green_dark"],
+            thickness=16,
+        )
+
+    def _apply_game_theme(self, widget: object) -> None:
+        p = self._game_palette
+        w = cast(Any, widget)
+        cls = str(w.winfo_class())
+
+        def cfg(target: object, **kwargs: object) -> None:
+            cast(Any, target).configure(**kwargs)
+
+        try:
+            if cls == "TFrame":
+                cfg(w, style="Game.TFrame")
+            elif cls == "TLabel":
+                cfg(w, style="Game.TLabel")
+            elif cls == "TLabelframe":
+                cfg(w, style="Game.TLabelframe")
+            elif cls == "TButton":
+                cfg(w, style="Game.TButton")
+            elif cls == "TEntry":
+                cfg(w, style="Game.TEntry")
+            elif cls == "TCombobox":
+                cfg(w, style="Game.TCombobox")
+            elif cls == "TScrollbar":
+                orient = str(w.cget("orient"))
+                cfg(w, style="Game.Horizontal.TScrollbar" if orient == "horizontal" else "Game.Vertical.TScrollbar")
+            elif cls == "TProgressbar":
+                cfg(w, style="Game.Horizontal.TProgressbar")
+            elif cls == "Button":
+                cfg(
+                    w,
+                    bg=p["surface"],
+                    fg=p["text"],
+                    activebackground=p["surface_soft"],
+                    activeforeground=p["text"],
+                    relief="solid",
+                    bd=1,
+                    highlightthickness=0,
+                )
+            elif cls == "Listbox":
+                cfg(
+                    w,
+                    bg=p["surface"],
+                    fg=p["text"],
+                    selectbackground=p["green_soft"],
+                    selectforeground=p["text"],
+                    highlightbackground=p["line"],
+                    highlightcolor=p["line"],
+                    bd=1,
+                    relief="solid",
+                )
+            elif cls == "Text":
+                cfg(
+                    w,
+                    bg=p["surface"],
+                    fg=p["text"],
+                    insertbackground=p["text"],
+                    highlightbackground=p["line"],
+                    highlightcolor=p["line"],
+                    bd=1,
+                    relief="solid",
+                )
+        except tk.TclError:
+            pass
+
+        for child in w.winfo_children():
+            self._apply_game_theme(child)
 
     def _center_toplevel(self, win: tk.Toplevel, width: int, height: int) -> None:
         win.update_idletasks()
@@ -341,6 +532,11 @@ class HolyWarGUI(tk.Tk):
         self.log_text.pack(fill="both", expand=True)
         self.log_text.configure(state="disabled")
         self.bind("<Return>", lambda _e: self.play_selected_card())
+
+        self.game_screen.configure(style="Game.TFrame")
+        self.configure(bg=self._game_palette["bg"])
+        self._apply_game_theme(self.game_screen)
+
         self._build_deck_manager_ui()
 
     def _build_deck_manager_ui(self) -> None:
@@ -738,7 +934,7 @@ class HolyWarGUI(tk.Tk):
         if self.premades_path.exists():
             register_premades_from_json(self.premades_path)
 
-    def _deck_name_to_def(self) -> dict[str, object]:
+    def _deck_name_to_def(self) -> dict[str, Any]:
         return {self._norm(c.name): c for c in self.cards}
 
     def _deck_rules_report(self) -> tuple[list[str], list[str], int, dict[str, int]]:
@@ -1157,7 +1353,7 @@ class HolyWarGUI(tk.Tk):
         rows: list[tuple] = []
         # cards.json may contain duplicated rows for the same card name.
         # For the picker we show each logical card only once.
-        unique_cards: dict[str, object] = {}
+        unique_cards: dict[str, Any] = {}
         for card in self.cards:
             key = self._norm(getattr(card, "name", ""))
             if not key or key in unique_cards:

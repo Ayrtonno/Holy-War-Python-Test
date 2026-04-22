@@ -1160,7 +1160,7 @@
     "crosses": "4",
     "faith": 4,
     "strength": 4,
-    "effect_text": "Se questo Santo distrugge un Santo avversario, aumenta la sua Fede a 4.",
+    "effect_text": "Se questo Santo distrugge un Santo avversario, aumenta la sua Fede di 4.",
     "expansion": "ANI-1",
     "is_token": false,
     "aliases": []
