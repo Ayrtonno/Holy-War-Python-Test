@@ -23,7 +23,8 @@ SCRIPT = {
                         "owner": "me",
                         "zone": "field",
                         "card_filter": {
-                            "card_type_in": ["albero"],
+                            "name_contains": "albero",
+                            "card_type_in": ["santo", "token"],
                         },
                     }
                 },
