@@ -21,12 +21,18 @@ env/
 *.egg-info/
 build/
 dist/
+installer/dist/
+*.spec
 
 # Local generated files
 my_premades.json
+.tmp_*.txt
+.tmp_ani_cards.txt
 reports/
 *.log
 Carte con effetti da fixxare e creare.txt
+installer/*.log
+installer/*.tmp
 
 # OS / editor noise
 .DS_Store

@@ -3,18 +3,19 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import traceback
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from holywar.ai.simple_ai import choose_action
-from holywar.cli import ensure_cards
+from holywar.cli import DEFAULT_JSON, ensure_cards
 from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
 from holywar.effects.runtime import runtime_cards, _norm
 from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.scripting_api import RuleEventContext
 from holywar.data.deck_builder import (
+    PREMADE_STORE_PATH,
     available_premade_decks,
     available_religions,
     get_premade_label,
@@ -22,6 +23,7 @@ from holywar.data.deck_builder import (
     reset_runtime_premades,
     runtime_premade_decks,
 )
+from holywar.app_paths import appdata_dir
 
 
 def _card_aliases(definition) -> list[str]:
@@ -82,7 +84,7 @@ class HolyWarGUI(tk.Tk):
         self._post_reveal_chain_actor: int | None = None
         self._sim_state_snapshot: dict | None = None
         self.religions = religions
-        self.premades_path = Path("holywar/data/premade_decks.json")
+        self.premades_path = PREMADE_STORE_PATH
         self._deck_editor_selected_id: str | None = None
         self._deck_editor_cards: dict[str, int] = {}
         self._deck_candidates_sort_col = "nome"
@@ -3923,7 +3925,7 @@ class HolyWarGUI(tk.Tk):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Holy War - GUI MVP")
     parser.add_argument("--deck-xlsx", type=str, default=None, help="Percorso a Holy War.xlsx")
-    parser.add_argument("--cards-json", type=str, default="holywar/data/cards.json", help="Cache JSON carte")
+    parser.add_argument("--cards-json", type=str, default=str(DEFAULT_JSON), help="Cache JSON carte")
     parser.add_argument("--premades-json", type=str, default=None, help="Importa deck premade custom da JSON")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--ai-delay", type=float, default=1.0)
@@ -3931,13 +3933,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
-    if args.premades_json:
-        register_premades_from_json(args.premades_json)
-    cards = ensure_cards(args)
-    app = HolyWarGUI(cards, seed=args.seed, ai_delay=args.ai_delay)
-    app.mainloop()
+    try:
+        parser = build_parser()
+        args = parser.parse_args()
+        if args.premades_json:
+            register_premades_from_json(args.premades_json)
+        cards = ensure_cards(args)
+        app = HolyWarGUI(cards, seed=args.seed, ai_delay=args.ai_delay)
+        app.mainloop()
+    except Exception as exc:
+        try:
+            log_dir = appdata_dir()
+            log_dir.mkdir(parents=True, exist_ok=True)
+            err_path = log_dir / "startup_error.log"
+            err_path.write_text(traceback.format_exc(), encoding="utf-8")
+            messagebox.showerror("Holy War - Errore avvio", f"{exc}\n\nLog: {err_path}")
+        except Exception:
+            raise
 
 
 if __name__ == "__main__":

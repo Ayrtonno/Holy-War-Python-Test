@@ -7,6 +7,7 @@ from typing import Iterable
 import json
 import unicodedata
 
+from holywar.app_paths import appdata_dir, bundled_data_dir
 from holywar.data.models import CardDefinition
 from holywar.data.premade_decks import NEUTRAL_FILL_ORDER
 
@@ -54,8 +55,27 @@ class PremadeBuild:
     warnings: list[str]
 
 
-PREMADE_STORE_PATH = Path("holywar/data/premade_decks.json")
+_FALLBACK_PREMADE_STORE_PATH = Path("holywar/data/premade_decks.json")
+_DEFAULT_PREMADE_SOURCE_PATH = bundled_data_dir() / "premade_decks.json"
+_LEGACY_PREMADE_PATHS = [
+    Path("holywar/data/premade_decks.json"),
+    Path("holywar/data/user_decks.json"),
+]
 _RUNTIME_PREMADE_DECKS: dict[str, dict] = {}
+
+
+def _resolve_premade_store_path() -> Path:
+    primary = appdata_dir() / "premade_decks.json"
+    for candidate in (primary, _FALLBACK_PREMADE_STORE_PATH):
+        try:
+            candidate.parent.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except Exception:
+            continue
+    return _FALLBACK_PREMADE_STORE_PATH
+
+
+PREMADE_STORE_PATH = _resolve_premade_store_path()
 
 
 def _is_in_group(card: CardDefinition, canonical: str) -> bool:
@@ -172,8 +192,34 @@ def get_premade_label(deck_id: str) -> str:
 
 def reset_runtime_premades() -> None:
     _RUNTIME_PREMADE_DECKS.clear()
+    _ensure_premade_store_exists()
     if PREMADE_STORE_PATH.exists():
         register_premades_from_json(PREMADE_STORE_PATH)
+
+
+def _ensure_premade_store_exists() -> None:
+    if PREMADE_STORE_PATH.exists():
+        return
+    PREMADE_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    for legacy in _LEGACY_PREMADE_PATHS:
+        try:
+            if not legacy.exists():
+                continue
+            src = legacy.resolve()
+            dst = PREMADE_STORE_PATH.resolve()
+            if src == dst:
+                return
+            PREMADE_STORE_PATH.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+            return
+        except Exception:
+            continue
+
+    if _DEFAULT_PREMADE_SOURCE_PATH.exists():
+        PREMADE_STORE_PATH.write_text(_DEFAULT_PREMADE_SOURCE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        return
+
+    PREMADE_STORE_PATH.write_text(json.dumps({"decks": []}, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _normalize_deck_payload(item: dict) -> dict:

@@ -5,6 +5,7 @@ import random
 import time
 from pathlib import Path
 
+from holywar.app_paths import bundled_data_dir
 from holywar.ai.simple_ai import choose_action
 from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
@@ -19,7 +20,7 @@ from holywar.data.deck_builder import (
 from holywar.data.importer import load_cards_from_xlsx, write_cards_json, load_cards_json
 
 
-DEFAULT_JSON = Path("holywar/data/cards.json")
+DEFAULT_JSON = bundled_data_dir() / "cards.json"
 
 
 def build_parser() -> argparse.ArgumentParser:
