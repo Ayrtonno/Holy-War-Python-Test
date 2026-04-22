@@ -3459,6 +3459,17 @@ class HolyWarGUI(tk.Tk):
             name_haystack = _card_name_haystack(inst.definition)
             crosses = getattr(inst.definition, "crosses", None)
 
+            # Converti crosses in intero se necessario
+            cross_value = None
+            if crosses is not None:
+                if isinstance(crosses, (int, float)):
+                    cross_value = int(crosses)
+                else:
+                    try:
+                        cross_value = int(float(str(crosses)))
+                    except (ValueError, TypeError):
+                        cross_value = None
+
             if type_filter and ctype not in type_filter:
                 return False
             if name_in and name_in.isdisjoint(name_variants):
@@ -3479,10 +3490,10 @@ class HolyWarGUI(tk.Tk):
             ):
                 return False
 
-            if crosses_gte is not None and (crosses is None or crosses < crosses_gte):
+            if crosses_gte is not None and (cross_value is None or cross_value < crosses_gte):
                 return False
 
-            if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
+            if crosses_lte is not None and (cross_value is None or cross_value > crosses_lte):
                 return False
 
             eff_strength = engine.get_effective_strength(inst.uid)
