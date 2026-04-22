@@ -55,6 +55,7 @@ class PremadeBuild:
 
 
 _RUNTIME_PREMADE_DECKS: dict[str, dict] = dict(PREMADE_DECKS)
+_RUNTIME_DISABLED_PREMADE_IDS: set[str] = set()
 
 
 def _is_in_group(card: CardDefinition, canonical: str) -> bool:
@@ -127,11 +128,47 @@ def available_religions(cards: list[CardDefinition]) -> list[str]:
 def available_premade_decks(religion: str | None = None) -> list[tuple[str, str, str]]:
     out: list[tuple[str, str, str]] = []
     for deck_id, cfg in _RUNTIME_PREMADE_DECKS.items():
+        if str(deck_id) in _RUNTIME_DISABLED_PREMADE_IDS:
+            continue
         rel = cfg["religion"]
         if religion and rel != religion:
             continue
         out.append((deck_id, rel, cfg["name"]))
     out.sort(key=lambda x: (x[1], x[2]))
+    return out
+
+
+def get_runtime_premade(deck_id: str) -> dict | None:
+    if str(deck_id) in _RUNTIME_DISABLED_PREMADE_IDS:
+        return None
+    cfg = _RUNTIME_PREMADE_DECKS.get(str(deck_id))
+    if cfg is None:
+        return None
+    return {
+        "id": str(deck_id),
+        "religion": str(cfg.get("religion", "")),
+        "name": str(cfg.get("name", "")),
+        "cards": list(cfg.get("cards", []) or []),
+        "allow_over_45": bool(cfg.get("allow_over_45", False)),
+    }
+
+
+def runtime_premade_decks() -> list[dict]:
+    out: list[dict] = []
+    for deck_id, cfg in _RUNTIME_PREMADE_DECKS.items():
+        if str(deck_id) in _RUNTIME_DISABLED_PREMADE_IDS:
+            continue
+        out.append(
+            {
+                "id": str(deck_id),
+                "religion": str(cfg.get("religion", "")),
+                "name": str(cfg.get("name", "")),
+                "cards": list(cfg.get("cards", []) or []),
+                "allow_over_45": bool(cfg.get("allow_over_45", False)),
+                "is_builtin": str(deck_id) in PREMADE_DECKS,
+            }
+        )
+    out.sort(key=lambda d: (str(d.get("religion", "")), str(d.get("name", ""))))
     return out
 
 
@@ -143,6 +180,7 @@ def get_premade_label(deck_id: str) -> str:
 def reset_runtime_premades() -> None:
     _RUNTIME_PREMADE_DECKS.clear()
     _RUNTIME_PREMADE_DECKS.update(PREMADE_DECKS)
+    _RUNTIME_DISABLED_PREMADE_IDS.clear()
 
 
 def _normalize_deck_payload(item: dict) -> dict:
@@ -159,13 +197,25 @@ def _normalize_deck_payload(item: dict) -> dict:
             continue
         if cname and qty > 0:
             cards.append((cname, qty))
-    return {"id": deck_id, "religion": religion, "name": name, "cards": cards}
+    return {
+        "id": deck_id,
+        "religion": religion,
+        "name": name,
+        "cards": cards,
+        "allow_over_45": bool(item.get("allow_over_45", False)),
+    }
 
 
 def register_premades_from_json(path: str | Path) -> list[str]:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     decks = data.get("decks", [])
+    disabled_ids = data.get("disabled_ids", [])
     warnings: list[str] = []
+    if isinstance(disabled_ids, list):
+        for raw_id in disabled_ids:
+            deck_id = str(raw_id).strip()
+            if deck_id:
+                _RUNTIME_DISABLED_PREMADE_IDS.add(deck_id)
     for raw in decks:
         if not isinstance(raw, dict):
             warnings.append("Entry deck non valida (non dict), ignorata.")
@@ -179,7 +229,10 @@ def register_premades_from_json(path: str | Path) -> list[str]:
                 "religion": deck["religion"],
                 "name": deck["name"],
                 "cards": deck["cards"],
+                "allow_over_45": bool(deck.get("allow_over_45", False)),
             }
+            if deck["id"] in _RUNTIME_DISABLED_PREMADE_IDS:
+                _RUNTIME_DISABLED_PREMADE_IDS.remove(deck["id"])
         except Exception as exc:
             warnings.append(f"Deck non valido: {exc}")
     return warnings
@@ -188,11 +241,13 @@ def register_premades_from_json(path: str | Path) -> list[str]:
 def export_premades_json(path: str | Path, include_builtin: bool = True) -> Path:
     src = PREMADE_DECKS if include_builtin else _RUNTIME_PREMADE_DECKS
     payload = {
+        "disabled_ids": sorted(_RUNTIME_DISABLED_PREMADE_IDS),
         "decks": [
             {
                 "id": deck_id,
                 "religion": cfg["religion"],
                 "name": cfg["name"],
+                "allow_over_45": bool(cfg.get("allow_over_45", False)),
                 "cards": [{"name": n, "qty": q} for n, q in cfg["cards"]],
             }
             for deck_id, cfg in src.items()
@@ -202,6 +257,13 @@ def export_premades_json(path: str | Path, include_builtin: bool = True) -> Path
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
+
+
+def disable_runtime_premade(deck_id: str) -> None:
+    did = str(deck_id).strip()
+    if not did:
+        return
+    _RUNTIME_DISABLED_PREMADE_IDS.add(did)
 
 
 def build_test_deck(cards: list[CardDefinition], religion: str) -> DeckBuildResult:
@@ -295,6 +357,7 @@ def build_test_deck(cards: list[CardDefinition], religion: str) -> DeckBuildResu
 def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuild:
     cfg = _RUNTIME_PREMADE_DECKS[deck_id]
     religion = cfg["religion"]
+    allow_over_45 = bool(cfg.get("allow_over_45", False))
     warnings: list[str] = []
 
     by_name: dict[str, CardDefinition] = {}
@@ -346,8 +409,11 @@ def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuil
         if len(main) < 45:
             warnings.append(f"{cfg['name']}: deck incompleto ({len(main)}/45)")
 
+    if not allow_over_45:
+        main = main[:45]
+
     return PremadeBuild(
-        deck=DeckBuildResult(main_deck=main[:45], white_deck=white, innate_deck=innate),
+        deck=DeckBuildResult(main_deck=main, white_deck=white, innate_deck=innate),
         warnings=warnings,
     )
 

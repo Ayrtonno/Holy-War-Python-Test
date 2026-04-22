@@ -4011,13 +4011,24 @@ class RuntimeCardManager:
             player = engine.state.players[owner_idx]
             if source not in player.hand:
                 return
-            slot = engine._first_open(player.attack)
-            zone = "attack"
+            requested = str(engine.state.flags.get("_runtime_selected_target", "")).strip().lower()
+            slot = None
+            zone = ""
+            if requested:
+                parsed_zone, parsed_slot = engine._parse_zone_target(requested)
+                if parsed_zone in {"attack", "defense"} and parsed_slot >= 0:
+                    slots = player.attack if parsed_zone == "attack" else player.defense
+                    if parsed_slot < len(slots) and slots[parsed_slot] is None:
+                        zone = parsed_zone
+                        slot = parsed_slot
             if slot is None:
-                slot = engine._first_open(player.defense)
-                zone = "defense"
-            if slot is None:
-                return
+                slot = engine._first_open(player.attack)
+                zone = "attack"
+                if slot is None:
+                    slot = engine._first_open(player.defense)
+                    zone = "defense"
+                if slot is None:
+                    return
             player.hand.remove(source)
             if not engine.place_card_from_uid(owner_idx, source, zone, slot):
                 player.hand.append(source)

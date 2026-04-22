@@ -27,6 +27,18 @@ def _is_preparation_context(engine: "GameEngine") -> bool:
     return int(engine.state.turn_number) == 0 and int(engine.state.preparation_turns_done) < 2
 
 
+def _open_saint_slot_tokens(engine: "GameEngine", player_idx: int) -> list[str]:
+    player = engine.state.players[player_idx]
+    out: list[str] = []
+    for i, uid in enumerate(player.attack):
+        if uid is None:
+            out.append(f"a{i + 1}")
+    for i, uid in enumerate(player.defense):
+        if uid is None:
+            out.append(f"d{i + 1}")
+    return out
+
+
 def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) -> bool:
     player = engine.state.players[player_idx]
     if uid not in player.hand:
@@ -38,8 +50,23 @@ def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) ->
     previous_source = flags.get("_runtime_source_card")
     previous_selected = flags.get("_runtime_selected_target")
 
+    selected_target = ""
+    try:
+        card_name = engine.state.instances[uid].definition.name
+    except Exception:
+        card_name = ""
+    if _norm(card_name) == _norm("Albero Sacro") and not _is_preparation_context(engine):
+        chooser = getattr(engine, "choose_auto_play_slot_from_draw", None)
+        if callable(chooser):
+            slots = _open_saint_slot_tokens(engine, player_idx)
+            if slots:
+                chosen = chooser(player_idx, uid, slots)
+                chosen_norm = str(chosen or "").strip().lower()
+                if chosen_norm in {s.lower() for s in slots}:
+                    selected_target = chosen_norm
+
     flags["_runtime_source_card"] = uid
-    flags["_runtime_selected_target"] = ""
+    flags["_runtime_selected_target"] = selected_target
     try:
         runtime_cards._apply_effect(
             engine,
