@@ -215,9 +215,10 @@ def resolve_targeted_attack(
     ]
     if forced_slots and target_slot not in forced_slots:
         forced_names = ", ".join(
-            engine.state.instances[defender_player.attack[i]].definition.name
+            engine.state.instances[s_uid].definition.name
             for i in forced_slots
-            if defender_player.attack[i] in engine.state.instances
+            for s_uid in [defender_player.attack[i]]
+            if s_uid is not None and s_uid in engine.state.instances
         )
         label = forced_names or "un bersaglio obbligatorio"
         return ActionResult(False, f"Devi attaccare {label}.")

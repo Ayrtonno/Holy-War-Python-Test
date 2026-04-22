@@ -346,6 +346,11 @@ def handle_saint_play(
 
     zone_label = "Attacco" if zone == "attack" else "Difesa"
     engine.state.log(f"{player.name} posiziona {card.definition.name} in {zone_label} {slot + 1}.")
+
+    play_msg = resolve_card_effect(engine, player_idx, uid, None)
+    if play_msg and "nessun effetto" not in str(play_msg).lower():
+        engine.state.log(str(play_msg))
+
     engine._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
     engine._emit_event("on_summoned_from_hand", player_idx, card=uid)
     if _norm(card.definition.card_type) == "token":
@@ -375,6 +380,11 @@ def handle_artifact_play(engine: "GameEngine", player_idx: int, uid: str) -> Act
     player.artifacts[slot] = uid
 
     engine.state.log(f"{player.name} posiziona Artefatto {card.definition.name}.")
+
+    play_msg = resolve_card_effect(engine, player_idx, uid, None)
+    if play_msg and "nessun effetto" not in str(play_msg).lower():
+        engine.state.log(str(play_msg))
+
     engine._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
     enter_msg = resolve_enter_effect(engine, player_idx, uid)
     if enter_msg:
@@ -388,6 +398,11 @@ def handle_building_play(engine: "GameEngine", player_idx: int, uid: str) -> Act
     card = engine.state.instances[uid]
     player.building = uid
     engine.state.log(f"{player.name} posiziona Edificio {card.definition.name}.")
+
+    play_msg = resolve_card_effect(engine, player_idx, uid, None)
+    if play_msg and "nessun effetto" not in str(play_msg).lower():
+        engine.state.log(str(play_msg))
+
     engine._emit_event("on_enter_field", player_idx, card=uid, from_zone="hand")
     enter_msg = resolve_enter_effect(engine, player_idx, uid)
     if enter_msg:

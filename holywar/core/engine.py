@@ -78,6 +78,7 @@ class GameEngine:
 
     # Dispatches a gameplay event to the scripting runtime and aliases.
     def _emit_event(self, event: str, actor_idx: int, **payload) -> None:
+        
         if event == "on_card_sent_to_graveyard":
             card_uid = str(payload.get("card", "")).strip()
             from_zone = str(payload.get("from_zone", "")).strip().lower()
@@ -299,7 +300,11 @@ class GameEngine:
                         }
                     ) or (
                         self.state.players[owner].building is not None
-                        and _norm(self.state.instances[self.state.players[owner].building].definition.name)
+                        and _norm(
+                            self.state.instances[
+                                str(self.state.players[owner].building)
+                            ].definition.name
+                        )
                         == _norm(required_controller_name)
                     )
                 elif controller_zone in {"hand"}:
@@ -499,10 +504,18 @@ class GameEngine:
         self,
         player_idx: int,
         defender_idx: int,
+        attacker_uid: str,
         attacker: CardInstance,
         target_slot: int | None,
     ) -> ActionResult | None:
-        return combat_ops.validate_attack_preconditions(self, player_idx, defender_idx, attacker, target_slot)
+        return combat_ops.validate_attack_preconditions(
+            self,
+            player_idx,
+            defender_idx,
+            attacker_uid,
+            attacker,
+            target_slot,
+        )
 
     # Marks the attacker as committed and updates the per-turn attack counter.
     def _mark_attack_committed(self, player_idx: int, attacker: CardInstance, defender_uid: str | None = None) -> None:
@@ -519,9 +532,16 @@ class GameEngine:
         defender_idx: int,
         attacker_uid: str,
         attacker: CardInstance,
-        target_slot: int | None,
+        target_slot: int | None = None,
     ) -> ActionResult:
-        return combat_ops.resolve_targeted_attack(self, player_idx, defender_idx, attacker_uid, attacker, target_slot)
+        return combat_ops.resolve_targeted_attack(
+            self,
+            player_idx,
+            defender_idx,
+            attacker_uid,
+            attacker,
+            target_slot,
+        )
 
     # Declares and resolves an attack through the combat module.
     def attack(self, player_idx: int, from_slot: int, target_slot: int | None) -> ActionResult:

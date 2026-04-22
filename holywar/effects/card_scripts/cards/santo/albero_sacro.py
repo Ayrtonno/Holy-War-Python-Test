@@ -12,25 +12,13 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {"event": "on_my_turn_end", "frequency": "each_turn"},
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "deck",
-                "owner": "me",
-                "card_filter": {"name_contains": "Token Albero"},
-                "max_targets": 1,
-            },
-            "effect": {"action": "summon_named_card", "card_name": "Token Albero"},
+            "target": {"type": "source_card"},
+            "effect": {"action": "summon_generated_token", "card_name": "Token Albero"},
         },
         {
             "trigger": {"event": "on_opponent_turn_end", "frequency": "each_turn"},
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "deck",
-                "owner": "me",
-                "card_filter": {"name_contains": "Token Albero"},
-                "max_targets": 1,
-            },
-            "effect": {"action": "summon_named_card", "card_name": "Token Albero"},
+            "target": {"type": "source_card"},
+            "effect": {"action": "summon_generated_token", "card_name": "Token Albero"},
         },
         {
             "trigger": {"event": "on_saint_defeated_in_battle", "frequency": "each_turn"},

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from holywar.core import state
+from holywar.core.state import MAX_HAND
 from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.scripting_api import RuleEventContext
 from holywar.core.state import CardInstance
@@ -100,7 +101,6 @@ SUPPORTED_EFFECT_ACTIONS = {
     "mill_cards",
     "draw_cards",
     "inflict_sin",
-    "inflict_sin_to_event_controller",
     "inflict_sin_to_target_owners",
     "remove_sin",
     "add_inspiration",
@@ -154,10 +154,6 @@ SUPPORTED_EFFECT_ACTIONS = {
     "retaliate_damage_to_event_source_if_enemy_saint",
     "grant_attack_barrier",
     "prevent_specific_card_from_attacking",
-    "prevent_specific_card_from_activating",
-    "destroy_equipped_target_and_excommunicate_source",
-    "summon_generated_token",
-    "resolve_monsone_payload",
     "halve_strength_rounded_down",
     "equip_card",
     "unequip_card",
@@ -210,7 +206,6 @@ class CardFilterSpec:
     name_contains: str | None = None
     name_not_contains: str | None = None
     card_type_in: list[str] = field(default_factory=list)
-    expansion_in: list[str] = field(default_factory=list)
     exclude_event_card: bool = False
     exclude_buildings_if_my_building_zone_occupied: bool = False
     crosses_gte: int | None = None
@@ -295,8 +290,6 @@ class CardScript:
     halves_friendly_saint_play_cost: bool = False
     halve_friendly_saint_play_cost_excludes_self: bool = True
     doubles_enemy_play_cost: bool = False
-    cannot_be_targeted_by_enemy_card_types: list[str] = field(default_factory=list)
-    grants_targeting_immunity_to_friendly_cards: list[dict[str, Any]] = field(default_factory=list)
     activate_targeting: str = "auto"
     attack_targeting: str = "auto"
     can_attack: bool = True
@@ -320,6 +313,12 @@ class CardScript:
     sigilli_strength_bonus_threshold: int | None = None
     sigilli_strength_bonus_amount: int | None = None
     is_pyramid: bool = False
+    pyramid_strength_bonus_threshold: int | None = None
+    pyramid_strength_bonus_amount: int | None = None
+    pyramid_summon_extra_base_faith_threshold: int | None = None
+    pyramid_summon_extra_base_faith_multiplier: int | None = None
+    pyramid_turn_draw_bonus_threshold: int | None = None
+    pyramid_turn_draw_bonus_amount: int | None = None
     is_altare_sigilli: bool = False
     seals_level_size: int | None = None
     seals_faith_per_level: int | None = None
@@ -455,7 +454,6 @@ class RuntimeCardManager:
                     name_contains=filt.get("name_contains"),
                     name_not_contains=filt.get("name_not_contains"),
                     card_type_in=list(filt.get("card_type_in", []) or []),
-                    expansion_in=[str(v) for v in list(filt.get("expansion_in", []) or [])],
                     exclude_event_card=bool(filt.get("exclude_event_card", False)),
                     exclude_buildings_if_my_building_zone_occupied=bool(
                         filt.get("exclude_buildings_if_my_building_zone_occupied", False)
@@ -608,13 +606,37 @@ class RuntimeCardManager:
                     spec.get("halve_friendly_saint_play_cost_excludes_self", True)
                 ),
                 doubles_enemy_play_cost=bool(spec.get("doubles_enemy_play_cost", False)),
-                cannot_be_targeted_by_enemy_card_types=[
-                    str(v) for v in list(spec.get("cannot_be_targeted_by_enemy_card_types", []) or [])
-                ],
-                grants_targeting_immunity_to_friendly_cards=[
-                    dict(v) for v in list(spec.get("grants_targeting_immunity_to_friendly_cards", []) or []) if isinstance(v, dict)
-                ],
                 is_pyramid=bool(spec.get("is_pyramid", False)),
+                pyramid_strength_bonus_threshold=(
+                    int(spec["pyramid_strength_bonus_threshold"])
+                    if spec.get("pyramid_strength_bonus_threshold") is not None
+                    else None
+                ),
+                pyramid_strength_bonus_amount=(
+                    int(spec["pyramid_strength_bonus_amount"])
+                    if spec.get("pyramid_strength_bonus_amount") is not None
+                    else None
+                ),
+                pyramid_summon_extra_base_faith_threshold=(
+                    int(spec["pyramid_summon_extra_base_faith_threshold"])
+                    if spec.get("pyramid_summon_extra_base_faith_threshold") is not None
+                    else None
+                ),
+                pyramid_summon_extra_base_faith_multiplier=(
+                    int(spec["pyramid_summon_extra_base_faith_multiplier"])
+                    if spec.get("pyramid_summon_extra_base_faith_multiplier") is not None
+                    else None
+                ),
+                pyramid_turn_draw_bonus_threshold=(
+                    int(spec["pyramid_turn_draw_bonus_threshold"])
+                    if spec.get("pyramid_turn_draw_bonus_threshold") is not None
+                    else None
+                ),
+                pyramid_turn_draw_bonus_amount=(
+                    int(spec["pyramid_turn_draw_bonus_amount"])
+                    if spec.get("pyramid_turn_draw_bonus_amount") is not None
+                    else None
+                ),
                 is_altare_sigilli=bool(spec.get("is_altare_sigilli", False)),
                 seals_level_size=(int(spec["seals_level_size"]) if spec.get("seals_level_size") is not None else None),
                 seals_faith_per_level=(
@@ -858,6 +880,42 @@ class RuntimeCardManager:
             return False
         return bool(script.is_pyramid)
 
+    def get_pyramid_strength_bonus_threshold(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.pyramid_strength_bonus_threshold
+
+    def get_pyramid_strength_bonus_amount(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.pyramid_strength_bonus_amount
+
+    def get_pyramid_summon_extra_base_faith_threshold(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.pyramid_summon_extra_base_faith_threshold
+
+    def get_pyramid_summon_extra_base_faith_multiplier(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.pyramid_summon_extra_base_faith_multiplier
+
+    def get_pyramid_turn_draw_bonus_threshold(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.pyramid_turn_draw_bonus_threshold
+
+    def get_pyramid_turn_draw_bonus_amount(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None:
+            return None
+        return script.pyramid_turn_draw_bonus_amount
+
     def get_is_altare_sigilli(self, card_name: str) -> bool:
         script = self.get_script(card_name)
         if script is None:
@@ -1048,15 +1106,6 @@ class RuntimeCardManager:
     ) -> tuple[bool, str | None]:
         self.ensure_all_cards_migrated(engine)
         inst = engine.state.instances[uid]
-        for tag in list(inst.cursed):
-            if not isinstance(tag, str) or not tag.startswith("no_activate_until:"):
-                continue
-            try:
-                until_turn = int(tag.split(":", 1)[1])
-            except (TypeError, ValueError):
-                continue
-            if int(engine.state.turn_number) <= until_turn:
-                return (False, "L'attivazione di questa carta e bloccata da un effetto.")
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
 
         mode = _norm(script.on_activate_mode)
@@ -1430,8 +1479,6 @@ class RuntimeCardManager:
                     ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", "")))
                 )
                 ctx.engine.state.flags["_runtime_event_source"] = str(ctx.payload.get("source", ""))
-                ctx.engine.state.flags["_runtime_event_target"] = str(ctx.payload.get("target", ""))
-                ctx.engine.state.flags["_runtime_event_controller"] = str(ctx.payload.get("controller", ""))
                 ctx.engine.state.flags["_runtime_event_name"] = str(ctx.event)
                 ctx.engine.state.flags["_runtime_source_card"] = _source
                 try:
@@ -1443,8 +1490,6 @@ class RuntimeCardManager:
                 finally:
                     ctx.engine.state.flags.pop("_runtime_event_card", None)
                     ctx.engine.state.flags.pop("_runtime_event_source", None)
-                    ctx.engine.state.flags.pop("_runtime_event_target", None)
-                    ctx.engine.state.flags.pop("_runtime_event_controller", None)
                     ctx.engine.state.flags.pop("_runtime_event_name", None)
                     ctx.engine.state.flags.pop("_runtime_source_card", None)
 
@@ -1506,10 +1551,6 @@ class RuntimeCardManager:
         for idx in (0, 1):
             p = engine.state.players[idx]
             if uid in (p.attack + p.defense + p.artifacts) or p.building == uid:
-                return True
-        active_innate = engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []})
-        for idx in (0, 1):
-            if uid in list(active_innate.get(str(idx), []) or []):
                 return True
         return False
     
@@ -1620,12 +1661,8 @@ class RuntimeCardManager:
         needle_in = {_norm(v) for v in target.card_filter.name_in}
         needle = _norm(target.card_filter.name_contains or "")
         type_filter = {_norm(v) for v in target.card_filter.card_type_in}
-        expansion_filter = {_norm(v) for v in target.card_filter.expansion_in}
         event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
         source_uid = str(engine.state.flags.get("_runtime_source_card", ""))
-        source_inst = engine.state.instances.get(source_uid) if source_uid in engine.state.instances else None
-        source_owner = source_inst.owner if source_inst is not None else None
-        source_type = _norm(source_inst.definition.card_type) if source_inst is not None else ""
         top_n = target.card_filter.top_n_from_zone
         top_n_allowed: set[str] | None = None
         if top_n is not None and int(top_n) > 0:
@@ -1656,51 +1693,6 @@ class RuntimeCardManager:
                 continue
             if type_filter and _norm(inst.definition.card_type) not in type_filter:
                 continue
-            if expansion_filter and _norm(str(inst.definition.expansion or "")) not in expansion_filter:
-                continue
-            # Enemy-targeting immunity declared by target card script.
-            if source_inst is not None and source_owner is not None and int(source_owner) != int(inst.owner):
-                target_script = self.get_script(inst.definition.name)
-                blocked_types = (
-                    {_norm(v) for v in target_script.cannot_be_targeted_by_enemy_card_types}
-                    if target_script is not None
-                    else set()
-                )
-                if source_type in blocked_types:
-                    continue
-
-                # Aura-targeting immunity granted by friendly cards on target owner's field.
-                owner_player = engine.state.players[int(inst.owner)]
-                owner_field = [u for u in owner_player.attack + owner_player.defense + owner_player.artifacts if u]
-                if owner_player.building:
-                    owner_field.append(owner_player.building)
-                aura_blocked = False
-                inst_name_haystack = _card_name_haystack(inst.definition)
-                inst_type = _norm(inst.definition.card_type)
-                for aura_uid in owner_field:
-                    aura_inst = engine.state.instances.get(aura_uid)
-                    if aura_inst is None:
-                        continue
-                    aura_script = self.get_script(aura_inst.definition.name)
-                    if aura_script is None:
-                        continue
-                    for rule in aura_script.grants_targeting_immunity_to_friendly_cards:
-                        rule_types = {_norm(v) for v in list(rule.get("source_card_types", []) or [])}
-                        if rule_types and source_type not in rule_types:
-                            continue
-                        rf = dict(rule.get("card_filter", {}) or {})
-                        rf_name_contains = _norm(str(rf.get("name_contains", "")))
-                        if rf_name_contains and rf_name_contains not in inst_name_haystack:
-                            continue
-                        rf_type_filter = {_norm(v) for v in list(rf.get("card_type_in", []) or [])}
-                        if rf_type_filter and inst_type not in rf_type_filter:
-                            continue
-                        aura_blocked = True
-                        break
-                    if aura_blocked:
-                        break
-                if aura_blocked:
-                    continue
             if (
                 target.card_filter.exclude_buildings_if_my_building_zone_occupied
                 and engine.state.players[owner_idx].building is not None
@@ -1828,10 +1820,6 @@ class RuntimeCardManager:
             source_uid = str(engine.state.flags.get("_runtime_event_source", ""))
             if source_uid:
                 pool.append(source_uid)
-        elif ttype == "payload_target_card":
-            target_uid = str(engine.state.flags.get("_runtime_event_target", "")).strip()
-            if target_uid:
-                pool.append(target_uid)
         elif ttype == "equipped_target_of_source":
             source_uid = str(engine.state.flags.get("_runtime_source_card", "")).strip()
             if source_uid:
@@ -2109,8 +2097,7 @@ class RuntimeCardManager:
         if zone == "hand":
             if uid in player.hand:
                 return True
-            is_innata = state.is_innata_card_type(inst.definition.card_type)
-            if not is_innata and not state.hand_has_space_for_non_innata(player, engine.state.instances):
+            if len(player.hand) >= MAX_HAND:
                 return False
             self._remove_uid_from_all_player_zones(engine, real_owner, uid)
             if leaving_field:
@@ -2193,7 +2180,6 @@ class RuntimeCardManager:
         engine: GameEngine,
         owner_idx: int,
         token_name: str,
-        preferred_zone: str | None = None,
     ) -> str | None:
         token_key = _norm(token_name)
         cards_path = Path(__file__).resolve().parents[1] / "data" / "cards.json"
@@ -2206,27 +2192,11 @@ class RuntimeCardManager:
 
         player = engine.state.players[owner_idx]
 
-        preferred = _norm(preferred_zone or "")
-        slot = None
-        zone = ""
-        if preferred == "defense":
+        slot = engine._first_open(player.attack)
+        zone = "attack"
+        if slot is None:
             slot = engine._first_open(player.defense)
             zone = "defense"
-            if slot is None:
-                slot = engine._first_open(player.attack)
-                zone = "attack"
-        elif preferred == "attack":
-            slot = engine._first_open(player.attack)
-            zone = "attack"
-            if slot is None:
-                slot = engine._first_open(player.defense)
-                zone = "defense"
-        else:
-            slot = engine._first_open(player.attack)
-            zone = "attack"
-            if slot is None:
-                slot = engine._first_open(player.defense)
-                zone = "defense"
         if slot is None:
             engine.state.log(f"{player.name} non ha spazio per evocare {token_name}.")
             return None
@@ -2315,84 +2285,6 @@ class RuntimeCardManager:
                     continue
                 if tag not in inst.cursed:
                     inst.cursed.append(tag)
-            return
-        if action == "prevent_specific_card_from_activating":
-            duration_turns = max(1, int(effect.amount or 1))
-            until_turn = int(engine.state.turn_number) + duration_turns - 1
-            tag = f"no_activate_until:{until_turn}"
-            for t_uid in targets:
-                inst = engine.state.instances.get(t_uid)
-                if inst is None:
-                    continue
-                if tag not in inst.cursed:
-                    inst.cursed.append(tag)
-            return
-        if action == "destroy_equipped_target_and_excommunicate_source":
-            source_inst = engine.state.instances.get(source_uid)
-            if source_inst is None:
-                return
-            target_uid = self._equipment_target_uid(engine, source_uid)
-            if target_uid and target_uid in engine.state.instances:
-                target_inst = engine.state.instances[target_uid]
-                self._clear_equipment_link(engine, source_uid)
-                engine.destroy_saint_by_uid(target_inst.owner, target_uid, cause="effect")
-            engine.excommunicate_card(source_inst.owner, source_uid)
-            return
-        if action == "summon_generated_token":
-            token_name = str(effect.card_name or "").strip()
-            if not token_name:
-                return
-            summon_owner = self._resolve_owner_scope(owner_idx, effect.owner or "me")
-            copies = max(1, int(effect.amount or 1))
-            preferred_zone = str(effect.zone or "").strip() or None
-            for _ in range(copies):
-                self._summon_generated_token(engine, summon_owner, token_name, preferred_zone=preferred_zone)
-            return
-        if action == "resolve_monsone_payload":
-            raw = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
-            if not raw.startswith("monsone:"):
-                return
-            payload = raw[len("monsone:") :]
-            parts: dict[str, str] = {}
-            for part in payload.split(";"):
-                if "=" not in part:
-                    continue
-                k, v = part.split("=", 1)
-                parts[_norm(k)] = v.strip()
-
-            player = engine.state.players[owner_idx]
-            discard_uids = [v.strip() for v in str(parts.get("discard", "")).split(",") if v.strip()]
-            discarded_count = 0
-            for d_uid in discard_uids[:3]:
-                if d_uid in player.hand:
-                    player.hand.remove(d_uid)
-                    player.graveyard.append(d_uid)
-                    discarded_count += 1
-            while discarded_count < 3 and player.deck:
-                top_uid = player.deck.pop()
-                player.graveyard.append(top_uid)
-                discarded_count += 1
-
-            return_uids = [v.strip() for v in str(parts.get("return", "")).split(",") if v.strip()]
-            moved = 0
-            for r_uid in return_uids:
-                if moved >= discarded_count:
-                    break
-                inst = engine.state.instances.get(r_uid)
-                if inst is None:
-                    continue
-                crosses_txt = _norm(str(inst.definition.crosses or ""))
-                try:
-                    crosses = int(float(crosses_txt)) if crosses_txt else 99
-                except (TypeError, ValueError):
-                    crosses = 99
-                if crosses > 8:
-                    continue
-                if self._move_uid_to_zone(engine, r_uid, "relicario", inst.owner):
-                    moved += 1
-
-            engine.rng.shuffle(engine.state.players[0].deck)
-            engine.rng.shuffle(engine.state.players[1].deck)
             return
         if action == "equip_card":
             source_inst = engine.state.instances.get(source_uid)
@@ -2986,76 +2878,19 @@ class RuntimeCardManager:
             inst.blessed.append(f"campana_counter:{counter}")
             return
         if action == "cataclisma_ciclico":
-            opp_idx = 1 - owner_idx
             own_saints = engine.all_saints_on_field(owner_idx)
+            opp_idx = 1 - owner_idx
             opp_saints = engine.all_saints_on_field(opp_idx)
-            candidates = list(dict.fromkeys(own_saints + opp_saints))
-
-            if not candidates:
-                source_inst = engine.state.instances.get(source_uid)
-                if source_inst is not None:
-                    engine.destroy_any_card(source_inst.owner, source_uid)
-                    engine.state.log("Cataclisma Ciclico non trova Santi da distruggere e si distrugge.")
+            if not own_saints and not opp_saints:
                 return
-
-            flags = engine.state.flags
-            expected_choice_source = f"{source_uid}:cataclisma_ciclico"
-            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
-            choice_ready = bool(flags.get("_runtime_choice_ready"))
-
-            if choice_ready and choice_source == expected_choice_source:
-                selected_uid = str(flags.get("_runtime_choice_selected", "")).strip()
-                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
-                choice_candidates = [v for v in candidates_raw.split(";;") if v]
-                if selected_uid not in choice_candidates:
-                    selected_uid = ""
-                for key in (
-                    "_runtime_choice_source",
-                    "_runtime_choice_ready",
-                    "_runtime_choice_selected",
-                    "_runtime_choice_candidates",
-                    "_runtime_choice_owner",
-                    "_runtime_choice_title",
-                    "_runtime_choice_prompt",
-                    "_runtime_choice_min_targets",
-                    "_runtime_choice_max_targets",
-                ):
-                    flags.pop(key, None)
-
-                if (
-                    not selected_uid
-                    or selected_uid not in engine.state.instances
-                    or selected_uid not in list(dict.fromkeys(engine.all_saints_on_field(0) + engine.all_saints_on_field(1)))
-                ):
-                    # La scelta non e piu valida: fall back deterministico su un candidato ancora presente.
-                    live_candidates = list(dict.fromkeys(engine.all_saints_on_field(owner_idx) + engine.all_saints_on_field(opp_idx)))
-                    if not live_candidates:
-                        source_inst = engine.state.instances.get(source_uid)
-                        if source_inst is not None:
-                            engine.destroy_any_card(source_inst.owner, source_uid)
-                            engine.state.log("Cataclisma Ciclico non trova piu Santi validi e si distrugge.")
-                        return
-                    selected_uid = live_candidates[0]
+            if opp_saints:
+                target_uid = opp_saints[0]
+                target_owner = opp_idx
             else:
-                flags["_runtime_choice_source"] = expected_choice_source
-                flags["_runtime_choice_candidates"] = ";;".join(candidates)
-                flags["_runtime_choice_owner"] = str(owner_idx)
-                flags["_runtime_choice_title"] = "Cataclisma Ciclico"
-                flags["_runtime_choice_prompt"] = "Scegli un Santo sul campo da distruggere."
-                flags["_runtime_choice_min_targets"] = "1"
-                flags["_runtime_choice_max_targets"] = "1"
-                flags["_runtime_choice_ready"] = False
-                flags["_runtime_resume_same_action"] = True
-                flags["_runtime_reveal_card"] = source_uid
-                flags["_runtime_waiting_for_reveal"] = True
-                return
-
-            target_inst = engine.state.instances.get(selected_uid)
-            if target_inst is None:
-                return
-            target_owner = int(target_inst.owner)
-            target_name = target_inst.definition.name
-            engine.destroy_saint_by_uid(target_owner, selected_uid, cause="effect")
+                target_uid = own_saints[0]
+                target_owner = owner_idx
+            target_name = engine.state.instances[target_uid].definition.name
+            engine.destroy_saint_by_uid(target_owner, target_uid, cause="effect")
             if target_owner == owner_idx:
                 engine.gain_sin(opp_idx, 2)
                 engine.state.log(
@@ -3459,19 +3294,6 @@ class RuntimeCardManager:
         if action == "inflict_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             engine.gain_sin(target, max(0, int(effect.amount)))
-            return
-        if action == "inflict_sin_to_event_controller":
-            amount = max(0, int(effect.amount))
-            if amount <= 0:
-                return
-            raw_controller = str(engine.state.flags.get("_runtime_event_controller", "")).strip()
-            try:
-                target = int(raw_controller)
-            except (TypeError, ValueError):
-                return
-            if target not in (0, 1):
-                return
-            engine.gain_sin(target, amount)
             return
         if action == "inflict_sin_from_source_paid_inspiration":
             source_inst = engine.state.instances.get(source_uid)
@@ -4586,7 +4408,6 @@ class RuntimeCardManager:
                     str(card_filter.get("name_not_contains")) if card_filter.get("name_not_contains") is not None else None
                 ),
                 card_type_in=[str(v) for v in list(card_filter.get("card_type_in", []) or [])],
-                expansion_in=[str(v) for v in list(card_filter.get("expansion_in", []) or [])],
                 crosses_gte=crosses_gte,
                 crosses_lte=crosses_lte,
                 strength_gte=strength_gte,
