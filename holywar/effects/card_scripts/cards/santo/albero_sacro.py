@@ -11,6 +11,11 @@ SCRIPT = {
     "end_turn_on_draw": True,
     "triggered_effects": [
         {
+            "trigger": {"event": "on_preparation_complete", "frequency": "each_turn"},
+            "target": {"type": "source_card"},
+            "effect": {"action": "summon_generated_token", "card_name": "Token Albero"},
+        },
+        {
             "trigger": {"event": "on_my_turn_end", "frequency": "each_turn"},
             "target": {"type": "source_card"},
             "effect": {"action": "summon_generated_token", "card_name": "Token Albero"},

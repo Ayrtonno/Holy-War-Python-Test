@@ -118,6 +118,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "set_double_cost_next_turn",
     "shuffle_deck",
     "shuffle_target_owner_decks",
+    "summon_generated_token",
     "return_to_hand_once_per_turn",
     "swap_attack_defense",
     "increase_faith_per_opponent_saints",
@@ -2180,6 +2181,7 @@ class RuntimeCardManager:
         engine: GameEngine,
         owner_idx: int,
         token_name: str,
+        preferred_zone: str | None = None,
     ) -> str | None:
         token_key = _norm(token_name)
         cards_path = Path(__file__).resolve().parents[1] / "data" / "cards.json"
@@ -2192,11 +2194,28 @@ class RuntimeCardManager:
 
         player = engine.state.players[owner_idx]
 
-        slot = engine._first_open(player.attack)
-        zone = "attack"
-        if slot is None:
+        preferred = _norm(preferred_zone or "")
+        slot = None
+        zone = ""
+
+        if preferred == "defense":
             slot = engine._first_open(player.defense)
             zone = "defense"
+            if slot is None:
+                slot = engine._first_open(player.attack)
+                zone = "attack"
+        elif preferred == "attack":
+            slot = engine._first_open(player.attack)
+            zone = "attack"
+            if slot is None:
+                slot = engine._first_open(player.defense)
+                zone = "defense"
+        else:
+            slot = engine._first_open(player.attack)
+            zone = "attack"
+            if slot is None:
+                slot = engine._first_open(player.defense)
+                zone = "defense"
         if slot is None:
             engine.state.log(f"{player.name} non ha spazio per evocare {token_name}.")
             return None
@@ -3805,6 +3824,22 @@ class RuntimeCardManager:
                     engine.state.log(str(enter_msg))
 
             engine.state.flags.pop(flag_name, None)
+            return
+        
+        if action == "summon_generated_token":
+            token_name = str(effect.card_name or "").strip()
+            if not token_name:
+                return
+            summon_owner = self._resolve_owner_scope(owner_idx, effect.owner or "me")
+            copies = max(1, int(effect.amount or 1))
+            preferred_zone = str(effect.zone or "").strip() or None
+            for _ in range(copies):
+                self._summon_generated_token(
+                    engine,
+                    summon_owner,
+                    token_name,
+                    preferred_zone=preferred_zone,
+                )
             return
 
         if action == "summon_token":

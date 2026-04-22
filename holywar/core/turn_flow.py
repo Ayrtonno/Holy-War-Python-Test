@@ -123,6 +123,10 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
                 if player_idx not in pending:
                     pending.append(player_idx)
 
+                prep_auto_end = runtime_state.setdefault("request_end_preparation_players", [])
+                if player_idx not in prep_auto_end:
+                    prep_auto_end.append(player_idx)
+
             elif is_real_turn_draw:
                 runtime_state["request_end_turn_player"] = player_idx
 
@@ -268,6 +272,14 @@ def start_turn(engine: "GameEngine") -> None:
     engine._cleanup_zero_faith_saints()
 
     if engine.state.phase == "preparation":
+        prep_auto_end = runtime_state.setdefault("request_end_preparation_players", [])
+
+        if current in prep_auto_end:
+            prep_auto_end.remove(current)
+            engine.state.log(f"{player.name} termina immediatamente la preparazione.")
+            end_turn(engine)
+            return
+
         engine.state.log(
             f"Preparazione: {player.name} dispone di 10 Ispirazione e non puo attaccare."
         )
@@ -330,10 +342,9 @@ def end_turn(engine: "GameEngine") -> None:
             pending.append(current)
 
         if engine.state.preparation_turns_done >= 2:
-            pending_players = list(runtime_state.pop("preparation_end_turn_pending", []))
+            runtime_state.pop("preparation_end_turn_pending", None)
 
-            for prep_player in pending_players:
-                _emit_end_turn_events(engine, prep_player)
+            engine._emit_event("on_preparation_complete", current, player=current)
 
             engine.state.phase = "active"
             engine.state.coin_toss_winner = engine.rng.randint(0, 1)
