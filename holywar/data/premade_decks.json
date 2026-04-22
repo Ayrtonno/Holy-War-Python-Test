@@ -1,0 +1,1616 @@
+{
+  "decks": [
+    {
+      "id": "animismo_b1_antico_albero",
+      "religion": "Animismo",
+      "name": "B1 - Antico Albero",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Albero Fortunato",
+          "qty": 3
+        },
+        {
+          "name": "Pianta Carnivora",
+          "qty": 3
+        },
+        {
+          "name": "Albero Sconsacrato",
+          "qty": 3
+        },
+        {
+          "name": "Creature del Sottobosco",
+          "qty": 3
+        },
+        {
+          "name": "Albero di Pietra",
+          "qty": 3
+        },
+        {
+          "name": "Insetto della Palude",
+          "qty": 3
+        },
+        {
+          "name": "Muschio Tossico",
+          "qty": 3
+        },
+        {
+          "name": "Pietra Bianca",
+          "qty": 3
+        },
+        {
+          "name": "Pioggia",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione Naturale",
+          "qty": 3
+        },
+        {
+          "name": "Corteccia",
+          "qty": 3
+        },
+        {
+          "name": "Cuore della foresta",
+          "qty": 3
+        },
+        {
+          "name": "Radici",
+          "qty": 3
+        },
+        {
+          "name": "Albero Sacro",
+          "qty": 1
+        },
+        {
+          "name": "Albero Secolare",
+          "qty": 1
+        },
+        {
+          "name": "Foresta Sacra",
+          "qty": 1
+        },
+        {
+          "name": "Ruscello Sacro",
+          "qty": 1
+        },
+        {
+          "name": "Preghiera: Fertilità",
+          "qty": 1
+        },
+        {
+          "name": "Fioritura Primaverile",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "animismo_b2_pietre",
+      "religion": "Animismo",
+      "name": "B2 - Rocce e Totem",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Insetto della Palude",
+          "qty": 3
+        },
+        {
+          "name": "Occhi della Notte",
+          "qty": 3
+        },
+        {
+          "name": "Stalagmiti",
+          "qty": 3
+        },
+        {
+          "name": "Stalattiti",
+          "qty": 3
+        },
+        {
+          "name": "Golem di Pietra",
+          "qty": 3
+        },
+        {
+          "name": "Pietra Focaia",
+          "qty": 3
+        },
+        {
+          "name": "Totem di Pietra",
+          "qty": 3
+        },
+        {
+          "name": "Albero di Pietra",
+          "qty": 2
+        },
+        {
+          "name": "Memoria della Pietra",
+          "qty": 3
+        },
+        {
+          "name": "Pietra Bianca",
+          "qty": 3
+        },
+        {
+          "name": "Pietra Nera",
+          "qty": 3
+        },
+        {
+          "name": "Pietre Pesanti",
+          "qty": 3
+        },
+        {
+          "name": "Caverna Profonda",
+          "qty": 3
+        },
+        {
+          "name": "Pietre Aguzze",
+          "qty": 3
+        },
+        {
+          "name": "Sabbie Mobili",
+          "qty": 2
+        },
+        {
+          "name": "Pietra Levigata",
+          "qty": 1
+        },
+        {
+          "name": "Segno Del Passato",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "animismo_b3_cataclismi",
+      "religion": "Animismo",
+      "name": "B3 - Tempeste e Cataclismi",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Larva Pestilenziale",
+          "qty": 3
+        },
+        {
+          "name": "Insetto Dorato",
+          "qty": 3
+        },
+        {
+          "name": "Anfibio Tossico",
+          "qty": 3
+        },
+        {
+          "name": "Occhi della Notte",
+          "qty": 3
+        },
+        {
+          "name": "Albero Fortunato",
+          "qty": 2
+        },
+        {
+          "name": "Pioggia Acida",
+          "qty": 3
+        },
+        {
+          "name": "Tempesta",
+          "qty": 3
+        },
+        {
+          "name": "Monsone",
+          "qty": 3
+        },
+        {
+          "name": "Voragine",
+          "qty": 3
+        },
+        {
+          "name": "Tifone",
+          "qty": 3
+        },
+        {
+          "name": "Diboscamento",
+          "qty": 2
+        },
+        {
+          "name": "Terremoto: Magnitudo 3",
+          "qty": 2
+        },
+        {
+          "name": "Uragano",
+          "qty": 1
+        },
+        {
+          "name": "Inverno",
+          "qty": 1
+        },
+        {
+          "name": "Tornado",
+          "qty": 1
+        },
+        {
+          "name": "Cataclisma Ciclico",
+          "qty": 1
+        },
+        {
+          "name": "Fiamma Primordiale",
+          "qty": 1
+        },
+        {
+          "name": "Incendio",
+          "qty": 3
+        },
+        {
+          "name": "Sequoia",
+          "qty": 1
+        },
+        {
+          "name": "Aquila Vorace",
+          "qty": 1
+        },
+        {
+          "name": "Sacrificio Naturale",
+          "qty": 2
+        }
+      ]
+    },
+    {
+      "id": "cristianesimo_b1_sigilli_martirio",
+      "religion": "Cristianesimo",
+      "name": "B1 - Sigilli e Martirio",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Prete Anziano",
+          "qty": 3
+        },
+        {
+          "name": "Moribondo",
+          "qty": 2
+        },
+        {
+          "name": "Paladino della Fede",
+          "qty": 3
+        },
+        {
+          "name": "Custode dei Sigilli",
+          "qty": 3
+        },
+        {
+          "name": "Guerriero Santificato",
+          "qty": 2
+        },
+        {
+          "name": "Frate Curatore",
+          "qty": 2
+        },
+        {
+          "name": "Primo Sigillo",
+          "qty": 3
+        },
+        {
+          "name": "Offerta ai Sigilli",
+          "qty": 3
+        },
+        {
+          "name": "Secondo Sigillo: Guerra",
+          "qty": 3
+        },
+        {
+          "name": "Preghiera",
+          "qty": 3
+        },
+        {
+          "name": "Perdono",
+          "qty": 3
+        },
+        {
+          "name": "Processione",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione Cristiana",
+          "qty": 2
+        },
+        {
+          "name": "Altare dei Sette Sigilli",
+          "qty": 1
+        },
+        {
+          "name": "Veggente dell'Apocalisse",
+          "qty": 1
+        },
+        {
+          "name": "Papa",
+          "qty": 1
+        },
+        {
+          "name": "Trombe del Giudizio",
+          "qty": 1
+        },
+        {
+          "name": "Quarto Sigillo: Morte",
+          "qty": 1
+        },
+        {
+          "name": "Settimo Sigillo",
+          "qty": 1
+        },
+        {
+          "name": "Arca della salvezza",
+          "qty": 1
+        },
+        {
+          "name": "Terzo Sigillo: Carestia",
+          "qty": 1
+        },
+        {
+          "name": "Araldo della Fine",
+          "qty": 1
+        },
+        {
+          "name": "Giorno Festivo",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "cristianesimo_b2_genesi",
+      "religion": "Cristianesimo",
+      "name": "B2 - Genesi Estesa",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Impostore",
+          "qty": 3
+        },
+        {
+          "name": "Moribondo",
+          "qty": 3
+        },
+        {
+          "name": "Prete Anziano",
+          "qty": 3
+        },
+        {
+          "name": "Giorno 5: Creature del Mare",
+          "qty": 3
+        },
+        {
+          "name": "Giorno 6: Creature di Terra",
+          "qty": 3
+        },
+        {
+          "name": "Paladino della Fede",
+          "qty": 3
+        },
+        {
+          "name": "Processione",
+          "qty": 3
+        },
+        {
+          "name": "Sacrificio",
+          "qty": 4
+        },
+        {
+          "name": "Preghiera",
+          "qty": 3
+        },
+        {
+          "name": "Veggenza",
+          "qty": 3
+        },
+        {
+          "name": "Giorno Festivo",
+          "qty": 2
+        },
+        {
+          "name": "Giorno 1: Cieli e Terra",
+          "qty": 1
+        },
+        {
+          "name": "Giorno 2: Cielo Terrestre",
+          "qty": 1
+        },
+        {
+          "name": "Giorno 3: Terre e Mari",
+          "qty": 1
+        },
+        {
+          "name": "Giorno 4: Stelle",
+          "qty": 1
+        },
+        {
+          "name": "Giorno 7: Riposo",
+          "qty": 1
+        },
+        {
+          "name": "Settimo Sigillo",
+          "qty": 1
+        },
+        {
+          "name": "Cronologia Sacra",
+          "qty": 1
+        },
+        {
+          "name": "Biblioteca d'Oro",
+          "qty": 2
+        },
+        {
+          "name": "Custode della Creazione",
+          "qty": 1
+        },
+        {
+          "name": "Genesi: Compimento",
+          "qty": 1
+        },
+        {
+          "name": "Ascensione",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "cristianesimo_b3_creatore",
+      "religion": "Cristianesimo",
+      "name": "B3 - Via del Creatore",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Missionario",
+          "qty": 3
+        },
+        {
+          "name": "Paladino della Fede",
+          "qty": 3
+        },
+        {
+          "name": "Guerriero Santificato",
+          "qty": 3
+        },
+        {
+          "name": "Frate Curatore",
+          "qty": 3
+        },
+        {
+          "name": "Vescovo della Città Lucente",
+          "qty": 2
+        },
+        {
+          "name": "Brigante",
+          "qty": 2
+        },
+        {
+          "name": "Preghiera",
+          "qty": 3
+        },
+        {
+          "name": "Ascensione",
+          "qty": 3
+        },
+        {
+          "name": "Sacrificio",
+          "qty": 3
+        },
+        {
+          "name": "Perdono",
+          "qty": 2
+        },
+        {
+          "name": "Veggenza",
+          "qty": 2
+        },
+        {
+          "name": "Acqua",
+          "qty": 1
+        },
+        {
+          "name": "Aria",
+          "qty": 1
+        },
+        {
+          "name": "Fuoco",
+          "qty": 1
+        },
+        {
+          "name": "Terra",
+          "qty": 1
+        },
+        {
+          "name": "Umanità",
+          "qty": 2
+        },
+        {
+          "name": "Rifugio Sacro",
+          "qty": 2
+        },
+        {
+          "name": "Canti Religiosi",
+          "qty": 2
+        },
+        {
+          "name": "Dio, il Creatore",
+          "qty": 1
+        },
+        {
+          "name": "Chiesa",
+          "qty": 1
+        },
+        {
+          "name": "Biblioteca Apostolica",
+          "qty": 1
+        },
+        {
+          "name": "Campana",
+          "qty": 1
+        },
+        {
+          "name": "Sacri Vasi",
+          "qty": 1
+        },
+        {
+          "name": "Giudizio Universale",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "egizie_b1_aldila_ordine",
+      "religion": "Egiziane",
+      "name": "B1 - Aldilà Ordinato",
+      "allow_over_45": true,
+      "cards": [
+        {
+          "name": "Anubi",
+          "qty": 1
+        },
+        {
+          "name": "Bende Consacrate",
+          "qty": 3
+        },
+        {
+          "name": "Coccodrillo del Nilo",
+          "qty": 2
+        },
+        {
+          "name": "Concentrazione",
+          "qty": 1
+        },
+        {
+          "name": "Deriu-hebet",
+          "qty": 3
+        },
+        {
+          "name": "Geb",
+          "qty": 3
+        },
+        {
+          "name": "Iside",
+          "qty": 1
+        },
+        {
+          "name": "Mummificazione",
+          "qty": 3
+        },
+        {
+          "name": "Nefti",
+          "qty": 3
+        },
+        {
+          "name": "Nun",
+          "qty": 1
+        },
+        {
+          "name": "Osiride",
+          "qty": 1
+        },
+        {
+          "name": "Passaggio all'Aldilà",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione Egizia",
+          "qty": 3
+        },
+        {
+          "name": "Ptah",
+          "qty": 3
+        },
+        {
+          "name": "Rito Funebre",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote Oroscopo",
+          "qty": 3
+        },
+        {
+          "name": "Set",
+          "qty": 3
+        },
+        {
+          "name": "Seth",
+          "qty": 1
+        },
+        {
+          "name": "Ultima Offerta",
+          "qty": 2
+        },
+        {
+          "name": "Vasi Canopi",
+          "qty": 2
+        }
+      ]
+    },
+    {
+      "id": "egizie_b2_piramidi",
+      "religion": "Egiziane",
+      "name": "B2 - Le Tre Piramidi",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Nefti",
+          "qty": 3
+        },
+        {
+          "name": "Set",
+          "qty": 3
+        },
+        {
+          "name": "Deriu-hebet",
+          "qty": 3
+        },
+        {
+          "name": "Neith",
+          "qty": 3
+        },
+        {
+          "name": "Geb",
+          "qty": 3
+        },
+        {
+          "name": "Ptah",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote Orologio",
+          "qty": 3
+        },
+        {
+          "name": "Schiavo Mutilato",
+          "qty": 3
+        },
+        {
+          "name": "Passaggio all'Aldilà",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione Egizia",
+          "qty": 3
+        },
+        {
+          "name": "Bende Consacrate",
+          "qty": 2
+        },
+        {
+          "name": "Ultima Offerta",
+          "qty": 2
+        },
+        {
+          "name": "Piramide: Chefren",
+          "qty": 1
+        },
+        {
+          "name": "Piramide: Cheope",
+          "qty": 1
+        },
+        {
+          "name": "Piramide: Micerino",
+          "qty": 1
+        },
+        {
+          "name": "Nun",
+          "qty": 1
+        },
+        {
+          "name": "Ra",
+          "qty": 1
+        },
+        {
+          "name": "Sfinge",
+          "qty": 1
+        },
+        {
+          "name": "Esondazione del Nilo",
+          "qty": 1
+        },
+        {
+          "name": "Faro di Alessandria",
+          "qty": 2
+        },
+        {
+          "name": "Tempesta di Sabbia",
+          "qty": 1
+        },
+        {
+          "name": "Piaga Ignota",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "egizie_b3_riti_totali",
+      "religion": "Egiziane",
+      "name": "B3 - Riti Totali",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Set",
+          "qty": 3
+        },
+        {
+          "name": "Nefti",
+          "qty": 3
+        },
+        {
+          "name": "Deriu-hebet",
+          "qty": 3
+        },
+        {
+          "name": "Neith",
+          "qty": 3
+        },
+        {
+          "name": "Geb",
+          "qty": 3
+        },
+        {
+          "name": "Ptah",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote Orologio",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote Oroscopo",
+          "qty": 3
+        },
+        {
+          "name": "Unut",
+          "qty": 3
+        },
+        {
+          "name": "Schiavi",
+          "qty": 3
+        },
+        {
+          "name": "Coccodrillo del Nilo",
+          "qty": 3
+        },
+        {
+          "name": "Bende Consacrate",
+          "qty": 3
+        },
+        {
+          "name": "Passaggio all'Aldilà",
+          "qty": 3
+        },
+        {
+          "name": "Mummificazione",
+          "qty": 3
+        },
+        {
+          "name": "Atum",
+          "qty": 1
+        },
+        {
+          "name": "Faro di Alessandria",
+          "qty": 1
+        },
+        {
+          "name": "Medicina Egizia",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "norrena_b1_thor",
+      "religion": "Mitologia Norrena",
+      "name": "B1 - Concilio di Thor",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Tanngnjostr",
+          "qty": 3
+        },
+        {
+          "name": "Tanngrisnir",
+          "qty": 3
+        },
+        {
+          "name": "Huginn",
+          "qty": 3
+        },
+        {
+          "name": "Muninn",
+          "qty": 3
+        },
+        {
+          "name": "Sif",
+          "qty": 3
+        },
+        {
+          "name": "Jordh",
+          "qty": 3
+        },
+        {
+          "name": "Skadi",
+          "qty": 3
+        },
+        {
+          "name": "Thor",
+          "qty": 1
+        },
+        {
+          "name": "Figli di Odino",
+          "qty": 3
+        },
+        {
+          "name": "Gungnir",
+          "qty": 3
+        },
+        {
+          "name": "Járngreipr",
+          "qty": 3
+        },
+        {
+          "name": "Megingjörð",
+          "qty": 3
+        },
+        {
+          "name": "Saga degli Eroi Caduti",
+          "qty": 3
+        },
+        {
+          "name": "Tempesta di Asgard",
+          "qty": 3
+        },
+        {
+          "name": "Valhalla",
+          "qty": 1
+        },
+        {
+          "name": "Yggdrasil",
+          "qty": 1
+        },
+        {
+          "name": "Mjolnir",
+          "qty": 1
+        },
+        {
+          "name": "Loki",
+          "qty": 2
+        }
+      ]
+    },
+    {
+      "id": "norrena_b2_odino",
+      "religion": "Mitologia Norrena",
+      "name": "B2 - Arsenale di Odino",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Huginn",
+          "qty": 3
+        },
+        {
+          "name": "Muninn",
+          "qty": 3
+        },
+        {
+          "name": "Tanngnjostr",
+          "qty": 3
+        },
+        {
+          "name": "Tanngrisnir",
+          "qty": 3
+        },
+        {
+          "name": "Sif",
+          "qty": 3
+        },
+        {
+          "name": "Jordh",
+          "qty": 3
+        },
+        {
+          "name": "Skadi",
+          "qty": 3
+        },
+        {
+          "name": "Odino",
+          "qty": 1
+        },
+        {
+          "name": "Figli di Odino",
+          "qty": 3
+        },
+        {
+          "name": "Gungnir",
+          "qty": 3
+        },
+        {
+          "name": "Járngreipr",
+          "qty": 3
+        },
+        {
+          "name": "Megingjörð",
+          "qty": 2
+        },
+        {
+          "name": "Saga degli Eroi Caduti",
+          "qty": 3
+        },
+        {
+          "name": "Tempesta di Asgard",
+          "qty": 3
+        },
+        {
+          "name": "Valhalla",
+          "qty": 1
+        },
+        {
+          "name": "Yggdrasil",
+          "qty": 1
+        },
+        {
+          "name": "Fenrir",
+          "qty": 1
+        },
+        {
+          "name": "Jormungandr",
+          "qty": 1
+        },
+        {
+          "name": "Bifrost",
+          "qty": 1
+        },
+        {
+          "name": "Loki",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "norrena_b3_ragnarok",
+      "religion": "Mitologia Norrena",
+      "name": "B3 - Presagi di Ragnarok",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Tanngnjostr",
+          "qty": 3
+        },
+        {
+          "name": "Tanngrisnir",
+          "qty": 3
+        },
+        {
+          "name": "Huginn",
+          "qty": 3
+        },
+        {
+          "name": "Muninn",
+          "qty": 3
+        },
+        {
+          "name": "Sif",
+          "qty": 3
+        },
+        {
+          "name": "Jordh",
+          "qty": 3
+        },
+        {
+          "name": "Loki",
+          "qty": 3
+        },
+        {
+          "name": "Skadi",
+          "qty": 3
+        },
+        {
+          "name": "Figli di Odino",
+          "qty": 3
+        },
+        {
+          "name": "Saga degli Eroi Caduti",
+          "qty": 3
+        },
+        {
+          "name": "Valhalla",
+          "qty": 1
+        },
+        {
+          "name": "Yggdrasil",
+          "qty": 1
+        },
+        {
+          "name": "Fenrir",
+          "qty": 1
+        },
+        {
+          "name": "Jormungandr",
+          "qty": 1
+        },
+        {
+          "name": "Assalto Invernale",
+          "qty": 1
+        },
+        {
+          "name": "Ragnarok",
+          "qty": 1
+        },
+        {
+          "name": "Bifrost",
+          "qty": 3
+        },
+        {
+          "name": "Tempesta di Asgard",
+          "qty": 3
+        },
+        {
+          "name": "Gungnir",
+          "qty": 1
+        },
+        {
+          "name": "Járngreipr",
+          "qty": 1
+        },
+        {
+          "name": "Megingjörð",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "xibalba_b1_guardiani",
+      "religion": "Ombre Maya",
+      "name": "B1 - Guardiani dell'Oltretomba",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Anima Errante",
+          "qty": 3
+        },
+        {
+          "name": "Ix Chel",
+          "qty": 3
+        },
+        {
+          "name": "Spirito dei Sepolti",
+          "qty": 3
+        },
+        {
+          "name": "Sussurro degli Antenati",
+          "qty": 3
+        },
+        {
+          "name": "Sacrificio della Fertilità",
+          "qty": 3
+        },
+        {
+          "name": "Cenote Sacro",
+          "qty": 3
+        },
+        {
+          "name": "Eco dei Morti",
+          "qty": 3
+        },
+        {
+          "name": "Fiume dei Morti",
+          "qty": 3
+        },
+        {
+          "name": "Calice Insanguinato",
+          "qty": 3
+        },
+        {
+          "name": "Tikal",
+          "qty": 3
+        },
+        {
+          "name": "Concentrazione",
+          "qty": 3
+        },
+        {
+          "name": "Cura",
+          "qty": 2
+        },
+        {
+          "name": "Ritorno Infame",
+          "qty": 3
+        },
+        {
+          "name": "Vucub-Came",
+          "qty": 1
+        },
+        {
+          "name": "Hun-Came",
+          "qty": 1
+        },
+        {
+          "name": "Camazotz",
+          "qty": 1
+        },
+        {
+          "name": "Ah Puch",
+          "qty": 1
+        },
+        {
+          "name": "Rituale dei Guardiani",
+          "qty": 1
+        },
+        {
+          "name": "Rituale Sepolcrale",
+          "qty": 1
+        },
+        {
+          "name": "Promessa dell'oltretomba",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "xibalba_b2_maledizione",
+      "religion": "Ombre Maya",
+      "name": "B2 - Maledizione di Xibalba",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Anima Errante",
+          "qty": 3
+        },
+        {
+          "name": "Ix Chel",
+          "qty": 3
+        },
+        {
+          "name": "Spirito dei Sepolti",
+          "qty": 3
+        },
+        {
+          "name": "Sussurro degli Antenati",
+          "qty": 3
+        },
+        {
+          "name": "Furia di Camazotz",
+          "qty": 3
+        },
+        {
+          "name": "Cenote Sacro",
+          "qty": 3
+        },
+        {
+          "name": "Eco dei Morti",
+          "qty": 3
+        },
+        {
+          "name": "Fiume dei Morti",
+          "qty": 3
+        },
+        {
+          "name": "Calice Insanguinato",
+          "qty": 3
+        },
+        {
+          "name": "Tikal",
+          "qty": 3
+        },
+        {
+          "name": "Concentrazione",
+          "qty": 3
+        },
+        {
+          "name": "Meditazione",
+          "qty": 2
+        },
+        {
+          "name": "Corruzione",
+          "qty": 3
+        },
+        {
+          "name": "Vucub-Came",
+          "qty": 1
+        },
+        {
+          "name": "Hun-Came",
+          "qty": 1
+        },
+        {
+          "name": "Camazotz",
+          "qty": 1
+        },
+        {
+          "name": "Maledizione di Xibalba",
+          "qty": 1
+        },
+        {
+          "name": "Spirito dell'Esercito Dorato",
+          "qty": 1
+        },
+        {
+          "name": "Promessa dell'oltretomba",
+          "qty": 1
+        },
+        {
+          "name": "Sacrificio della Fertilità",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "xibalba_b3_xibalba",
+      "religion": "Ombre Maya",
+      "name": "B3 - Trono di Xibalba",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Anima Errante",
+          "qty": 3
+        },
+        {
+          "name": "Ix Chel",
+          "qty": 3
+        },
+        {
+          "name": "Spirito dei Sepolti",
+          "qty": 3
+        },
+        {
+          "name": "Sussurro degli Antenati",
+          "qty": 3
+        },
+        {
+          "name": "Cenote Sacro",
+          "qty": 3
+        },
+        {
+          "name": "Eco dei Morti",
+          "qty": 3
+        },
+        {
+          "name": "Fiume dei Morti",
+          "qty": 3
+        },
+        {
+          "name": "Tikal",
+          "qty": 3
+        },
+        {
+          "name": "Ritorno Infame",
+          "qty": 3
+        },
+        {
+          "name": "Concentrazione",
+          "qty": 3
+        },
+        {
+          "name": "Cura Totale",
+          "qty": 2
+        },
+        {
+          "name": "Calice Insanguinato",
+          "qty": 3
+        },
+        {
+          "name": "Rituale dei Guardiani",
+          "qty": 1
+        },
+        {
+          "name": "Rituale Sepolcrale",
+          "qty": 1
+        },
+        {
+          "name": "Resurrezione del Sacerdote",
+          "qty": 1
+        },
+        {
+          "name": "Maledizione di Xibalba",
+          "qty": 1
+        },
+        {
+          "name": "Xibalba",
+          "qty": 1
+        },
+        {
+          "name": "Vucub-Came",
+          "qty": 1
+        },
+        {
+          "name": "Hun-Came",
+          "qty": 1
+        },
+        {
+          "name": "Camazotz",
+          "qty": 1
+        },
+        {
+          "name": "Ah Puch",
+          "qty": 1
+        },
+        {
+          "name": "Promessa dell'oltretomba",
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "id": "phdk_b1_volere",
+      "religion": "Ph-DakGaph",
+      "name": "B1 - Volere del Vuoto",
+      "allow_over_45": true,
+      "cards": [
+        {
+          "name": "Av'drna",
+          "qty": 2
+        },
+        {
+          "name": "Avidità di Av",
+          "qty": 3
+        },
+        {
+          "name": "Distorsione del Reliquiario",
+          "qty": 1
+        },
+        {
+          "name": "Dono di Kah",
+          "qty": 3
+        },
+        {
+          "name": "Frammento dello Specchio",
+          "qty": 3
+        },
+        {
+          "name": "Fujn'lyat",
+          "qty": 2
+        },
+        {
+          "name": "Fujn-dar",
+          "qty": 3
+        },
+        {
+          "name": "Gggnag'ljep",
+          "qty": 1
+        },
+        {
+          "name": "Gub-ner Antico",
+          "qty": 3
+        },
+        {
+          "name": "Kah-ok",
+          "qty": 3
+        },
+        {
+          "name": "Libro di Ya-ner",
+          "qty": 1
+        },
+        {
+          "name": "Paradosso di Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Pkad-nok",
+          "qty": 3
+        },
+        {
+          "name": "Pkad-nok'ljep",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione di Ph",
+          "qty": 3
+        },
+        {
+          "name": "Rito della Ri-Manifestazione",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote del Vuoto",
+          "qty": 3
+        },
+        {
+          "name": "Volere di Ph",
+          "qty": 1
+        },
+        {
+          "name": "Ya-ner",
+          "qty": 3
+        }
+      ]
+    },
+    {
+      "id": "phdk_b2_risveglio",
+      "religion": "Ph-DakGaph",
+      "name": "B2 - Presagio del Risveglio",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Fujn-dar",
+          "qty": 3
+        },
+        {
+          "name": "Kah-ok",
+          "qty": 3
+        },
+        {
+          "name": "Pkad-nok",
+          "qty": 3
+        },
+        {
+          "name": "Ya-ner",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote del Vuoto",
+          "qty": 3
+        },
+        {
+          "name": "Gub-ner Antico",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione di Ph",
+          "qty": 3
+        },
+        {
+          "name": "Dono di Kah",
+          "qty": 3
+        },
+        {
+          "name": "Frammento dello Specchio",
+          "qty": 3
+        },
+        {
+          "name": "Avidità di Av",
+          "qty": 3
+        },
+        {
+          "name": "Rito della Ri-Manifestazione",
+          "qty": 2
+        },
+        {
+          "name": "Distorsione del Reliquiario",
+          "qty": 2
+        },
+        {
+          "name": "Ph'drna",
+          "qty": 1
+        },
+        {
+          "name": "Llakhnal",
+          "qty": 2
+        },
+        {
+          "name": "Gggnag'ljep",
+          "qty": 1
+        },
+        {
+          "name": "Libro di Ya-ner",
+          "qty": 1
+        },
+        {
+          "name": "Ph'kdam",
+          "qty": 1
+        },
+        {
+          "name": "Paradosso di Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Maledizione di Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Risveglio di Ph-Dak'Gaph",
+          "qty": 1
+        },
+        {
+          "name": "Furia di Llakhnal",
+          "qty": 2
+        }
+      ]
+    },
+    {
+      "id": "phdk_b3_specchio",
+      "religion": "Ph-DakGaph",
+      "name": "B3 - Specchio di Ykknødar",
+      "allow_over_45": false,
+      "cards": [
+        {
+          "name": "Fujn-dar",
+          "qty": 3
+        },
+        {
+          "name": "Kah-ok",
+          "qty": 3
+        },
+        {
+          "name": "Pkad-nok",
+          "qty": 3
+        },
+        {
+          "name": "Ya-ner",
+          "qty": 3
+        },
+        {
+          "name": "Sacerdote del Vuoto",
+          "qty": 3
+        },
+        {
+          "name": "Gub-ner Antico",
+          "qty": 3
+        },
+        {
+          "name": "Proibizione di Ph",
+          "qty": 3
+        },
+        {
+          "name": "Pkad-nok'ljep",
+          "qty": 3
+        },
+        {
+          "name": "Dono di Kah",
+          "qty": 3
+        },
+        {
+          "name": "Frammento dello Specchio",
+          "qty": 3
+        },
+        {
+          "name": "Avidità di Av",
+          "qty": 3
+        },
+        {
+          "name": "Volere di Ph",
+          "qty": 1
+        },
+        {
+          "name": "Rito della Ri-Manifestazione",
+          "qty": 2
+        },
+        {
+          "name": "Distorsione del Reliquiario",
+          "qty": 2
+        },
+        {
+          "name": "Libro di Ya-ner",
+          "qty": 1
+        },
+        {
+          "name": "Paradosso di Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Specchio di Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Maledizione di Ykknødar",
+          "qty": 1
+        },
+        {
+          "name": "Furia di Llakhnal",
+          "qty": 1
+        },
+        {
+          "name": "Gggnag'ljep",
+          "qty": 1
+        }
+      ]
+    }
+  ]
+}

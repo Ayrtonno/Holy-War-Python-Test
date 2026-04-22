@@ -7,7 +7,7 @@ from holywar.data.models import CardDefinition
 def test_available_premade_has_expected_decks() -> None:
     decks = available_premade_decks("Animismo")
     ids = {d[0] for d in decks}
-    assert "animismo_respiro_antico_albero" in ids
+    assert "animismo_b1_antico_albero" in ids
 
 
 def test_build_premade_falls_back_to_45_cards() -> None:
@@ -33,5 +33,5 @@ def test_build_premade_falls_back_to_45_cards() -> None:
         CardDefinition("Rinforzi", "Benedizione", "2", None, None, "", "NEU-1"),
     ]
 
-    built = build_premade_deck(cards, "animismo_respiro_antico_albero")
+    built = build_premade_deck(cards, "animismo_b1_antico_albero")
     assert len(built.deck.main_deck) == 45

@@ -82,9 +82,8 @@ class HolyWarGUI(tk.Tk):
         self._post_reveal_chain_actor: int | None = None
         self._sim_state_snapshot: dict | None = None
         self.religions = religions
-        self.user_decks_path = Path("holywar/data/user_decks.json")
+        self.premades_path = Path("holywar/data/premade_decks.json")
         self._deck_editor_selected_id: str | None = None
-        self._deck_editor_selected_is_builtin = False
         self._deck_editor_cards: dict[str, int] = {}
         self._deck_candidates_sort_col = "nome"
         self._deck_candidates_sort_asc = True
@@ -103,7 +102,7 @@ class HolyWarGUI(tk.Tk):
         self.resource_deck_labels: list[ttk.Label] = []
         self.resource_sin_bars: list[ttk.Progressbar] = []
         self._slot_highlights: list[tuple[tk.Widget, dict[str, str]]] = []
-        self._load_user_decks_into_runtime()
+        self._load_premades_into_runtime()
         self._build_ui()
         self.show_main_menu()
 
@@ -576,33 +575,29 @@ class HolyWarGUI(tk.Tk):
             return 3
         return 1
 
-    def _user_decks_payload(self) -> dict:
-        if not self.user_decks_path.exists():
-            return {"decks": [], "disabled_ids": []}
+    def _premades_payload(self) -> dict:
+        if not self.premades_path.exists():
+            return {"decks": []}
         try:
-            raw = json.loads(self.user_decks_path.read_text(encoding="utf-8"))
+            raw = json.loads(self.premades_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                return {"decks": [], "disabled_ids": []}
+                return {"decks": []}
             decks = raw.get("decks", [])
             if not isinstance(decks, list):
                 decks = []
-            disabled_ids = raw.get("disabled_ids", [])
-            if not isinstance(disabled_ids, list):
-                disabled_ids = []
             return {
                 "decks": [d for d in decks if isinstance(d, dict)],
-                "disabled_ids": [str(v).strip() for v in disabled_ids if str(v).strip()],
             }
         except Exception:
-            return {"decks": [], "disabled_ids": []}
+            return {"decks": []}
 
-    def _save_user_decks_payload(self, payload: dict) -> None:
-        self.user_decks_path.parent.mkdir(parents=True, exist_ok=True)
-        self.user_decks_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    def _save_premades_payload(self, payload: dict) -> None:
+        self.premades_path.parent.mkdir(parents=True, exist_ok=True)
+        self.premades_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def _load_user_decks_into_runtime(self) -> None:
-        if self.user_decks_path.exists():
-            register_premades_from_json(self.user_decks_path)
+    def _load_premades_into_runtime(self) -> None:
+        if self.premades_path.exists():
+            register_premades_from_json(self.premades_path)
 
     def _deck_name_to_def(self) -> dict[str, object]:
         return {self._norm(c.name): c for c in self.cards}
@@ -694,15 +689,13 @@ class HolyWarGUI(tk.Tk):
         self._deck_entries = runtime_premade_decks()
         self.deck_listbox.delete(0, tk.END)
         for deck in self._deck_entries:
-            suffix = " (base)" if bool(deck.get("is_builtin", False)) else ""
-            label = f"{deck.get('name', 'Deck')} [{deck.get('religion', '-')}]"+suffix
+            label = f"{deck.get('name', 'Deck')} [{deck.get('religion', '-')}]"
             self.deck_listbox.insert(tk.END, label)
         self._deck_manager_new()
         self._refresh_deck_card_candidates()
 
     def _deck_manager_new(self) -> None:
         self._deck_editor_selected_id = None
-        self._deck_editor_selected_is_builtin = False
         self._deck_editor_cards = {}
         self.deck_name_var.set("")
         if self.religions:
@@ -724,15 +717,11 @@ class HolyWarGUI(tk.Tk):
             return
         if not messagebox.askyesno("Elimina deck", f"Confermi eliminazione di '{deck.get('name', 'Deck')}'?"):
             return
-        payload = self._user_decks_payload()
+        payload = self._premades_payload()
         payload["decks"] = [d for d in payload.get("decks", []) if str(d.get("id", "")) != deck_id]
-        disabled = [str(v).strip() for v in payload.get("disabled_ids", []) if str(v).strip()]
-        if bool(deck.get("is_builtin", False)) and deck_id not in disabled:
-            disabled.append(deck_id)
-        payload["disabled_ids"] = disabled
-        self._save_user_decks_payload(payload)
+        self._save_premades_payload(payload)
         reset_runtime_premades()
-        self._load_user_decks_into_runtime()
+        self._load_premades_into_runtime()
         self.update_premade_options()
         self._deck_manager_reload_user_decks()
 
@@ -745,7 +734,6 @@ class HolyWarGUI(tk.Tk):
             return
         deck = self._deck_entries[idx]
         self._deck_editor_selected_id = str(deck.get("id", "")).strip() or None
-        self._deck_editor_selected_is_builtin = bool(deck.get("is_builtin", False))
         self.deck_name_var.set(str(deck.get("name", "")))
         rel = str(deck.get("religion", "")).strip()
         if rel:
@@ -1345,11 +1333,7 @@ class HolyWarGUI(tk.Tk):
                 base = "deck"
             self._deck_editor_selected_id = f"user_{base}"
 
-        payload = self._user_decks_payload()
-        payload["disabled_ids"] = [
-            did for did in [str(v).strip() for v in payload.get("disabled_ids", []) if str(v).strip()]
-            if did != self._deck_editor_selected_id
-        ]
+        payload = self._premades_payload()
         kept = [d for d in payload.get("decks", []) if str(d.get("id", "")) != self._deck_editor_selected_id]
         kept.append(
             {
@@ -1361,9 +1345,9 @@ class HolyWarGUI(tk.Tk):
             }
         )
         payload["decks"] = kept
-        self._save_user_decks_payload(payload)
+        self._save_premades_payload(payload)
         reset_runtime_premades()
-        self._load_user_decks_into_runtime()
+        self._load_premades_into_runtime()
         self.update_premade_options()
         self._deck_manager_reload_user_decks()
         messagebox.showinfo("Deck", "Deck salvato.")
