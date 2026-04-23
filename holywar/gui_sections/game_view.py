@@ -307,7 +307,17 @@ class GUIGameViewMixin:
             strength = f" P:{self.engine.get_effective_strength(uid)}"
         else:
             strength = ""
-        return f"{inst.definition.name}{faith}{strength}"
+        counter_txt = ""
+        for tag in list(inst.blessed):
+            if not isinstance(tag, str) or not tag.startswith("campana_counter:"):
+                continue
+            try:
+                value = int(tag.split(":", 1)[1])
+            except ValueError:
+                value = 0
+            counter_txt = f" S:{value}"
+            break
+        return f"{inst.definition.name}{faith}{strength}{counter_txt}"
 
     def on_hand_right_click(self, event) -> None:
         if self.engine is None or not self.can_human_act():
@@ -350,7 +360,10 @@ class GUIGameViewMixin:
                 target = f"a{s}"
                 if self._can_play_target(own_idx, idx, target):
                     att_targets.append(target)
-                    m_att.add_command(label=f"Attacco {s}", command=lambda uu=uid, ss=s: self.play_uid(uu, f"a{ss}"))
+                    m_att.add_command(
+                        label=f"Attacco {s}",
+                        command=lambda uu=uid, ss=s: self.play_saint_with_optional_sacrifice(uu, f"a{ss}"),
+                    )
             if not att_targets:
                 m_att.add_command(label="Nessuno slot valido", state="disabled")
             menu.add_cascade(label="Gioca in Attacco", menu=m_att)
@@ -360,7 +373,10 @@ class GUIGameViewMixin:
                 target = f"d{s}"
                 if self._can_play_target(own_idx, idx, target):
                     def_targets.append(target)
-                    m_def.add_command(label=f"Difesa {s}", command=lambda uu=uid, ss=s: self.play_uid(uu, f"d{ss}"))
+                    m_def.add_command(
+                        label=f"Difesa {s}",
+                        command=lambda uu=uid, ss=s: self.play_saint_with_optional_sacrifice(uu, f"d{ss}"),
+                    )
             if not def_targets:
                 m_def.add_command(label="Nessuno slot valido", state="disabled")
             menu.add_cascade(label="Gioca in Difesa", menu=m_def)

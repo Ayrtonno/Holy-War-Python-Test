@@ -11,9 +11,10 @@ SCRIPT = {
         "can_play_by_sacrificing": {
             "owner": "me",
             "zone": "field",
-            "card_filter": {"card_type_in": ["santo", "token"]},
+            "card_filter": {"card_type_in": ["santo"]},
             "count": 1,
         },
+        "choose_play_sacrifices_from_target": True,
         "play_sacrifices_no_sin_on_death": True,
         "gain_faith_from_play_sacrifices": True,
         "grant_no_sin_on_death_if_gained_faith_from_sacrifices": True,

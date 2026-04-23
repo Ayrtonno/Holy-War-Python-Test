@@ -17,10 +17,15 @@ SCRIPT = {
             "effect": {"action": "decrease_faith", "amount": 3},
         },
         {
-            "trigger": {"event": "on_opponent_turn_end", "frequency": "each_turn"},
-            "condition": {"source_on_field": True},
+            "trigger": {"event": "on_saint_destroyed_by_effect", "frequency": "each_turn"},
+            "condition": {
+                "all_of": [
+                    {"event_card_name_is": "Missionario"},
+                    {"payload_reason_in": ["effect"]},
+                ]
+            },
             "target": {"type": "source_card"},
-            "effect": {"action": "decrease_faith", "amount": 3},
+            "effect": {"action": "inflict_sin", "amount": 6, "target_player": "opponent"},
         },
         {
             "trigger": {"event": "on_saint_destroyed_by_effect", "frequency": "each_turn"},

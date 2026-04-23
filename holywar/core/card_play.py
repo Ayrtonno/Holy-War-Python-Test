@@ -182,10 +182,31 @@ def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement
     return list(dict.fromkeys(out))
 
 
+def _split_play_target_with_directives(target: str | None) -> tuple[str | None, dict[str, str]]:
+    raw = str(target or "").strip()
+    if not raw:
+        return None, {}
+    parts = [p.strip() for p in raw.split("|") if p.strip()]
+    if not parts:
+        return None, {}
+    placement = parts[0]
+    directives: dict[str, str] = {}
+    for part in parts[1:]:
+        if ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        key = _norm(key)
+        if not key:
+            continue
+        directives[key] = value.strip()
+    return placement, directives
+
+
 def _consume_scripted_play_costs(
     engine: "GameEngine",
     player_idx: int,
     card: "CardInstance",
+    play_target: str | None = None,
 ) -> tuple[ActionResult | None, int]:
     script = runtime_cards.get_script(card.definition.name)
     if script is None:
@@ -198,7 +219,22 @@ def _consume_scripted_play_costs(
         candidates = _collect_requirement_cards(engine, player_idx, requirement_cfg)
         if len(candidates) < count:
             return ActionResult(False, f"Per giocare {card.definition.name} non ci sono abbastanza carte da sacrificare."), 0
-        for uid in candidates[:count]:
+        selected_uids: list[str] = []
+        if bool(script.play_requirements.get("choose_play_sacrifices_from_target", False)):
+            _, directives = _split_play_target_with_directives(play_target)
+            raw_selected = str(directives.get("sac", "")).strip()
+            requested = [v.strip() for v in raw_selected.split(",") if v.strip()]
+            allowed = set(candidates)
+            selected_uids = [uid for uid in requested if uid in allowed]
+            if len(selected_uids) < count:
+                return (
+                    ActionResult(False, f"Per giocare {card.definition.name} devi selezionare {count} carta/e da sacrificare."),
+                    0,
+                )
+            selected_uids = selected_uids[:count]
+        else:
+            selected_uids = candidates[:count]
+        for uid in selected_uids:
             sacr_inst = engine.state.instances[uid]
             owner = sacr_inst.owner
             sacrificed_total_faith += max(0, int(sacr_inst.definition.faith or 0))
@@ -470,16 +506,18 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
         script = runtime_cards.get_script(card.definition.name)
         ctype = _norm(card.definition.card_type)
 
+    placement_target, _directives = _split_play_target_with_directives(target)
+
     can_play, reason = runtime_cards.can_play(
         engine,
         player_idx,
         player.hand[hand_index],
-        target=target,
+        target=placement_target,
     )
     if not can_play:
         return ActionResult(False, reason or "Non puoi giocare questa carta.")
 
-    is_valid, error_message, place_owner_idx, zone, slot = validate_play_constraints(engine, player_idx, card, target)
+    is_valid, error_message, place_owner_idx, zone, slot = validate_play_constraints(engine, player_idx, card, placement_target)
     if not is_valid:
         return ActionResult(False, error_message)
 
@@ -512,7 +550,12 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
         if bool(script.play_requirements.get("store_paid_inspiration_on_source", False)):
             card.blessed = [tag for tag in card.blessed if not str(tag).startswith("paid_inspiration_on_summon:")]
             card.blessed.append(f"paid_inspiration_on_summon:{int(paid_inspiration)}")
-    scripted_cost_error, sacrificed_total_faith = _consume_scripted_play_costs(engine, player_idx, card)
+    scripted_cost_error, sacrificed_total_faith = _consume_scripted_play_costs(
+        engine,
+        player_idx,
+        card,
+        play_target=target,
+    )
     if scripted_cost_error is not None:
         player.hand.insert(hand_index, uid)
         return scripted_cost_error
@@ -522,7 +565,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
             if bool(script.play_requirements.get("grant_no_sin_on_death_if_gained_faith_from_sacrifices", False)):
                 if "no_sin_on_death" not in card.blessed:
                     card.blessed.append("no_sin_on_death")
-    emit_play_events(engine, player_idx, uid, ctype, target)
+    emit_play_events(engine, player_idx, uid, ctype, placement_target)
 
     if ctype in SAINT_TYPES:
         result = handle_saint_play(engine, player_idx, place_owner_idx, uid, zone, slot)

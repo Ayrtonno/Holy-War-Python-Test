@@ -18,6 +18,28 @@ def _norm(text: str) -> str:
     return value.strip().lower()
 
 
+def _has_active_no_attack_until_draw(engine: "GameEngine") -> bool:
+    runtime_state = engine.state.flags.setdefault("runtime_state", {})
+    raw_sources = list(runtime_state.get("no_attacks_until_draw_sources", []) or [])
+    if not raw_sources:
+        return False
+    runtime_state["no_attacks_until_draw_sources"] = [uid for uid in raw_sources if str(uid).strip()]
+    return bool(runtime_state["no_attacks_until_draw_sources"])
+
+
+def _has_extra_attack_for_turn(attacker: CardInstance, turn_number: int) -> bool:
+    wanted = f"extra_attack_turn:{int(turn_number)}"
+    return any(str(tag) == wanted for tag in list(attacker.blessed))
+
+
+def _consume_extra_attack_for_turn(attacker: CardInstance, turn_number: int) -> bool:
+    wanted = f"extra_attack_turn:{int(turn_number)}"
+    if wanted not in attacker.blessed:
+        return False
+    attacker.blessed = [tag for tag in attacker.blessed if str(tag) != wanted]
+    return True
+
+
 # Starts battle-phase bookkeeping when the first attack of the turn is declared.
 def start_battle_phase_if_needed(engine: "GameEngine", player_idx: int) -> None:
     runtime_state = ensure_runtime_state(engine)
@@ -66,9 +88,12 @@ def validate_attack_preconditions(
     if engine._is_attacker_blocked_this_turn(attacker):
         return ActionResult(False, f"{attacker.definition.name} non puo attaccare in questo turno.")
     can_multi_targets = runtime_cards.get_can_attack_multiple_targets_in_attack_per_turn(attacker.definition.name)
+    has_extra_attack = _has_extra_attack_for_turn(attacker, engine.state.turn_number)
     if attacker.exhausted:
-        if not can_multi_targets:
+        if not can_multi_targets and not has_extra_attack:
             return ActionResult(False, "Questo Santo ha gia attaccato nel turno corrente.")
+        if has_extra_attack:
+            return None
         if target_slot is None or not (0 <= target_slot < ATTACK_SLOTS):
             return ActionResult(
                 False,
@@ -94,6 +119,8 @@ def mark_attack_committed(
     attacker: CardInstance,
     defender_uid: str | None = None,
 ) -> None:
+    if attacker.exhausted:
+        _consume_extra_attack_for_turn(attacker, engine.state.turn_number)
     attacker.exhausted = True
     if defender_uid:
         attacked_targets = engine.state.flags.setdefault("attacked_targets_this_turn", {})
@@ -341,6 +368,8 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
         return ActionResult(False, "Durante il turno di preparazione non si puo attaccare.")
     if int(engine.state.flags.get("no_attacks_turn", -1)) == int(engine.state.turn_number):
         return ActionResult(False, "In questo turno gli attacchi sono bloccati da un effetto.")
+    if _has_active_no_attack_until_draw(engine):
+        return ActionResult(False, "Gli attacchi sono bloccati finche un giocatore non pesca una carta.")
     if player_idx != engine.state.active_player:
         return ActionResult(False, "Puoi attaccare solo nel tuo turno.")
 

@@ -433,7 +433,7 @@ class RuntimeResolutionMixin:
                     return
                 if _te.trigger.event in {"on_my_turn_start", "on_my_turn_end"} and ctx.player_idx != _owner:
                     return
-                if _te.trigger.event in {"on_opponent_turn_start", "on_opponent_turn_end"} and ctx.player_idx != _owner:
+                if _te.trigger.event in {"on_opponent_turn_start", "on_opponent_turn_end"} and ctx.player_idx != (1 - _owner):
                     return
                 if _te.trigger.event.startswith("on_this_card_"):
                     event_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))

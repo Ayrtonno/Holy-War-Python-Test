@@ -473,6 +473,24 @@ class GameEngine:
         inst = self.state.instances[uid]
         if "silenced" in inst.cursed:
             return ActionResult(False, "Questa carta ha i suoi effetti annullati.")
+        keep_curses: list[str] = []
+        activation_negated = False
+        for tag in list(inst.cursed):
+            if not isinstance(tag, str) or not tag.startswith("no_activate_until:"):
+                keep_curses.append(tag)
+                continue
+            try:
+                until_turn = int(tag.split(":", 1)[1])
+            except ValueError:
+                continue
+            if int(self.state.turn_number) <= until_turn and not activation_negated:
+                activation_negated = True
+                continue
+            if int(self.state.turn_number) <= until_turn:
+                keep_curses.append(tag)
+        inst.cursed = keep_curses
+        if activation_negated:
+            return ActionResult(True, f"L'attivazione di {inst.definition.name} e stata annullata.")
         if runtime_cards.is_activate_once_per_turn(inst.definition.name) and not self.can_activate_once_per_turn(uid):
             return ActionResult(True, f"{inst.definition.name}: abilita gia usata in questo turno.")
         can_activate, reason = runtime_cards.can_activate(self, player_idx, uid, target=target)

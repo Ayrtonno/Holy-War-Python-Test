@@ -557,6 +557,27 @@ class RuntimeEffectsMixin:
                 if tag not in inst.cursed:
                     inst.cursed.append(tag)
             return
+        if action == "negate_next_activation":
+            duration_turns = max(1, int(effect.amount or 1))
+            until_turn = int(engine.state.turn_number) + duration_turns - 1
+            tag = f"no_activate_until:{until_turn}"
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                if tag not in inst.cursed:
+                    inst.cursed.append(tag)
+            return
+        if action == "grant_extra_attack_this_turn":
+            current_turn = int(engine.state.turn_number)
+            tag = f"extra_attack_turn:{current_turn}"
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                inst.blessed = [t for t in inst.blessed if not (isinstance(t, str) and t.startswith("extra_attack_turn:"))]
+                inst.blessed.append(tag)
+            return
         if action == "equip_card":
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
@@ -943,6 +964,16 @@ class RuntimeEffectsMixin:
                     amount=0,
                 )
             return
+        if action == "set_faith_to":
+            value = max(0, int(effect.amount))
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                inst.current_faith = value
+                if value <= 0 and _norm(inst.definition.card_type) in {"santo", "token"}:
+                    engine.destroy_saint_by_uid(inst.owner, t_uid, cause="effect")
+            return
         
         if action == "summon_target_to_field":
             for t_uid in targets:
@@ -1146,6 +1177,26 @@ class RuntimeEffectsMixin:
                         counter = 0
                     inst.blessed.remove(tag)
             counter += 1
+            inst.blessed.append(f"campana_counter:{counter}")
+            return
+        if action == "campana_remove_counter":
+            inst = engine.state.instances.get(source_uid)
+            if inst is None:
+                return
+            amount = max(0, int(effect.amount or 0))
+            if amount <= 0:
+                return
+            counter = 0
+            for tag in list(inst.blessed):
+                if not isinstance(tag, str) or not tag.startswith("campana_counter:"):
+                    continue
+                try:
+                    counter = int(tag.split(":", 1)[1])
+                except ValueError:
+                    counter = 0
+                inst.blessed.remove(tag)
+                break
+            counter = max(0, counter - amount)
             inst.blessed.append(f"campana_counter:{counter}")
             return
         if action == "cataclisma_ciclico":
@@ -1620,6 +1671,20 @@ class RuntimeEffectsMixin:
         if action == "remove_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             engine.reduce_sin(target, max(0, int(effect.amount)))
+            return
+        if action == "remove_sin_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = max(0, int(raw_value))
+            except (TypeError, ValueError):
+                amount = 0
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            if amount > 0:
+                engine.reduce_sin(target, amount)
+            engine.state.flags.pop(flag_name, None)
             return
         if action == "add_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -2238,6 +2303,116 @@ class RuntimeEffectsMixin:
             key = str(target)
             flags[key] = int(flags.get(key, 0)) + amount
             return
+        if action == "set_no_attacks_until_card_draw":
+            runtime_state = engine.state.flags.setdefault("runtime_state", {})
+            locked_sources = list(runtime_state.get("no_attacks_until_draw_sources", []) or [])
+            if source_uid and source_uid not in locked_sources:
+                locked_sources.append(source_uid)
+            runtime_state["no_attacks_until_draw_sources"] = locked_sources
+            return
+        if action == "swap_attack_defense_rows":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            player = engine.state.players[target]
+            player.attack, player.defense = player.defense, player.attack
+            return
+        if action == "transfer_target_control_until_turn_end":
+            target_controller = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            runtime_state = engine.state.flags.setdefault("runtime_state", {})
+            pending_returns = list(runtime_state.get("temporary_control_returns", []) or [])
+            expire_turn = int(engine.state.turn_number)
+
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                if _norm(inst.definition.card_type) not in {"santo", "token"}:
+                    continue
+
+                board_owner = engine._find_board_owner_of_uid(t_uid)
+                if board_owner is None or int(board_owner) == int(target_controller):
+                    continue
+
+                from_player = engine.state.players[board_owner]
+                to_player = engine.state.players[target_controller]
+
+                from_zone = ""
+                from_slot = -1
+                if t_uid in from_player.attack:
+                    from_zone = "attack"
+                    from_slot = int(from_player.attack.index(t_uid))
+                    from_player.attack[from_slot] = None
+                    back_uid = from_player.defense[from_slot]
+                    if back_uid is not None and from_player.attack[from_slot] is None:
+                        from_player.attack[from_slot] = back_uid
+                        from_player.defense[from_slot] = None
+                elif t_uid in from_player.defense:
+                    from_zone = "defense"
+                    from_slot = int(from_player.defense.index(t_uid))
+                    from_player.defense[from_slot] = None
+                else:
+                    continue
+
+                placed = False
+                if from_zone == "attack" and 0 <= from_slot < len(to_player.attack) and to_player.attack[from_slot] is None:
+                    to_player.attack[from_slot] = t_uid
+                    placed = True
+                elif from_zone == "defense" and 0 <= from_slot < len(to_player.defense) and to_player.defense[from_slot] is None:
+                    to_player.defense[from_slot] = t_uid
+                    placed = True
+                else:
+                    slot = engine._first_open(to_player.attack)
+                    if slot is not None:
+                        to_player.attack[slot] = t_uid
+                        placed = True
+                    else:
+                        slot = engine._first_open(to_player.defense)
+                        if slot is not None:
+                            to_player.defense[slot] = t_uid
+                            placed = True
+
+                if not placed:
+                    if from_zone == "attack" and 0 <= from_slot < len(from_player.attack) and from_player.attack[from_slot] is None:
+                        from_player.attack[from_slot] = t_uid
+                    elif from_zone == "defense" and 0 <= from_slot < len(from_player.defense) and from_player.defense[from_slot] is None:
+                        from_player.defense[from_slot] = t_uid
+                    else:
+                        fallback_slot = engine._first_open(from_player.attack)
+                        if fallback_slot is not None:
+                            from_player.attack[fallback_slot] = t_uid
+                        else:
+                            fallback_slot = engine._first_open(from_player.defense)
+                            if fallback_slot is not None:
+                                from_player.defense[fallback_slot] = t_uid
+                    continue
+
+                if "sin_to_controller_on_death" not in inst.blessed:
+                    inst.blessed.append("sin_to_controller_on_death")
+
+                pending_returns = [rec for rec in pending_returns if str(rec.get("uid", "")) != t_uid]
+                pending_returns.append(
+                    {
+                        "uid": t_uid,
+                        "from_owner": int(board_owner),
+                        "to_owner": int(target_controller),
+                        "from_zone": from_zone,
+                        "from_slot": int(from_slot),
+                        "expires_turn": expire_turn,
+                    }
+                )
+
+            runtime_state["temporary_control_returns"] = pending_returns
+            return
+        if action == "set_attack_shield_this_turn":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            shield = engine.state.flags.setdefault("attack_shield_turn", {})
+            shield[str(target)] = int(engine.state.turn_number)
+            return
+        if action == "win_the_game":
+            winner = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            if engine.state.winner is None:
+                engine.state.winner = int(winner)
+                engine.state.log(f"{engine.state.players[winner].name} vince il duello per effetto carta.")
+            return
         if action == "swap_attack_defense":
             player = engine.state.players[owner_idx]
             attack_slot = next((i for i, uid in enumerate(player.attack) if uid is not None), None)
@@ -2455,6 +2630,25 @@ class RuntimeEffectsMixin:
 
         if condition.get("source_on_field") is True and not self._is_uid_on_field(ctx.engine, str(payload.get("source", ""))):
             return False
+        source_counter_gte = condition.get("source_counter_gte")
+        if source_counter_gte is not None:
+            source_uid = str(payload.get("source", "")).strip()
+            if not source_uid:
+                source_uid = str(ctx.engine.state.flags.get("_runtime_source_card", "")).strip()
+            if not source_uid or source_uid not in ctx.engine.state.instances:
+                return False
+            source_inst = ctx.engine.state.instances[source_uid]
+            counter = 0
+            for tag in list(source_inst.blessed):
+                if not isinstance(tag, str) or not tag.startswith("campana_counter:"):
+                    continue
+                try:
+                    counter = int(tag.split(":", 1)[1])
+                except ValueError:
+                    counter = 0
+                break
+            if counter < int(source_counter_gte):
+                return False
 
         target_uid = str(payload.get("card", ""))
         if target_uid and target_uid in ctx.engine.state.instances:
@@ -2740,3 +2934,95 @@ class RuntimeEffectsMixin:
                 if self.get_is_altare_sigilli(engine.state.instances[uid].definition.name) is wanted
             ]
         return filtered
+
+    def resolve_end_turn_runtime_hooks(self, engine: GameEngine, current_player_idx: int) -> None:
+        runtime_state = engine.state.flags.setdefault("runtime_state", {})
+        pending_returns = list(runtime_state.get("temporary_control_returns", []) or [])
+        if not pending_returns:
+            return
+
+        keep: list[dict[str, Any]] = []
+        current_turn = int(engine.state.turn_number)
+
+        for rec in pending_returns:
+            uid = str(rec.get("uid", "")).strip()
+            expires_turn = int(rec.get("expires_turn", -1))
+            if not uid or expires_turn != current_turn:
+                keep.append(rec)
+                continue
+            if uid not in engine.state.instances:
+                continue
+
+            from_owner = int(rec.get("from_owner", -1))
+            to_owner = int(rec.get("to_owner", -1))
+            from_zone = _norm(str(rec.get("from_zone", "attack")))
+            from_slot = int(rec.get("from_slot", -1))
+            if from_owner not in (0, 1) or to_owner not in (0, 1):
+                continue
+
+            inst = engine.state.instances[uid]
+            board_owner = engine._find_board_owner_of_uid(uid)
+            if board_owner is None:
+                inst.blessed = [tag for tag in inst.blessed if str(tag) != "sin_to_controller_on_death"]
+                continue
+
+            if int(board_owner) != int(to_owner):
+                inst.blessed = [tag for tag in inst.blessed if str(tag) != "sin_to_controller_on_death"]
+                continue
+
+            to_player = engine.state.players[to_owner]
+            moved_from_attack = False
+            moved_slot = -1
+            if uid in to_player.attack:
+                moved_slot = int(to_player.attack.index(uid))
+                to_player.attack[moved_slot] = None
+                moved_from_attack = True
+                back_uid = to_player.defense[moved_slot]
+                if back_uid is not None and to_player.attack[moved_slot] is None:
+                    to_player.attack[moved_slot] = back_uid
+                    to_player.defense[moved_slot] = None
+            elif uid in to_player.defense:
+                moved_slot = int(to_player.defense.index(uid))
+                to_player.defense[moved_slot] = None
+            else:
+                inst.blessed = [tag for tag in inst.blessed if str(tag) != "sin_to_controller_on_death"]
+                continue
+
+            from_player = engine.state.players[from_owner]
+            placed = False
+            if from_zone == "attack" and 0 <= from_slot < len(from_player.attack) and from_player.attack[from_slot] is None:
+                from_player.attack[from_slot] = uid
+                placed = True
+            elif from_zone == "defense" and 0 <= from_slot < len(from_player.defense) and from_player.defense[from_slot] is None:
+                from_player.defense[from_slot] = uid
+                placed = True
+            else:
+                slot = engine._first_open(from_player.attack)
+                if slot is not None:
+                    from_player.attack[slot] = uid
+                    placed = True
+                else:
+                    slot = engine._first_open(from_player.defense)
+                    if slot is not None:
+                        from_player.defense[slot] = uid
+                        placed = True
+
+            if not placed:
+                if moved_from_attack and 0 <= moved_slot < len(to_player.attack) and to_player.attack[moved_slot] is None:
+                    to_player.attack[moved_slot] = uid
+                elif (not moved_from_attack) and 0 <= moved_slot < len(to_player.defense) and to_player.defense[moved_slot] is None:
+                    to_player.defense[moved_slot] = uid
+                else:
+                    slot = engine._first_open(to_player.attack)
+                    if slot is not None:
+                        to_player.attack[slot] = uid
+                    else:
+                        slot = engine._first_open(to_player.defense)
+                        if slot is not None:
+                            to_player.defense[slot] = uid
+                keep.append(rec)
+                continue
+
+            inst.blessed = [tag for tag in inst.blessed if str(tag) != "sin_to_controller_on_death"]
+
+        runtime_state["temporary_control_returns"] = keep

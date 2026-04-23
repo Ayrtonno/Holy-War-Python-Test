@@ -161,13 +161,18 @@ def destroy_saint_by_uid(
                 except (TypeError, ValueError):
                     sin_gain = 0
                 break
+
+        sin_receiver_idx = int(board_owner_idx) if board_owner_idx in (0, 1) else int(owner_idx)
+        if "sin_to_controller_on_death" in inst.blessed and board_owner_idx in (0, 1):
+            sin_receiver_idx = int(board_owner_idx)
+
         if "no_sin_on_death" in inst.blessed:
             sin_gain = 0
-        if engine._has_artifact(owner_idx, "Umanit????") and inst.blessed:
+        if engine._has_artifact(sin_receiver_idx, "Umanit????") and inst.blessed:
             sin_gain = 0
-        engine.gain_sin(owner_idx, sin_gain)
+        engine.gain_sin(sin_receiver_idx, sin_gain)
         engine.state.log(
-            f"{inst.definition.name} viene distrutto: {engine.state.players[owner_idx].name} guadagna {sin_gain} Peccato."
+            f"{inst.definition.name} viene distrutto: {engine.state.players[sin_receiver_idx].name} guadagna {sin_gain} Peccato."
         )
     else:
         engine.state.log(f"{inst.definition.name} (Token) viene distrutto.")

@@ -4,7 +4,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import messagebox
 
-from holywar.effects.runtime import _norm
+from holywar.effects.runtime import _norm, runtime_cards
 
 
 def _card_aliases(definition) -> list[str]:
@@ -836,6 +836,56 @@ class GUIGameActionsMixin:
         self.refresh()
         if not self.chain_active:
             self.begin_turn_if_needed()
+
+    def play_saint_with_optional_sacrifice(self, uid: str, zone_target: str) -> None:
+        if self.engine is None:
+            return
+        own_idx = self.current_human_idx() or 0
+        hand = self.engine.state.players[own_idx].hand
+        if uid not in hand:
+            return
+
+        inst = self.engine.state.instances.get(uid)
+        script = runtime_cards.get_script(inst.definition.name) if inst is not None else None
+        if not script:
+            self.play_uid(uid, zone_target)
+            return
+
+        req = script.play_requirements.get("can_play_by_sacrificing")
+        needs_choice = bool(script.play_requirements.get("choose_play_sacrifices_from_target", False))
+        if not isinstance(req, dict) or not needs_choice:
+            self.play_uid(uid, zone_target)
+            return
+
+        count = max(1, int(req.get("count", 1) or 1))
+        owner = self.engine.state.players[own_idx]
+        candidates = [
+            c_uid
+            for c_uid in (owner.attack + owner.defense)
+            if (
+                c_uid is not None
+                and _norm(self.engine.state.instances[c_uid].definition.card_type) == "santo"
+            )
+        ]
+        if not candidates:
+            messagebox.showwarning("Sacrificio richiesto", "Non ci sono Santi da sacrificare.")
+            return
+        choices = [(self._format_guided_candidate(c_uid, own_idx), c_uid) for c_uid in candidates]
+        canceled, selected = self._open_board_target_picker(
+            title="Brigante - Sacrificio",
+            prompt=f"Seleziona {count} Santo/i da sacrificare.",
+            choices=choices,
+            allow_multi=(count > 1),
+            min_targets=count,
+            max_targets=count,
+            allow_none=False,
+            allow_manual=False,
+            card_uid=uid,
+        )
+        if canceled or not selected:
+            return
+        target = f"{zone_target}|sac:{selected}"
+        self.play_uid(uid, target)
 
     def on_own_slot_right_click(self, source: str) -> None:
         if self.engine is None or not self.can_human_act():

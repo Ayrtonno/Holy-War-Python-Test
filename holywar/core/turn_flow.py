@@ -158,6 +158,13 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
         player.hand.append(drawn_uid)
         drawn += 1
         engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []}).setdefault(str(player_idx), []).append(drawn_uid)
+
+        runtime_state = engine.state.flags.setdefault("runtime_state", {})
+        locked_sources = list(runtime_state.get("no_attacks_until_draw_sources", []) or [])
+        if locked_sources:
+            runtime_state["no_attacks_until_draw_sources"] = []
+            engine.state.log("Giorno Festivo: il blocco agli attacchi termina per una pescata.")
+
         engine._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
         card_name = engine.state.instances[drawn_uid].definition.name
 
@@ -404,6 +411,7 @@ def end_turn(engine: "GameEngine") -> None:
 
     if not was_preparation:
         _emit_end_turn_events(engine, current)
+    runtime_cards.resolve_end_turn_runtime_hooks(engine, current)
 
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})[str(current)] = []
     engine._cleanup_zero_faith_saints()
