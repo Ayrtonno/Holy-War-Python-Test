@@ -108,7 +108,7 @@ def test_declarative_trigger_foresta_sacra_like_structure() -> None:
     engine.end_turn()
     engine.start_turn()
 
-    assert engine.state.instances[tree_uid].current_faith == tree_before + 2
+    assert engine.state.instances[tree_uid].current_faith == (tree_before or 0) + 2
     assert engine.state.instances[thor_uid].current_faith == thor_before
 
 
@@ -163,7 +163,7 @@ def test_fuoco_is_declarative_trigger_and_applies_end_turn_damage() -> None:
     small_before = engine.state.instances[small_uid].current_faith
 
     engine.end_turn()
-    assert engine.state.instances[big_uid].current_faith == max(0, big_before - 2)
+    assert engine.state.instances[big_uid].current_faith == max(0, (big_before or 0) - 2)
     assert engine.state.instances[small_uid].current_faith == small_before
 
 

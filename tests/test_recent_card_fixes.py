@@ -1175,7 +1175,7 @@ def test_yggdrasil_uses_scripted_enter_and_activate_modes() -> None:
     assert engine.state.instances[ygg_uid].definition.name == "Yggdrasil"
     out = engine.activate_ability(0, "b", "buff:a1")
     assert out.ok
-    assert engine.state.instances[target_uid].current_faith == before_faith + 2
+    assert engine.state.instances[target_uid].current_faith == (before_faith or 0) + 2
     assert engine.get_effective_strength(target_uid) == before_strength + 2
 
 
@@ -1223,7 +1223,7 @@ def test_vescovo_della_citta_buia_scales_with_enemy_saints() -> None:
     assert engine.play_card(0, i_v, "a1").ok
     v_uid = engine.state.players[0].attack[0]
     assert v_uid is not None
-    assert engine.state.instances[v_uid].current_faith == engine.state.instances[v_uid].definition.faith + 10
+    assert engine.state.instances[v_uid].current_faith == (engine.state.instances[v_uid].definition.faith or 0) + 10
 
 
 def test_vescovo_della_citta_lucente_heals_damaged_saints() -> None:
@@ -1388,7 +1388,7 @@ def test_albero_fortunato_and_seguace_draw_on_death() -> None:
     assert len(engine.state.players[0].hand) == before + 1
 
 
-def test_neith_hits_all_opponent_saints_on_entry() -> None:
+def test_neith_hits_all_opponent_saints_on_entry_against_defense_row() -> None:
     cards = [
         CardDefinition("Neith", "Santo", "3", 3, 2, "", "EGI-1"),
         CardDefinition("Enemy1", "Santo", "2", 2, 2, "", "EGI-1"),
@@ -1433,7 +1433,7 @@ def test_araldo_and_custode_manage_sigilli_via_script() -> None:
     assert engine.play_card(0, i_custode, "a1").ok
     custode_uid = engine.state.players[0].attack[0]
     assert custode_uid is not None
-    assert engine.state.instances[custode_uid].current_faith >= 6
+    assert (engine.state.instances[custode_uid].current_faith or 0) >= 6
     assert engine.get_effective_strength(custode_uid) >= 6
 
     i_araldo = _force_card_in_hand(engine, 0, "Araldo della Fine")
@@ -1741,7 +1741,9 @@ def test_ptah_can_return_a_drawn_card_to_relicario() -> None:
         ),
     )
     assert targets == [drawn_uid]
-    runtime_cards._apply_effect(engine, 0, ptah_uid, targets, runtime_cards.get_script("Ptah").triggered_effects[0].effect)  # noqa: SLF001
+    ptah_script = runtime_cards.get_script("Ptah")
+    assert ptah_script is not None
+    runtime_cards._apply_effect(engine, 0, ptah_uid, targets, ptah_script.triggered_effects[0].effect)  # noqa: SLF001
     assert drawn_uid in p0.deck
     assert drawn_uid not in p0.hand
 

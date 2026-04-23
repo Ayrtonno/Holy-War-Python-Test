@@ -3,7 +3,7 @@ from __future__ import annotations
 CARD_NAME = "Canti Religiosi"
 
 SAINT_GRAVE_FILTER = {
-    "card_type_in": ["santo", "token"],
+    "card_type_in": ["santo"],
 }
 
 SCRIPT = {

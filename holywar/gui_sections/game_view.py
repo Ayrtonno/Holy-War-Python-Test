@@ -1,6 +1,8 @@
 from __future__ import annotations
+# pyright: reportAttributeAccessIssue=false
 
 import json
+from typing import TYPE_CHECKING, Any, cast
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -9,6 +11,9 @@ from holywar.effects.runtime import runtime_cards
 
 class GUIGameViewMixin:
     """Board/hand rendering and user interaction handlers."""
+
+    if TYPE_CHECKING:
+        def __getattr__(self, _name: str) -> Any: ...
 
     def _grid_slots(self, parent, attack, defense, artifacts, building) -> None:
         ttk.Label(parent, text="Attacco").grid(row=0, column=0, sticky="w")
@@ -152,7 +157,7 @@ class GUIGameViewMixin:
                     allow_multi=allow_multi,
                     min_targets=min_targets,
                     max_targets=max_targets,
-                    allow_none=True,
+                    allow_none=(min_targets == 0),
                     allow_manual=False,
                     card_uid=reveal_uid,
                     preserve_selection_order=preserve_selection_order,
@@ -525,10 +530,10 @@ class GUIGameViewMixin:
         else:
             uids = list(player.excommunicated)
 
-        win = tk.Toplevel(self)
+        win = tk.Toplevel(cast(Any, self))
         win.title(f"{labels[zone_key]} (Debug)")
         self._center_toplevel(win, 560, 500)
-        win.transient(self)
+        win.transient(cast(Any, self))
 
         ttk.Label(
             win,

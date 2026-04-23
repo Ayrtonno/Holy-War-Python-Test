@@ -1,7 +1,8 @@
 from __future__ import annotations
+# pyright: reportAttributeAccessIssue=false
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -11,6 +12,9 @@ from holywar.effects.runtime import _norm
 
 class GUIDeckManagerMixin:
     """Deck editor UI, filters, validation and persistence helpers."""
+
+    if TYPE_CHECKING:
+        def __getattr__(self, _name: str) -> Any: ...
 
     def _build_deck_manager_ui(self) -> None:
         p = self._deck_palette
@@ -651,9 +655,9 @@ class GUIDeckManagerMixin:
             messagebox.showinfo("Filtro", "Nessun dato disponibile da filtrare.")
             return
 
-        win = tk.Toplevel(self)
+        win = tk.Toplevel(cast(Any, self))
         win.title(title)
-        win.transient(self)
+        win.transient(cast(Any, self))
         win.grab_set()
         self._center_toplevel(win, 460, 560)
 

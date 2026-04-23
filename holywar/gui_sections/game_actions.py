@@ -1,6 +1,7 @@
 from __future__ import annotations
+# pyright: reportAttributeAccessIssue=false
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import tkinter as tk
 from tkinter import messagebox
 
@@ -27,6 +28,9 @@ def _card_name_haystack(definition) -> str:
 
 class GUIGameActionsMixin:
     """Gameplay actions and advanced target orchestration handlers."""
+
+    if TYPE_CHECKING:
+        def __getattr__(self, _name: str) -> Any: ...
 
     def _card_allows_multi_target(self, uid: str) -> bool:
         mode = self._play_targeting_mode(uid)

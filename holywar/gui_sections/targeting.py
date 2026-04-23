@@ -1,6 +1,7 @@
 from __future__ import annotations
+# pyright: reportAttributeAccessIssue=false
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -13,6 +14,9 @@ from holywar.scripting_api import RuleEventContext
 
 class GUITargetingMixin:
     """Targeting and board-picker logic used by play/activate flows."""
+
+    if TYPE_CHECKING:
+        def __getattr__(self, _name: str) -> Any: ...
 
     def _clone_engine(self) -> GameEngine | None:
         if self.engine is None:
@@ -498,10 +502,10 @@ class GUITargetingMixin:
         result: dict[str, str | None] = {"value": ""}
         bindings: list[tuple[tk.Widget, str]] = []
 
-        win = tk.Toplevel(self)
+        win = tk.Toplevel(cast(Any, self))
         win.title(title)
         self._center_toplevel(win, 700, 560)
-        win.transient(self)
+        win.transient(cast(Any, self))
         p = self._target_picker_palette
         win.configure(bg=p["bg"])
 

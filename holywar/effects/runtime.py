@@ -172,7 +172,6 @@ SUPPORTED_EFFECT_ACTIONS = {
     "equip_card",
     "unequip_card",
     "destroy_equipment",
-    "reorder_top_n_of_deck",
 }
 
 

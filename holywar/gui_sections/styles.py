@@ -19,7 +19,7 @@ class GUIStylesMixin:
             "accent": "#0078d4",
             "accent_soft": "#e8f2ff",
         }
-        style = ttk.Style(self)
+        style = ttk.Style(cast(Any, self))
         try:
             style.theme_use("clam")
         except tk.TclError:
@@ -114,7 +114,7 @@ class GUIStylesMixin:
             "green_soft": "#eaf8ee",
         }
 
-        style = ttk.Style(self)
+        style = ttk.Style(cast(Any, self))
         try:
             style.theme_use("clam")
         except tk.TclError:
@@ -238,7 +238,7 @@ class GUIStylesMixin:
             "accent_soft": gp["green_soft"],
         }
 
-        style = ttk.Style(self)
+        style = ttk.Style(cast(Any, self))
         try:
             style.theme_use("clam")
         except tk.TclError:

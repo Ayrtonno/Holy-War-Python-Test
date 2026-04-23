@@ -1530,7 +1530,7 @@ class RuntimeEffectsMixin:
                     flags.pop(key, None)
                 return
 
-            candidates = list(player.deck[-top_n:]) if player.deck else []
+            candidates = list(reversed(player.deck[-top_n:])) if player.deck else []
             if not candidates:
                 return
 
@@ -2711,8 +2711,12 @@ class RuntimeEffectsMixin:
             if phase_is != current_phase:
                 return False
 
-        if condition.get("source_on_field") is True and not self._is_uid_on_field(ctx.engine, str(payload.get("source", ""))):
-            return False
+        if condition.get("source_on_field") is True:
+            source_uid = str(payload.get("source", "")).strip()
+            if not source_uid:
+                source_uid = str(ctx.engine.state.flags.get("_runtime_source_card", "")).strip()
+            if not source_uid or not self._is_uid_on_field(ctx.engine, source_uid):
+                return False
         source_counter_gte = condition.get("source_counter_gte")
         if source_counter_gte is not None:
             source_uid = str(payload.get("source", "")).strip()

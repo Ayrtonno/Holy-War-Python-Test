@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from holywar.core.engine import GameEngine
 from holywar.data.models import CardDefinition
 from holywar.scripting_api import RuleEvents
@@ -14,10 +16,11 @@ def test_rules_api_exposes_declared_surface() -> None:
     assert "on_card_played" in RuleEvents.ALL
     assert hasattr(api, "count_cards_in_hand")
     assert hasattr(api, "target_saint_on_field")
-    assert hasattr(api, "can_play_only_if")
+    api_any = cast(Any, api)
+    assert hasattr(api_any, "can_play_only_if")
     assert api.count_cards_in_hand(0) == 5
     assert api.target_saint_on_field() == []
-    assert api.can_play_only_if(True) is False
+    assert api_any.can_play_only_if(True) is False
     api.win_the_game(0, "test")
     assert engine.state.winner == 0
 

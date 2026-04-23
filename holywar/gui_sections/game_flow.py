@@ -1,7 +1,9 @@
 from __future__ import annotations
+# pyright: reportAttributeAccessIssue=false
 
 import json
 import random
+from typing import TYPE_CHECKING, Any
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -12,6 +14,9 @@ from holywar.data.deck_builder import available_premade_decks, get_premade_label
 
 class GUIGameFlowMixin:
     """Turn flow, AI loop, chain priority and persistence actions."""
+
+    if TYPE_CHECKING:
+        def __getattr__(self, _name: str) -> Any: ...
 
     def show_main_menu(self) -> None:
         self.game_screen.pack_forget()
