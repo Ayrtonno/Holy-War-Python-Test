@@ -9,20 +9,22 @@ SAINT_GRAVE_FILTER = {
 SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
-    "on_activate_mode": "auto",
-    "play_targeting": "none",
+    "on_activate_mode": "scripted",
+    "activate_once_per_turn": True,
+    "activate_targeting": "none",
     "triggered_effects": [],
-    "on_play_actions": [
+    "on_play_actions": [],
+    "on_activate_actions": [
         {
             "target": {"type": "source_card"},
             "effect": {
                 "action": "choose_option",
                 "choice_title": "Canti Religiosi",
-                "choice_prompt": "Scegli uno dei due effetti.",
+                "choice_prompt": "Scegli uno dei seguenti effetti.",
                 "choice_options": [
                     {
                         "value": "recover",
-                        "label": "Riprendi un Santo dal cimitero",
+                        "label": "Prendi un Santo dal tuo cimitero e aggiungilo alla tua mano, poi distruggi questa carta",
                         "condition": {
                             "controller_has_cards": {
                                 "zone": "graveyard",
@@ -33,7 +35,7 @@ SCRIPT = {
                     },
                     {
                         "value": "shield",
-                        "label": "Annulla il primo attacco ricevuto nel turno",
+                        "label": "Se non controlli Santi, annulla il primo attacco che ricevi durante il prossimo turno avversario",
                         "condition": {"my_saints_lte": 0},
                     },
                 ],
@@ -69,7 +71,7 @@ SCRIPT = {
         {
             "condition": {"selected_option_in": ["shield"]},
             "target": {"type": "source_card"},
-            "effect": {"action": "set_attack_shield_this_turn", "target_player": "me"},
+            "effect": {"action": "set_attack_shield_next_opponent_turn", "target_player": "me"},
         },
     ],
 }

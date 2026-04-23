@@ -115,7 +115,7 @@
     "crosses": "5",
     "faith": 6,
     "strength": null,
-    "effect_text": "Scegli uno dei seguenti effetti: • Prendi un Santo dal tuo cimitero e aggiungilo alla tua mano, poi distruggi questa carta. • Se non controlli Santi, annulla il primo attacco che ricevi in questo turno.",
+    "effect_text": "Una volta per turno, scegli uno dei seguenti effetti: • Prendi un Santo dal tuo cimitero e aggiungilo alla tua mano, poi distruggi questa carta. • Se non controlli Santi, annulla il primo attacco che ricevi durante il prossimo turno avversario.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []

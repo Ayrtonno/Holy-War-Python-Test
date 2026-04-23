@@ -143,6 +143,7 @@ class GUIGameViewMixin:
                 max_targets_raw = str(flags.get("_runtime_choice_max_targets", "1")).strip()
                 max_targets = int(max_targets_raw) if max_targets_raw else 1
                 allow_multi = max_targets != 1
+                preserve_selection_order = bool(flags.get("_runtime_choice_preserve_order"))
 
                 canceled, selected = self._open_board_target_picker(
                     title=title,
@@ -154,6 +155,7 @@ class GUIGameViewMixin:
                     allow_none=True,
                     allow_manual=False,
                     card_uid=reveal_uid,
+                    preserve_selection_order=preserve_selection_order,
                 )
                 flags["_runtime_choice_selected"] = "" if canceled or not selected else str(selected)
                 flags["_runtime_choice_ready"] = True

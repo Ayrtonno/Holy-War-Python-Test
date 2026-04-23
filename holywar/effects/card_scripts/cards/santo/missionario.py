@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-CARD_NAME = 'Missionario'
+CARD_NAME = "Missionario"
 
 SCRIPT = {
     "on_play_mode": "auto",
@@ -11,8 +11,7 @@ SCRIPT = {
     "play_targeting": "none",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_my_turn_end", "frequency": "each_turn"},
-            "condition": {"source_on_field": True},
+            "trigger": {"event": "on_turn_end", "frequency": "each_turn"},
             "target": {"type": "source_card"},
             "effect": {"action": "decrease_faith", "amount": 3},
         },

@@ -33,6 +33,30 @@ if TYPE_CHECKING:
 
 class RuntimeEffectsMixin:
     """Target resolution, zone moves and low-level effect execution helpers."""
+    if TYPE_CHECKING:
+        _temp_faith: dict[int, dict[str, list[tuple[str, int, str]]]]
+
+        def _selected_target_raw_for_current_action(self, engine: GameEngine) -> str: ...
+        def _selected_target_uid_for_current_action(self, engine: GameEngine, owner_idx: int) -> str | None: ...
+        def _collect_selectable_targets_for_manual_target(
+            self,
+            engine: GameEngine,
+            owner_idx: int,
+            target: TargetSpec,
+        ) -> list[str]: ...
+        def _filter_target_pool(
+            self,
+            engine: GameEngine,
+            owner_idx: int,
+            target: TargetSpec,
+            pool: list[str],
+        ) -> list[str]: ...
+        def _is_uid_on_field(self, engine: GameEngine, uid: str) -> bool: ...
+        def _eval_condition_node(self, ctx: RuleEventContext, owner_idx: int, node: dict[str, Any]) -> bool: ...
+        def resolve_enter(self, engine: GameEngine, player_idx: int, uid: str) -> object: ...
+        def is_immune_to_action(self, card_name: str, action_name: str) -> bool: ...
+        def get_is_altare_sigilli(self, card_name: str) -> bool: ...
+        def get_is_pyramid(self, card_name: str) -> bool: ...
 
     def _resolve_targets(self, engine: GameEngine, owner_idx: int, target: TargetSpec) -> list[str]:
         pool: list[str] = []
@@ -1469,6 +1493,60 @@ class RuntimeEffectsMixin:
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
             return
+        if action == "reorder_top_n_of_deck":
+            top_n = max(1, int(effect.amount or 1))
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            flags = engine.state.flags
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+
+            if choice_ready and choice_source == source_uid:
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                selected_uids = [uid for uid in selected_uids if uid in candidates]
+
+                if len(selected_uids) == len(candidates) and candidates:
+                    base_deck = list(player.deck[:-len(candidates)])
+                    # selected_uids = ordine desiderato dall'alto verso il basso
+                    player.deck = base_deck + list(reversed(selected_uids))
+
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                    "_runtime_choice_preserve_order",
+                ):
+                    flags.pop(key, None)
+                return
+
+            candidates = list(player.deck[-top_n:]) if player.deck else []
+            if not candidates:
+                return
+
+            flags["_runtime_choice_source"] = source_uid
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = "Riordina le carte"
+            flags["_runtime_choice_prompt"] = "Seleziona tutte le carte nell'ordine desiderato, dalla prima che vuoi in cima alla quinta."
+            flags["_runtime_choice_min_targets"] = str(len(candidates))
+            flags["_runtime_choice_max_targets"] = str(len(candidates))
+            flags["_runtime_choice_preserve_order"] = True
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
         if action == "optional_recover_from_graveyard_then_shuffle":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
@@ -2406,6 +2484,11 @@ class RuntimeEffectsMixin:
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             shield = engine.state.flags.setdefault("attack_shield_turn", {})
             shield[str(target)] = int(engine.state.turn_number)
+            return
+        if action == "set_attack_shield_next_opponent_turn":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            shield = engine.state.flags.setdefault("attack_shield_turn", {})
+            shield[str(target)] = int(engine.state.turn_number) + 1
             return
         if action == "win_the_game":
             winner = self._resolve_player_scope(owner_idx, effect.target_player or "me")

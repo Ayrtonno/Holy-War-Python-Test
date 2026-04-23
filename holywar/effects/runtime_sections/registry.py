@@ -372,6 +372,13 @@ class RuntimeRegistryMixin:
                 self._scripts[key] = CardScript(name=inst.definition.name)
         self._ensure_leave_subscription(engine)
 
+    def _ensure_leave_subscription(self, engine: "GameEngine") -> None:
+        """Track engine subscription to prevent duplicate bindings."""
+        engine_id = id(engine)
+        if engine_id in self._subscribed_engines:
+            return
+        self._subscribed_engines.add(engine_id)
+
     def is_migrated(self, card_name: str) -> bool:
         return _norm(card_name) in self._scripts
 

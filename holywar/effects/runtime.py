@@ -109,6 +109,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "pay_inspiration",
     "set_faith_to",
     "set_attack_shield_this_turn",
+    "set_attack_shield_next_opponent_turn",
+    "reorder_top_n_of_deck",
     "remove_sin_from_flag",
     "win_the_game",
     "grant_extra_attack_this_turn",
@@ -170,6 +172,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "equip_card",
     "unequip_card",
     "destroy_equipment",
+    "reorder_top_n_of_deck",
 }
 
 

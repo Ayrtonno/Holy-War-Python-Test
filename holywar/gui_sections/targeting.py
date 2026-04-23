@@ -465,6 +465,7 @@ class GUITargetingMixin:
         allow_manual: bool = False,
         card_uid: str | None = None,
         side_hint: str = "auto",
+        preserve_selection_order: bool = False,
     ) -> tuple[bool, str | None]:
         if self.engine is None:
             return (True, None)
@@ -581,7 +582,11 @@ class GUITargetingMixin:
 
             if selected_tokens:
                 labels = [self._format_guided_candidate(tok, own_idx) for tok in selected_tokens]
-                selected_var.set("Selezione: " + " | ".join(labels))
+                if preserve_selection_order:
+                    numbered = [f"{i + 1}) {label}" for i, label in enumerate(labels)]
+                    selected_var.set("Ordine selezionato: " + " | ".join(numbered))
+                else:
+                    selected_var.set("Selezione: " + " | ".join(labels))
             else:
                 selected_var.set("Nessun bersaglio selezionato.")
 
@@ -621,8 +626,26 @@ class GUITargetingMixin:
             if max_targets is not None and len(tokens) > max_targets:
                 tokens = tokens[:max_targets]
 
-            selected_tokens.clear()
-            selected_tokens.extend(tokens)
+            if allow_multi and preserve_selection_order:
+                previous = list(selected_tokens)
+
+                # rimuovi quelli deselezionati
+                selected_tokens[:] = [tok for tok in selected_tokens if tok in tokens]
+
+                # aggiungi in coda i nuovi selezionati, nell'ordine in cui compaiono
+                for tok in tokens:
+                    if tok not in selected_tokens:
+                        if max_targets is not None and len(selected_tokens) >= max_targets:
+                            break
+                        selected_tokens.append(tok)
+
+                # se l'utente ha fatto una selezione "pulita" da zero
+                if not previous and not selected_tokens and tokens:
+                    selected_tokens.extend(tokens[:max_targets] if max_targets is not None else tokens)
+            else:
+                selected_tokens.clear()
+                selected_tokens.extend(tokens)
+
             _refresh_state()
 
         lb.bind("<<ListboxSelect>>", _on_listbox_select)
