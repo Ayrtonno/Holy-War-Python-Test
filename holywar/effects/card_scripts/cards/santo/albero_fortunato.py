@@ -10,10 +10,16 @@ SCRIPT = {
         {
             "trigger": {
                 "event": "on_card_sent_to_graveyard",
+                "condition": {
+                    "event_card_name_is": "Albero Fortunato",
+                    "event_card_owner": "me",
+                    "payload_from_zone_in": ["attack", "defense", "field"],
+                },
             },
             "condition": {
                 "event_card_name_is": "Albero Fortunato",
                 "event_card_owner": "me",
+                "payload_from_zone_in": ["attack", "defense", "field"],
             },
             "target": {
                 "type": "source_card",
