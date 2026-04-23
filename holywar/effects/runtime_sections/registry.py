@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 
 
 class RuntimeRegistryMixin:
+    if TYPE_CHECKING:
+        # Methods from RuntimeEffectsMixin
+        def _eval_condition_node(self, ctx: RuleEventContext, owner_idx: int, node: dict[str, Any]) -> bool: ...
+        def _collect_cards_for_requirement(self, engine: GameEngine, owner_idx: int, req: dict[str, Any]) -> list[str]: ...
     """Script registry bootstrap, migration and static card property accessors."""
 
     def __init__(self) -> None:
