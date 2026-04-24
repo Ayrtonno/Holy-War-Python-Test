@@ -21,7 +21,7 @@ def _emit_end_turn_events(engine: "GameEngine", current: int) -> None:
     engine._emit_event("on_main_phase_end", current, player=current)
     engine._emit_event("on_turn_end", current, player=current)
     engine._emit_event("on_my_turn_end", current, player=current)
-    engine._emit_event("on_opponent_turn_end", 1 - current, opponent=current)
+    engine._emit_event("on_opponent_turn_end", current, opponent=current)
 
 def _is_preparation_context(engine: "GameEngine") -> bool:
     return int(engine.state.turn_number) == 0 and int(engine.state.preparation_turns_done) < 2
@@ -343,7 +343,7 @@ def start_turn(engine: "GameEngine") -> None:
     set_phase(engine, "turn_start")
     engine._emit_event("on_turn_start", current, player=current)
     engine._emit_event("on_my_turn_start", current, player=current)
-    engine._emit_event("on_opponent_turn_start", 1 - current, opponent=current)
+    engine._emit_event("on_opponent_turn_start", current, opponent=current)
 
     set_phase(engine, "draw")
     engine._emit_event("before_draw_phase", current, player=current)
