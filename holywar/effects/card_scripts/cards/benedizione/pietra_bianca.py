@@ -8,6 +8,7 @@ SCRIPT = {
     "on_activate_mode": "auto",
     "play_targeting": "guided",
     "triggered_effects": [],
+    #rimuove al momento il peccato pari all'attacco iniziale del santo... fixxare
     "on_play_actions": [
         {
             "target": {
