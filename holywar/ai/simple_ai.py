@@ -350,7 +350,7 @@ def _simulate(engine: GameEngine, player_idx: int, move: Move) -> int | None:
             if move.target and move.target.startswith("d"):
                 score += 6
 
-            if "non puo attaccare" in text and move.target and move.target.startswith("d"):
+            if "non può attaccare" in text and move.target and move.target.startswith("d"):
                 score += 12
 
         elif ctype == "edificio":
@@ -377,7 +377,7 @@ def _simulate(engine: GameEngine, player_idx: int, move: Move) -> int | None:
         elif ctype == "maledizione":
             score += 35
 
-            if "distrugg" in text or "escomunic" in text:
+            if "distrugg" in text or "scomunic" in text:
                 score += 25
 
             if move.target is not None:
