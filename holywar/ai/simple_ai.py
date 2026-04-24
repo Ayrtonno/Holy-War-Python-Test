@@ -436,7 +436,7 @@ def _tactical_bonus(engine: GameEngine, player_idx: int, move: Move) -> int:
 
         elif ctype == "maledizione":
             bonus += 16
-            if "distrugg" in text or "escomunic" in text:
+            if "distrugg" in text or "scomunic" in text:
                 bonus += 20
 
         elif ctype == "benedizione":
