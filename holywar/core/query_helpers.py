@@ -217,16 +217,19 @@ def apply_damage_mitigation(
     if damage <= 0:
         return 0
 
+    # Determine the card type of the target if a specific target uid is provided, as some damage prevention effects may only apply to certain card types. This checks if the target uid corresponds to a valid instance on the field and retrieves its card type, which can then be used to filter applicable damage prevention effects based on their allowed target types.
     target_type = ""
     if target_uid and target_uid in engine.state.instances:
         target_type = _norm(engine.state.instances[target_uid].definition.card_type)
 
+    # Check for any damage prevention effects from the player's artifacts or building that can reduce or negate the incoming damage, taking into account any specific conditions or allowed target types defined by those effects. This iterates through all potential sources of damage prevention on the player's field, checking for any that have defined thresholds for preventing incoming damage and applying those effects if the conditions are met, allowing for dynamic mitigation of damage based on the current state of the player's board and the specific target being damaged.
     player = engine.state.players[target_owner_idx]
     aura_sources: list[str] = []
     aura_sources.extend([uid for uid in player.artifacts if uid is not None])
     if player.building is not None:
         aura_sources.append(player.building)
 
+    # Apply any damage prevention effects from the player's artifacts or building that can reduce or negate the incoming damage, taking into account any specific conditions or allowed target types defined by those effects. This iterates through all potential sources of damage prevention on the player's field, checking for any that have defined thresholds for preventing incoming damage and applying those effects if the conditions are met, allowing for dynamic mitigation of damage based on the current state of the player's board and the specific target being damaged.
     for source_uid in aura_sources:
         if source_uid not in engine.state.instances:
             continue

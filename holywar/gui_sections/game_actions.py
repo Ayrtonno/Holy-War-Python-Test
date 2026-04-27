@@ -1,31 +1,31 @@
 from __future__ import annotations
 # pyright: reportAttributeAccessIssue=false
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 import tkinter as tk
 from tkinter import messagebox
 
 from holywar.effects.runtime import _norm, runtime_cards
 
-
+# Utility functions to extract and normalize card name variants for target matching in gameplay actions.
 def _card_aliases(definition) -> list[str]:
     raw_aliases = getattr(definition, "aliases", []) or []
     if isinstance(raw_aliases, str):
         return [part.strip() for part in raw_aliases.split(",") if part.strip()]
     return [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
 
-
+# Normalizes a string by converting it to lowercase and stripping whitespace, used for consistent target matching.
 def _card_name_variants(definition) -> set[str]:
     variants = {_norm(definition.name)}
     variants.update(_norm(alias) for alias in _card_aliases(definition))
     return {v for v in variants if v}
 
-
+# Creates a normalized haystack string containing the card's name and aliases, used for substring matching in target specifications.
 def _card_name_haystack(definition) -> str:
     parts = [definition.name, *_card_aliases(definition)]
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
-
+# This mixin class provides methods for handling gameplay actions that require target selection, including determining if a card allows multiple targets, if it requires a target, counting cards based on specific rules, and generating candidate targets for guided selection based on the card's script and targeting specifications.
 class GUIGameActionsMixin:
     """Gameplay actions and advanced target orchestration handlers."""
 
@@ -50,6 +50,7 @@ class GUIGameActionsMixin:
         max_targets = target.max_targets if target.max_targets is not None else 1
         return max_targets != 1
 
+    # Determines if the card with the given UID requires a target for its play action, based on its targeting mode and the presence of target specifications in its script, which affects whether the player will be prompted to select targets when playing the card.
     def _card_requires_target(self, uid: str) -> bool:
         mode = self._play_targeting_mode(uid)
 
@@ -70,6 +71,7 @@ class GUIGameActionsMixin:
 
         return False
 
+    # Counts the number of cards that match specific criteria defined in a rule, such as ownership, zone, card type, name filters, crosses, and strength, which is used for determining the maximum number of targets allowed for certain card effects based on the current game state.
     def _count_cards_from_rule(self, uid: str, rule: dict) -> int:
         if self.engine is None:
             return 0
@@ -139,6 +141,7 @@ class GUIGameActionsMixin:
 
         return total
 
+    # Retrieves the first target specification from the card's on-play actions, which is used to determine the targeting requirements and candidate targets for the card when it is played.
     def _first_activate_target_spec(self, uid: str):
         script = self._card_script(uid)
         if script is None:
@@ -150,6 +153,7 @@ class GUIGameActionsMixin:
                 return target
         return None
 
+    # Retrieves the first target specification from the card's on-play actions, which is used to determine the targeting requirements and candidate targets for the card when it is played.
     def _target_selection_limits(self, uid: str, *, for_activate: bool = False) -> tuple[int, int | None]:
         mode = self._play_targeting_mode(uid)
 
@@ -179,6 +183,7 @@ class GUIGameActionsMixin:
     def _is_monsone_card(self, uid: str) -> bool:
         return self._play_targeting_mode(uid) == "monsone"
 
+    # Generates a list of candidate target UIDs for a card with the given UID based on its targeting mode and specifications, which is used to provide guided target selection options to the player when playing the card.
     def _guided_target_candidates(self, uid: str) -> list[str]:
         if self.engine is None:
             return []
@@ -362,6 +367,7 @@ class GUIGameActionsMixin:
 
         return out
 
+    # Generates a list of candidate target UIDs for a card with the given UID based on its targeting mode and specifications, which is used to provide guided target selection options to the player when playing the card.
     def _guided_target_candidates_for_spec(self, uid: str, target) -> list[str]:
         if self.engine is None:
             return []
@@ -495,6 +501,7 @@ class GUIGameActionsMixin:
 
         return out
 
+    # Generates a list of candidate target UIDs for a card with the given UID based on its targeting mode and specifications, which is used to provide guided target selection options to the player when playing the card.
     def _board_activation_candidates(self, player_idx: int) -> list[str]:
         if self.engine is None:
             return []
@@ -522,6 +529,7 @@ class GUIGameActionsMixin:
             out.append("o:b")
         return out
 
+    # Generates a list of candidate target UIDs for a card with the given UID based on its targeting mode and specifications, which is used to provide guided target selection options to the player when playing the card.
     def _format_guided_candidate(self, token: str, own_idx: int) -> str:
         if self.engine is None:
             return token
@@ -596,6 +604,7 @@ class GUIGameActionsMixin:
 
         return token
 
+    # Handles the target selection process for the "Monsone" card effect, allowing the player to select up to 3 cards from their hand to discard and up to 3 cards on the field with 8 or fewer crosses to return to their respective reliquaries, and returns a formatted target string representing the player's choices for the card's effect resolution.
     def _monsone_target_payload(self, spell_uid: str) -> tuple[bool, str | None]:
         if self.engine is None:
             return (True, None)
@@ -688,6 +697,7 @@ class GUIGameActionsMixin:
         target = f"monsone:discard={','.join(discard_uids)};return={','.join(return_uids)}"
         return (False, target)
 
+    # Handles the process of collecting target selections for cards with multiple on-play actions that require targets, prompting the player to select valid targets for each action in sequence, and returns a formatted payload string representing the player's choices for all the actions, which is used for resolving the card's effects in the game engine.
     def _collect_on_play_action_targets(self, uid: str) -> tuple[bool, str | None]:
         if self.engine is None:
             return (True, None)
@@ -740,6 +750,7 @@ class GUIGameActionsMixin:
         payload = "seq:" + ";;".join(picked_parts)
         return (False, payload)
 
+    # Handles the guided target selection process when a player attempts to play a card that requires targets, providing a user interface for selecting valid targets based on the card's specifications and the current game state, and then initiates the card play action with the selected targets.
     def ask_guided_quick_target(self, uid: str) -> None:
         if self._is_monsone_card(uid):
             canceled, target = self._monsone_target_payload(uid)
@@ -811,6 +822,7 @@ class GUIGameActionsMixin:
             return
         self.play_uid(uid, selected)
 
+    # Executes the action of playing a card with the specified UID and target, handling both regular plays and quick plays during a chain, and providing user feedback if the action is invalid or if certain conditions are not met for playing the card.
     def play_uid(self, uid: str, target: str | None) -> None:
         if self.engine is None or not self.can_human_act():
             return
@@ -841,6 +853,7 @@ class GUIGameActionsMixin:
         if not self.chain_active:
             self.begin_turn_if_needed()
 
+    # Handles the special case of playing a Saint card that has the option to be played by sacrificing other Saints, prompting the player to select the required sacrifices if necessary, and then executing the play action with the appropriate target format to indicate the sacrifices made.
     def play_saint_with_optional_sacrifice(self, uid: str, zone_target: str) -> None:
         if self.engine is None:
             return
@@ -891,6 +904,7 @@ class GUIGameActionsMixin:
         target = f"{zone_target}|sac:{selected}"
         self.play_uid(uid, target)
 
+    # Handles the right-click event on the player's own board slots, providing a context menu with options to attack with the card in that slot, activate its abilities, and view details of equipped cards, while also highlighting valid targets for attacks and activations based on the current game state.
     def on_own_slot_right_click(self, source: str) -> None:
         if self.engine is None or not self.can_human_act():
             return
@@ -899,7 +913,7 @@ class GUIGameActionsMixin:
         uid = self.engine.resolve_board_uid(own_idx, source)
         if uid is None:
             return
-        menu = tk.Menu(self, tearoff=0)
+        menu = tk.Menu(cast(tk.Misc, self), tearoff=0)
         can_open_attack_menu = source.startswith("a") or source.startswith("d")
         if can_open_attack_menu:
             slot = int(source[1])
@@ -945,6 +959,7 @@ class GUIGameActionsMixin:
         finally:
             menu.grab_release()
 
+    # Executes the attack action from a specified slot to a target slot or directly if the target slot is None, handling the game logic for validating the attack, starting a chain if the attack is successful, and providing user feedback if the attack is invalid or if certain conditions are not met for attacking.
     def do_attack(self, from_slot: int, target_slot: int | None) -> None:
         if self.engine is None or not self.can_human_act():
             return
@@ -960,6 +975,7 @@ class GUIGameActionsMixin:
         self.refresh()
         self.begin_turn_if_needed()
 
+    # Executes the activation of an ability from a specified source on the player's board, handling the game logic for validating the activation, starting a chain if the activation is successful, and providing user feedback if the activation is invalid or if certain conditions are not met for activating the ability.
     def do_activate(self, source: str) -> None:
         if self.engine is None or not self.can_human_act():
             return

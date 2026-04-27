@@ -10,23 +10,24 @@ from holywar.effects.state_flags import ensure_runtime_state, refresh_player_fla
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
 
-
+# The turn_flow module contains functions that manage the flow of turns in the game, including starting and ending turns, handling the draw phase, and applying turn-based effects. It also includes helper functions for normalizing text, checking card types, and managing hand limits. These functions work together to ensure that the game progresses smoothly and that all relevant effects and rules are applied correctly during each player's turn.
 def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
 
-
+# The _emit_end_turn_events function is responsible for emitting the appropriate events at the end of a player's turn. It emits events for the end of the main phase, the end of the turn, and specific events for the active player and their opponent. This allows other parts of the game engine to react to these events and apply any necessary effects or updates based on the end of the turn.
 def _emit_end_turn_events(engine: "GameEngine", current: int) -> None:
     engine._emit_event("on_main_phase_end", current, player=current)
     engine._emit_event("on_turn_end", current, player=current)
     engine._emit_event("on_my_turn_end", current, player=current)
     engine._emit_event("on_opponent_turn_end", current, opponent=current)
 
+# The _is_preparation_context function checks if the game is currently in the preparation phase, which is defined as the first turn of the game (turn number 0) and before both players have completed their preparation turns. This is used to determine if certain effects or rules that only apply during preparation should be active.
 def _is_preparation_context(engine: "GameEngine") -> bool:
     return int(engine.state.turn_number) == 0 and int(engine.state.preparation_turns_done) < 2
 
-
+# The _open_saint_slot_tokens function generates a list of available slot tokens for placing saints in the attack and defense zones for a given player. It checks the player's current attack and defense slots and returns a list of tokens (e.g., "a1", "a2", "d1", "d2") for any slots that are currently empty (None). This is used to determine where a card like "Albero Sacro" can be automatically played from the hand during the draw phase.
 def _open_saint_slot_tokens(engine: "GameEngine", player_idx: int) -> list[str]:
     player = engine.state.players[player_idx]
     out: list[str] = []
@@ -38,7 +39,7 @@ def _open_saint_slot_tokens(engine: "GameEngine", player_idx: int) -> list[str]:
             out.append(f"d{i + 1}")
     return out
 
-
+# The _try_auto_play_from_hand function attempts to automatically play a card from the player's hand based on certain conditions and effects. It checks if the specified card UID is in the player's hand and if it exists in the game state instances. If the card is "Albero Sacro" and the game is not in the preparation context, it allows the player to choose an available slot token for automatic play. It then applies the effect of moving the card from the hand to the board and checks if the card was successfully played. This function returns True if the card was played from the hand to a valid zone, and False otherwise.
 def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) -> bool:
     player = engine.state.players[player_idx]
     if uid not in player.hand:
@@ -46,6 +47,7 @@ def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) ->
     if uid not in engine.state.instances:
         return False
 
+    # The following block manages temporary state flags for the source card and selected target during the auto-play process. It saves the previous values of these flags, sets them to the current card UID and selected target, applies the effect to move the card from the hand to the board, and then restores the previous flag values. This ensures that any effects that rely on these flags can function correctly during the auto-play process without permanently altering the game state.
     flags = engine.state.flags
     previous_source = flags.get("_runtime_source_card")
     previous_selected = flags.get("_runtime_selected_target")
@@ -65,6 +67,7 @@ def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) ->
                 if chosen_norm in {s.lower() for s in slots}:
                     selected_target = chosen_norm
 
+    # Set temporary flags for the source card and selected target, apply the effect to move the card from the hand to the board, and then restore the previous flag values. This allows any effects that depend on these flags to function correctly during the auto-play process without permanently altering the game state.
     flags["_runtime_source_card"] = uid
     flags["_runtime_selected_target"] = selected_target
     try:
@@ -88,7 +91,7 @@ def _try_auto_play_from_hand(engine: "GameEngine", player_idx: int, uid: str) ->
     zone_now = engine._locate_uid_zone(player_idx, uid)
     return uid not in player.hand and zone_now in {"attack", "defense", "artifacts", "artifact", "building"}
 
-
+# The _resolve_deferred_auto_play_on_turn_start function checks for any cards that were drawn in a previous turn and had the "auto_play_on_draw" effect, but were not automatically played because they were drawn during the opponent's turn. It looks for these cards in the player's hand at the start of their turn and attempts to auto-play them if they are still present. If any of these cards have the "end_turn_on_draw" effect and are successfully auto-played, the function returns True to indicate that the turn should end immediately. Otherwise, it returns False to allow the turn to proceed as normal.
 def _resolve_deferred_auto_play_on_turn_start(engine: "GameEngine", current: int) -> bool:
     runtime_state = ensure_runtime_state(engine)
     deferred = runtime_state.setdefault("deferred_auto_play_on_turn_start", {"0": [], "1": []})
@@ -98,6 +101,7 @@ def _resolve_deferred_auto_play_on_turn_start(engine: "GameEngine", current: int
 
     player = engine.state.players[current]
 
+    # Iterate through the pending UIDs for auto-play on turn start. For each UID, check if it is still in the player's hand and if it has the "auto_play_on_draw" effect. If so, attempt to auto-play it from the hand. If any card has the "end_turn_on_draw" effect and is successfully auto-played, return True to indicate that the turn should end immediately. Otherwise, return False to allow the turn to proceed as normal.
     for uid in pending_uids:
         if uid not in engine.state.instances:
             continue
@@ -159,6 +163,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
         drawn += 1
         engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []}).setdefault(str(player_idx), []).append(drawn_uid)
 
+        # If there are any sources that have locked attacks until a draw, unlock them now that the player has drawn a card.
         runtime_state = engine.state.flags.setdefault("runtime_state", {})
         locked_sources = list(runtime_state.get("no_attacks_until_draw_sources", []) or [])
         if locked_sources:
@@ -168,6 +173,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
         engine._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
         card_name = engine.state.instances[drawn_uid].definition.name
 
+        # Debug logging for cards with draw-triggered effects, such as "Albero Sacro", to help track the state of the game when these cards are drawn. This can be useful for understanding how the auto-play and end-turn effects are being applied during the draw phase.
         if _norm(card_name) == _norm("Albero Sacro"):
             engine.state.log(
                 f"auto_play={runtime_cards.get_auto_play_on_draw(card_name)} "
@@ -177,6 +183,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
 
         auto_play_succeeded = False
 
+        # If the drawn card has the "auto_play_on_draw" effect, attempt to auto-play it from the hand. If the card was drawn during the opponent's turn, defer the auto-play attempt until the start of the player's next turn. If the card also has the "end_turn_on_draw" effect and was successfully auto-played, mark that the turn should end immediately after drawing.
         if runtime_cards.get_auto_play_on_draw(card_name):
             is_controller_turn = int(player_idx) == int(engine.state.active_player)
 
@@ -188,6 +195,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
                 if drawn_uid in player.hand and drawn_uid not in deferred[str(player_idx)]:
                     deferred[str(player_idx)].append(drawn_uid)
 
+        # If the card has the "end_turn_on_draw" effect and was successfully auto-played, set a flag to indicate that the turn should end immediately after drawing. This will be checked at the end of the draw phase to determine if the turn should end or proceed to the main phase.
         if runtime_cards.get_end_turn_on_draw(card_name) and auto_play_succeeded:
             runtime_state = engine.state.flags.setdefault("runtime_state", {})
 
@@ -208,7 +216,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
     refresh_player_flags(engine)
     return drawn
 
-
+# The _remove_unplayed_innate_cards function is called at the end of the preparation phase to remove any innata cards that were not played during the preparation turns. It checks the player's hand, deck, white deck, graveyard, excommunicated zone, attack, defense, artifacts, and building for any innata cards that are still present and removes them from the game state. This ensures that players cannot keep innata cards that were meant to be played during preparation if they were not used, maintaining the integrity of the preparation phase.
 def _remove_unplayed_innate_cards(engine: "GameEngine", player_idx: int) -> None:
     player = engine.state.players[player_idx]
     active = set(engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).get(str(player_idx), []) or [])
@@ -292,12 +300,14 @@ def _run_draw_phase(engine: "GameEngine", current: int) -> int:
         next_draw_override[str(engine.state.active_player)] = 0
         return draw_cards(engine, engine.state.active_player, override_amount)
 
+    # Check for any pending "Albero Sacro" draws that need to be resolved before the normal draw. If there is a pending "Albero Sacro" draw, resolve it and return the number of cards drawn (which may be more than 1 if there are multiple pending draws).
     spore_pending = engine.state.flags.setdefault("spore_pending", {"0": False, "1": False})
     if spore_pending.get(str(engine.state.active_player), False):
         drawn = draw_cards(engine, engine.state.active_player, 8)
         spore_pending[str(engine.state.active_player)] = False
         return drawn
 
+    # Calculate the number of cards to draw, including any flat bonuses from card effects or other sources. Then perform the draw and return the number of cards drawn.
     bonus_draw = runtime_cards.get_context_bonus_amount(
         engine,
         engine.state.active_player,
@@ -320,10 +330,11 @@ def start_turn(engine: "GameEngine") -> None:
             engine.state.log(f"{player.name} termina immediatamente la preparazione.")
             end_turn(engine)
             return
-
+        # If the turn should end immediately after drawing due to an "end_turn_on_draw" effect, set the appropriate flag and end the turn. This will skip the main phase and go directly to the end phase, allowing any end-of-turn effects to resolve properly.
         engine.state.log(f"{player.name} termina immediatamente il turno.")
         end_turn(engine)
         return
+    # Reset the battle phase flag at the start of the turn. This ensures that any effects or conditions that depend on whether the battle phase has started will be correctly reset at the beginning of each player's turn.
     runtime_state["battle_phase_started"] = False
     stale_player = runtime_state.get("request_end_turn_player", None)
     if stale_player is not None and stale_player not in {0, 1}:

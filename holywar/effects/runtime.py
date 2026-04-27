@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
     from holywar.scripting_api import RuleEventContext
 
-
+# This module defines functions for managing runtime state flags in the game engine. The runtime state includes information about the current phase of the game, which player's turn it is, and various flags that indicate what actions are currently allowed for each player. The `ensure_runtime_state` function initializes the runtime state if it doesn't already exist, while the `refresh_player_flags` function updates the player-specific flags based on the current game state. The `set_phase` function is used to update the current phase of the game and refresh the player flags accordingly.
 SUPPORTED_CONDITION_KEYS = {
     "all_of",
     "any_of",
@@ -68,6 +68,7 @@ SUPPORTED_CONDITION_KEYS = {
     "event_card_owner_attack_count_gte",
 }
 
+# This dictionary defines aliases for effect actions. It maps various action names that might be used in card scripts or effect definitions to a standardized set of action names that the runtime will recognize and handle. For example, "add_faith" and "buff_faith" are both mapped to "increase_faith", while "remove_faith" and "damage_faith" are mapped to "decrease_faith". This allows for more flexibility in how actions are defined in card scripts while still maintaining a consistent set of actions that the runtime can process.
 EFFECT_ACTION_ALIASES = {
     "add_faith": "increase_faith",
     "buff_faith": "increase_faith",
@@ -85,6 +86,7 @@ EFFECT_ACTION_ALIASES = {
     "pay_inspiration": "pay_inspiration",
 }
 
+# This set defines the supported effect actions that the runtime can process. It includes a wide range of actions that can be performed as part of card effects, such as increasing or decreasing faith and strength, adding or removing counters, inflicting sin, drawing cards, moving cards between zones, and many more. This set is used to validate that any effect action specified in card scripts or effect definitions is recognized and can be handled by the runtime.
 SUPPORTED_EFFECT_ACTIONS = {
     "increase_faith",
     "decrease_faith",
@@ -174,45 +176,45 @@ SUPPORTED_EFFECT_ACTIONS = {
     "destroy_equipment",
 }
 
-
+# This set defines the supported effect conditions that can be used in card scripts or effect definitions. These conditions are used to determine whether certain effects should be applied based on the current game state, the event context, or other factors. The runtime will evaluate these conditions when processing effects to ensure that they are only applied when the specified conditions are met.
 def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text or "")
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 def _card_aliases(definition: CardDefinition) -> list[str]:
     raw_aliases = getattr(definition, "aliases", []) or []
     if isinstance(raw_aliases, str):
         return [part.strip() for part in raw_aliases.split(",") if part.strip()]
     return [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
 
-
+# These functions are utility functions for working with card definitions and their names. The `_norm` function normalizes a string by removing diacritical marks and converting it to lowercase, which is useful for comparing card names in a case-insensitive and accent-insensitive way. The `_card_aliases` function retrieves the list of aliases for a given card definition, which can be specified as a comma-separated string or as a list of strings. The `_card_name_variants` function generates a set of normalized name variants for a card definition, including its main name and any aliases. The `_card_name_haystack` function creates a single normalized string that contains the card's name and all its aliases, which can be used for substring searches. The `_card_matches_name` function checks if a given name matches any of the card's name variants.
 def _card_name_variants(definition: CardDefinition) -> set[str]:
     variants = {_norm(definition.name)}
     variants.update(_norm(alias) for alias in _card_aliases(definition))
     return {v for v in variants if v}
 
-
+# This function generates a set of normalized name variants for a given card definition. It takes the card's main name and any aliases, normalizes them using the `_norm` function, and returns a set of unique normalized names. This is useful for comparing card names in a way that is case-insensitive and accent-insensitive, allowing for more flexible matching of card names in various contexts (e.g., when checking if a card matches a specified name in an effect condition).
 def _card_name_haystack(definition: CardDefinition) -> str:
     parts = [definition.name, *_card_aliases(definition)]
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
-
+# This function checks if a given name matches any of the card's name variants. It normalizes the input name and checks if it is present in the set of normalized name variants for the card definition. This allows for flexible matching of card names, taking into account case insensitivity and ignoring diacritical marks, as well as considering any aliases that the card may have.
 def _card_matches_name(definition: CardDefinition, wanted: str) -> bool:
     wanted_norm = _norm(wanted)
     if not wanted_norm:
         return False
     return wanted_norm in _card_name_variants(definition)
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class TriggerSpec:
     event: str
     frequency: str = "each_turn"
     condition: dict[str, Any] = field(default_factory=dict)
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class CardFilterSpec:
     name_in: list[str] = field(default_factory=list)
@@ -229,7 +231,7 @@ class CardFilterSpec:
     drawn_this_turn_only: bool = False
     top_n_from_zone: int | None = None
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class TargetSpec:
     type: str
@@ -241,7 +243,7 @@ class TargetSpec:
     max_targets: int | None = None
     max_targets_from: dict[str, Any] | None = None
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class EffectSpec:
     action: str
@@ -271,21 +273,21 @@ class EffectSpec:
     choice_prompt: str | None = None
     choice_options: list[dict[str, Any]] = field(default_factory=list)
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class TriggeredEffectSpec:
     trigger: TriggerSpec
     target: TargetSpec
     effect: EffectSpec
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class ActionSpec:
     target: TargetSpec
     effect: EffectSpec
     condition: dict[str, Any] = field(default_factory=dict)
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
 class CardScript:
     name: str
@@ -357,7 +359,7 @@ class CardScript:
 
 from holywar.effects.runtime_sections import RuntimeRegistryMixin, RuntimeResolutionMixin, RuntimeEffectsMixin
 
-
+# The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 class RuntimeCardManager(RuntimeRegistryMixin, RuntimeResolutionMixin, RuntimeEffectsMixin):
     """Facade class: concrete behavior is composed via runtime mixins."""
     pass

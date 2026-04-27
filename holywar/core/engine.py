@@ -172,6 +172,7 @@ class GameEngine:
         p1_deck, p1_white, p1_innate = build_decks(0, p1_expansion, p1_premade_deck_id)
         p2_deck, p2_white, p2_innate = build_decks(1, p2_expansion, p2_premade_deck_id)
 
+        # Initializes the player states with their names, decks, and empty fields.
         p1 = PlayerState.empty(p1_name)
         p1.deck = p1_deck
         p1.white_deck = p1_white
@@ -278,6 +279,7 @@ class GameEngine:
                 except ValueError:
                     pass
         zone = self._locate_uid_zone(owner, uid)
+        # Apply any auras from friendly artifacts that grant strength to saints, if the card is currently on the field as a saint or token. This iterates through the owner's artifacts and checks for any that grant strength to friendly saints, applying the bonus if the current card is not excluded by the artifact's specific rules. This allows for dynamic strength bonuses from artifacts that can affect multiple saints on the field, while also respecting any exclusions defined by the artifact.
         if _norm(inst.definition.card_type) in {"santo", "token"} and zone in {"attack", "defense"}:
             for a_uid in self.state.players[owner].artifacts:
                 if not a_uid:
@@ -294,6 +296,7 @@ class GameEngine:
                     }
                     if _norm(inst.definition.name) not in excluded:
                         strength += int(aura)
+        # Apply any card-specific rules that grant strength bonuses based on the current game state, such as controlling certain artifacts or having specific cards in certain zones, if the card is on the field as a saint or token. This iterates through any defined strength bonus rules for the card and checks the conditions of each rule against the current game state, applying the bonus if the conditions are met. This allows for complex conditional strength bonuses that can depend on various factors in the game state, providing depth and strategic considerations for card interactions.
         for rule in runtime_cards.get_strength_bonus_rules(inst.definition.name):
             artifact_name = str(rule.get("artifact_name", "")).strip()
             if not artifact_name or not self._has_artifact(owner, artifact_name):
@@ -347,6 +350,7 @@ class GameEngine:
             if required_name and _norm(inst.definition.name) != _norm(required_name):
                 continue
             strength += int(rule.get("self_bonus", 0) or 0)
+        # Apply any context-specific bonuses from the card's own rules, such as having certain tags or being in certain zones, if the card is on the field as a saint or token. This checks for any defined context-specific strength bonuses for the card and applies them based on the current context, allowing for dynamic bonuses that can depend on various factors such as the card's current zone or its blessed/cursed tags.
         strength += runtime_cards.get_context_bonus_amount(self, owner, context="strength", amount_mode="flat")
         sigilli_threshold = runtime_cards.get_sigilli_strength_bonus_threshold(inst.definition.name)
         sigilli_amount = runtime_cards.get_sigilli_strength_bonus_amount(inst.definition.name)

@@ -4,10 +4,11 @@ from typing import Any, cast
 import tkinter as tk
 from tkinter import ttk
 
-
+# This mixin class provides theme and shared visual helpers for GUI screens and popups in the Holy War game. It includes methods for setting up styles for the deck builder, game view, and target picker sections of the GUI, as well as utility methods for applying themes to widgets and centering windows on the screen. The styles are defined using the ttk.Style class, and the mixin ensures a consistent visual appearance across different parts of the application.
 class GUIStylesMixin:
     """Theme and shared visual helpers for GUI screens and popups."""
 
+    # The following methods set up styles for different sections of the GUI, including the deck builder, game view, and target picker. Each method defines a color palette and configures styles for various ttk widgets such as frames, labels, buttons, entries, comboboxes, scrollbars, and treeviews. The styles include settings for background colors, foreground colors, border colors, fonts, padding, and state-specific appearances (e.g., active, pressed, disabled). The mixin also includes utility methods for applying themes to widgets and centering windows on the screen.
     def _setup_deck_builder_styles(self) -> None:
         self._deck_palette = {
             "bg": "#f3f7fc",
@@ -101,6 +102,7 @@ class GUIStylesMixin:
         )
         style.map("Deck.Treeview.Heading", background=[("active", "#f3f0ff")])
 
+    # This method sets up the styles for the main game view, defining a color palette and configuring styles for various ttk widgets such as frames, labels, buttons, entries, comboboxes, scrollbars, and progress bars. The styles include settings for background colors, foreground colors, border colors, fonts, padding, and state-specific appearances (e.g., active, pressed, disabled). The method ensures a consistent visual theme for the game view section of the GUI.
     def _setup_game_styles(self) -> None:
         self._game_palette = {
             "bg": "#f7f8fa",
@@ -224,6 +226,7 @@ class GUIStylesMixin:
             thickness=16,
         )
 
+    # This method sets up the styles for the target picker section of the GUI, defining a color palette and configuring styles for various ttk widgets such as frames, labels, buttons, entries, and scrollbars. The styles include settings for background colors, foreground colors, border colors, fonts, padding, and state-specific appearances (e.g., active, pressed, disabled). The method ensures a consistent visual theme for the target picker section of the GUI.
     def _setup_target_picker_styles(self) -> None:
         gp = self._game_palette
         self._target_picker_palette = {
@@ -315,6 +318,7 @@ class GUIStylesMixin:
             width=11,
         )
 
+    # This method applies the target picker theme to a given Listbox widget. It configures the Listbox's background color, foreground color, selection background and foreground colors, highlight background and color, border width, and relief style based on the target picker palette defined in the `_setup_target_picker_styles` method. This ensures that the Listbox used in the target picker section of the GUI has a consistent visual appearance that matches the overall theme of the target picker.
     def _apply_target_picker_listbox_theme(self, lb: tk.Listbox) -> None:
         p = self._target_picker_palette
         lb.configure(
@@ -328,6 +332,7 @@ class GUIStylesMixin:
             relief="solid",
         )
 
+    # This method applies the game theme to a given widget and all of its child widgets recursively. It checks the class of each widget and configures its styles based on the game palette defined in the `_setup_game_styles` method. The method handles various ttk widgets such as frames, labels, buttons, entries, comboboxes, scrollbars, and progress bars, as well as standard Tkinter widgets like Button, Listbox, and Text. It uses a try-except block to catch any `tk.TclError` exceptions that may occur during configuration (e.g., if a widget does not support certain options) and continues applying the theme to child widgets regardless of errors.
     def _apply_game_theme(self, widget: object) -> None:
         p = self._game_palette
         w = cast(Any, widget)
@@ -394,6 +399,7 @@ class GUIStylesMixin:
         for child in w.winfo_children():
             self._apply_game_theme(child)
 
+    # This method centers a given Toplevel window on the screen based on the specified width and height. It first updates the window's idle tasks to ensure that the geometry information is up to date, then retrieves the screen width and height. It calculates the x and y coordinates needed to position the window in the center of the screen, ensuring that they are not negative. Finally, it sets the geometry of the window using the calculated dimensions and coordinates.
     def _center_toplevel(self, win: tk.Toplevel, width: int, height: int) -> None:
         win.update_idletasks()
         screen_w = win.winfo_screenwidth()

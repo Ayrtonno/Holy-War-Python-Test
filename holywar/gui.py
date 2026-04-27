@@ -16,6 +16,7 @@ from holywar.data.deck_builder import (
 from holywar.app_paths import appdata_dir
 from holywar.gui_sections import GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGameFlowMixin, GUIGameViewMixin, GUIGameActionsMixin
 
+# This module defines the `HolyWarGUI` class, which is the main graphical user interface for the Holy War game. It uses the Tkinter library to create a windowed application that allows players to interact with the game visually. The GUI includes features for starting new games, managing decks, displaying the game state, and handling player actions. The class also includes methods for building the user interface, updating the display based on the game state, and responding to user input. Additionally, there are functions for building a command-line argument parser and running the main application loop.
 class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGameFlowMixin, GUIGameViewMixin, GUIGameActionsMixin, tk.Tk):
     def __init__(self, cards, seed: int | None, ai_delay: float) -> None:
         super().__init__()
@@ -173,6 +174,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.own_building = tk.Button(own_frame, text="-", width=24)
         self._grid_slots(own_frame, self.own_attack, self.own_defense, self.own_artifacts, self.own_building)
 
+        # Slot click bindings (right-click for actions, left-click for details).
         for i, btn in enumerate(self.own_attack):
             btn.bind("<Button-3>", lambda e, idx=i: self.on_own_slot_right_click(f"a{idx + 1}"))
             btn.bind("<Button-1>", lambda e, idx=i: self.show_board_card_detail(0, "attack", idx))
@@ -222,7 +224,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
 
         self._build_deck_manager_ui()
 
-
+# This function builds the command-line argument parser for the application. It defines various arguments that can be passed when launching the application, such as the path to the deck Excel file, the path to the cards JSON cache, the path to custom premade decks JSON, a random seed for game initialization, and a delay for AI actions. This allows users to customize their experience when starting the application from the command line.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Holy War - GUI MVP")
     parser.add_argument("--deck-xlsx", type=str, default=None, help="Percorso a Holy War.xlsx")

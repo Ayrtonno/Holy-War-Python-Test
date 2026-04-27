@@ -11,7 +11,7 @@ from holywar.effects.runtime import (
 )
 from holywar.scripting_api import DECLARED_FUNCTIONS, RuleEvents
 
-
+# This module defines the canonical sets of events, functions, conditions, and actions that are recognized by the Holy War game engine. It also includes a backlog of target IDs for coverage tracking and a `CoverageSnapshot` dataclass to represent the current state of implementation coverage. The `validate_registered_scripts` function checks the currently registered card scripts against the canonical sets and identifies any unknown events, actions, or condition keys that are being used in the scripts.
 CANONICAL_EVENTS: set[str] = set(RuleEvents.ALL) | {
     "on_card_sent_to_reliquiary",
     "on_card_returned_to_reliquiary",
@@ -23,6 +23,7 @@ CANONICAL_EVENTS: set[str] = set(RuleEvents.ALL) | {
 
 CANONICAL_FUNCTIONS: set[str] = set(DECLARED_FUNCTIONS)
 
+# This set defines the canonical actions that are recognized by the game engine. It includes the supported effect actions as well as additional actions that are specific to the game's mechanics, such as managing counters, summoning cards, equipping/unequipping, negating effects, and winning the game. This set is used for validating the actions specified in card scripts to ensure they conform to the expected actions that the engine can handle.
 CANONICAL_ACTIONS: set[str] = set(SUPPORTED_EFFECT_ACTIONS) | {
     "add_seal_counter",
     "remove_seal_counter",
@@ -58,6 +59,7 @@ CANONICAL_ACTIONS: set[str] = set(SUPPORTED_EFFECT_ACTIONS) | {
     "win_the_game",
 }
 
+# This set defines the canonical conditions that are recognized by the game engine. It includes the supported condition keys as well as additional conditions that can be used in card scripts to specify when certain effects should trigger or be applied. These conditions cover a wide range of game state checks, such as card ownership, card types, turn and phase information, and specific properties of cards and players. This set is used for validating the conditions specified in card scripts to ensure they conform to the expected conditions that the engine can evaluate.
 CANONICAL_CONDITIONS: set[str] = set(SUPPORTED_CONDITION_KEYS) | {
     "controller_has",
     "opponent_has",
@@ -96,7 +98,7 @@ BACKLOG_TARGET_IDS: tuple[str, ...] = tuple(
     + [f"EV{i:03d}" for i in range(1, 111)]
 )
 
-
+# This dictionary defines the aliases for effect actions, mapping various alternative names to their canonical forms. This allows card scripts to use different names for the same action while still being recognized by the engine as valid actions. For example, "add_counter" can be used as an alias for "add_generic_counter", and "destroy" can be used as an alias for "destroy_card". This helps improve the flexibility and readability of card scripts while maintaining consistency in the underlying actions that the engine processes.
 @dataclass(slots=True)
 class CoverageSnapshot:
     target_total: int
@@ -121,7 +123,7 @@ class CoverageSnapshot:
             return 0.0
         return self.implemented_total / float(self.target_total)
 
-
+# This function generates a snapshot of the current coverage of implemented events, functions, conditions, and actions in the game engine. It counts the number of implemented items in each category and compares it to the total number of target items defined in the backlog. The resulting `CoverageSnapshot` object can be used for diagnostics and tracking progress towards full implementation coverage.
 def current_coverage_snapshot() -> CoverageSnapshot:
     return CoverageSnapshot(
         target_total=len(BACKLOG_TARGET_IDS),
@@ -132,7 +134,7 @@ def current_coverage_snapshot() -> CoverageSnapshot:
         script_count=len(runtime_cards._scripts),  # noqa: SLF001 - intentional for diagnostics
     )
 
-
+# This function validates the registered card scripts against the canonical sets of events, actions, and condition keys. It iterates through all the triggered effects in the registered scripts and checks if the events, actions, and condition keys used in those effects are recognized by the engine. If it finds any unknown items, it collects them into sets and returns a dictionary containing sorted lists of unknown events, actions, and condition keys for further review and correction.
 def _walk_condition_keys(node: Any, out: set[str]) -> None:
     if isinstance(node, dict):
         for k, v in node.items():
@@ -142,7 +144,7 @@ def _walk_condition_keys(node: Any, out: set[str]) -> None:
         for it in node:
             _walk_condition_keys(it, out)
 
-
+# This function validates the registered card scripts against the canonical sets of events, actions, and condition keys. It iterates through all the triggered effects in the registered scripts and checks if the events, actions, and condition keys used in those effects are recognized by the engine. If it finds any unknown items, it collects them into sets and returns a dictionary containing sorted lists of unknown events, actions, and condition keys for further review and correction.
 def validate_registered_scripts() -> dict[str, list[str]]:
     unknown_events: set[str] = set()
     unknown_actions: set[str] = set()

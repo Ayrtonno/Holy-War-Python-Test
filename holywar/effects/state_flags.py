@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
 
-
+# This module defines functions for managing runtime state flags in the game engine. The runtime state includes information about the current phase of the game, which player's turn it is, and various flags that indicate what actions are currently allowed for each player. The `ensure_runtime_state` function initializes the runtime state if it doesn't already exist, while the `refresh_player_flags` function updates the player-specific flags based on the current game state. The `set_phase` function is used to update the current phase of the game and refresh the player flags accordingly.
 def _player_template() -> dict[str, Any]:
     return {
         "is_turn_owner": False,
@@ -25,7 +25,7 @@ def _player_template() -> dict[str, Any]:
         "sin": 0,
     }
 
-
+# This function ensures that the runtime state dictionary exists in the game engine's state flags and initializes it with default values if it doesn't already exist. It sets up various flags related to the current phase of the game, which player's turn it is, and other state information that will be used throughout the game. The function returns the runtime state dictionary for further manipulation.
 def ensure_runtime_state(engine: "GameEngine") -> dict[str, Any]:
     root = engine.state.flags.setdefault("runtime_state", {})
     root.setdefault("phase", "setup")
@@ -45,7 +45,7 @@ def ensure_runtime_state(engine: "GameEngine") -> dict[str, Any]:
         players.setdefault(idx, _player_template())
     return root
 
-
+# This function updates the player-specific flags in the runtime state based on the current game state. It iterates through each player and sets flags indicating whether they are the turn owner, whether it's their opponent's turn, which phase of the game it is, and what actions they are allowed to take (e.g., playing cards, activating effects, attacking). It also updates counts of saints on the field and in attack/defense positions, as well as remaining inspiration and sin for each player. This function should be called whenever there is a change in the game state that affects these flags, such as changing phases or updating the active player.
 def refresh_player_flags(engine: "GameEngine") -> None:
     root = ensure_runtime_state(engine)
     players = root["players"]
@@ -72,7 +72,7 @@ def refresh_player_flags(engine: "GameEngine") -> None:
         state["remaining_inspiration"] = int(p.inspiration)
         state["sin"] = int(p.sin)
 
-
+# This function is responsible for updating the current phase of the game in the runtime state and refreshing the player flags accordingly. It takes the game engine and the new phase as arguments, updates the relevant flags in the runtime state to reflect the new phase, and then calls `refresh_player_flags` to ensure that all player-specific flags are updated based on the new phase. This function should be called whenever there is a transition to a new phase in the game (e.g., from draw phase to main phase) to keep the runtime state consistent with the current game state.
 def set_phase(engine: "GameEngine", phase: str) -> None:
     root = ensure_runtime_state(engine)
     root["phase"] = phase

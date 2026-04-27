@@ -11,13 +11,14 @@ from holywar.effects.runtime import runtime_cards, _norm
 from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.scripting_api import RuleEventContext
 
-
+# This mixin class provides targeting and board-picker logic used by play and activate flows in the Holy War game. It includes methods for cloning the game engine state for simulation purposes, checking if certain actions (attack, activate, play) can be performed on specific targets, determining valid targets based on the game state, resolving widgets for highlighting potential targets on the board, and opening a target picker dialog for the user to select targets. The mixin relies on the game engine's state and card scripts to determine valid actions and targets, and it interacts with the GUI to provide visual feedback and selection options for the player.
 class GUITargetingMixin:
     """Targeting and board-picker logic used by play/activate flows."""
 
     if TYPE_CHECKING:
         def __getattr__(self, _name: str) -> Any: ...
 
+    # This attribute is used to store a snapshot of the game state for simulation purposes. It is initialized as None and is populated with a dictionary representation of the game state when the `_clone_engine` method is called for the first time. The snapshot allows for efficient cloning of the game engine state without needing to serialize and deserialize the entire state multiple times during targeting simulations.
     def _clone_engine(self) -> GameEngine | None:
         if self.engine is None:
             return None
@@ -30,6 +31,7 @@ class GUITargetingMixin:
         cloned_state = GameState.from_dict(self._sim_state_snapshot)
         return GameEngine(cloned_state, seed=self.seed)
 
+    # This method checks if an attack action can be performed from a specified slot to a target slot for a given player index. It clones the game engine state using the `_clone_engine` method and simulates the attack action. The method returns True if the attack action is valid and effective (i.e., it does not result in an error message indicating an invalid target), and False otherwise.
     def _can_attack_target(self, player_idx: int, from_slot: int, target_slot: int | None) -> bool:
         sim = self._clone_engine()
         if sim is None:
@@ -37,6 +39,7 @@ class GUITargetingMixin:
         res = sim.attack(player_idx, from_slot, target_slot)
         return bool(res.ok and self._is_effective_result_message(res.message))
 
+    # This method checks if an ability can be activated from a specified source to a target for a given player index. It clones the game engine state using the `_clone_engine` method and simulates the activation action. The method returns True if the activation action is valid and effective (i.e., it does not result in an error message indicating an invalid target), and False otherwise.
     def _can_activate_target(self, player_idx: int, source: str, target: str | None) -> bool:
         sim = self._clone_engine()
         if sim is None:
@@ -44,6 +47,7 @@ class GUITargetingMixin:
         res = sim.activate_ability(player_idx, source, target)
         return bool(res.ok and self._is_effective_result_message(res.message))
 
+    # This method checks if a card can be played from a specified hand index to a target for a given player index. It clones the game engine state using the `_clone_engine` method and simulates the play action. The method returns True if the play action is valid and effective (i.e., it does not result in an error message indicating an invalid target), and False otherwise. The `quick` parameter allows for a faster simulation that may skip certain checks, which can be useful for quickly validating potential targets without needing a full simulation of the play action.
     def _can_play_target(self, player_idx: int, hand_idx: int, target: str | None, quick: bool = False) -> bool:
         sim = self._clone_engine()
         if sim is None:
@@ -54,6 +58,7 @@ class GUITargetingMixin:
             res = sim.play_card(player_idx, hand_idx, target)
         return bool(res.ok and self._is_effective_result_message(res.message))
 
+    # This method checks if a result message from a simulated action indicates an effective outcome (i.e., the action was successful and did not encounter an error related to invalid targets). It normalizes the message text and checks for the presence of certain keywords that typically indicate an ineffective result, such as "no target", "invalid target", "unavailable", "impossible", etc. If any of these markers are found in the message, the method returns False, indicating that the result is not effective. Otherwise, it returns True.
     def _is_effective_result_message(self, msg: str | None) -> bool:
         text = (msg or "").lower().strip()
         if not text:
@@ -77,9 +82,11 @@ class GUITargetingMixin:
         ]
         return not any(m in text for m in blocked_markers)
 
+    # This method returns a list of candidate tokens that can be used for targeting on the board. The tokens represent different slots and positions on the game board, such as attack slots (a1, a2, a3), defense slots (d1, d2, d3), artifact slots (r1, r2, r3, r4), and the building slot (b). These tokens are used in various targeting methods to identify potential targets for actions like attacks, activations, and plays.
     def _candidate_slot_tokens(self) -> list[str]:
         return ["a1", "a2", "a3", "d1", "d2", "d3", "r1", "r2", "r3", "r4", "b"]
 
+    # This method splits a board token into its side and base components. The token is expected to be in the format "side:base", where "side" indicates whether the token refers to the player's own side ("own") or the opponent's side ("enemy"), and "base" indicates the specific slot or position on the board (e.g., "a1", "d2", "r3", "b"). If the token does not contain a colon, it is treated as having no explicit side, and the method returns (None, token). If the side component is recognized as one of several keywords indicating "own" or "enemy", it is normalized accordingly. Otherwise, the method returns (None, raw), treating the entire token as the base without an explicit side.
     def _split_board_token(self, token: str) -> tuple[str | None, str]:
         raw = str(token or "").strip()
         if ":" not in raw:
@@ -95,12 +102,14 @@ class GUITargetingMixin:
             return ("enemy", base)
         return (None, raw)
 
+    # This method retrieves the card script associated with a given card instance identified by its UID. It checks if the game engine is initialized and if the specified UID corresponds to a valid card instance in the game state. If both conditions are met, it retrieves the card's definition name and looks up the corresponding script in the runtime cards registry. The method returns the card script if found, or None if the engine is not initialized or if the UID does not correspond to a valid card instance.
     def _card_script(self, uid: str):
         if self.engine is None:
             return None
         card_name = self.engine.state.instances[uid].definition.name
         return runtime_cards.get_script(card_name)
 
+    # This method retrieves the raw card script specification for a given card instance identified by its UID. It checks if the game engine is initialized and if the specified UID corresponds to a valid card instance in the game state. If both conditions are met, it retrieves the card's definition name and looks up the corresponding raw script specification in the registry of card scripts. The method returns the raw script specification as a dictionary if found, or an empty dictionary if the engine is not initialized, if the UID does not correspond to a valid card instance, or if no matching script specification is found.
     def _raw_card_script(self, uid: str) -> dict:
         if self.engine is None:
             return {}
@@ -117,6 +126,7 @@ class GUITargetingMixin:
 
         return {}
 
+    # This method retrieves a list of manual targeting specifications for the "on play" actions of a card identified by its UID. It checks the raw card script for the specified UID and iterates through the "on_play_actions" defined in the script. For each action, it checks if it has a "target" field and if the corresponding action specification in the card script has a condition that evaluates to True in the current game context. If both conditions are met, it checks if the target specification requires manual selection based on certain fields (e.g., zone, card_filter, min_targets, etc.) and if the target type is "selected_target" or "selected_targets". If these criteria are satisfied, it adds the action index and target specification to the output list. The method returns a list of tuples containing the action index and target specification for each manual targeting action found.
     def _manual_play_target_actions(self, uid: str):
         raw = self._raw_card_script(uid)
         script = self._card_script(uid)
@@ -154,24 +164,28 @@ class GUITargetingMixin:
                 out.append((i, t))
         return out
 
+    # This method retrieves the first manual targeting specification for the "on activate" actions of a card identified by its UID. It checks the raw card script for the specified UID and iterates through the "on_activate_actions" defined in the script. For each action, it checks if it has a "target" field and if the corresponding action specification in the card script has a condition that evaluates to True in the current game context. If both conditions are met, it checks if the target specification requires manual selection based on certain fields (e.g., zone, card_filter, min_targets, etc.) and if the target type is "selected_target" or "selected_targets". If these criteria are satisfied, it returns the target specification for the first manual targeting action found. If no such action is found, it returns None.
     def _first_play_target_spec(self, uid: str):
         actions = self._manual_play_target_actions(uid)
         if not actions:
             return None
         return actions[0][1]
 
+    # This method retrieves the first manual targeting specification for the "on activate" actions of a card identified by its UID. It checks the raw card script for the specified UID and iterates through the "on_activate_actions" defined in the script. For each action, it checks if it has a "target" field and if the corresponding action specification in the card script has a condition that evaluates to True in the current game context. If both conditions are met, it checks if the target specification requires manual selection based on certain fields (e.g., zone, card_filter, min_targets, etc.) and if the target type is "selected_target" or "selected_targets". If these criteria are satisfied, it returns the target specification for the first manual targeting action found. If no such action is found, it returns None.
     def _play_targeting_mode(self, uid: str) -> str:
         script = self._card_script(uid)
         if script is None:
             return "auto"
         return str(script.play_targeting or "auto").strip().lower() or "auto"
 
+    # This method retrieves the targeting mode for the "on activate" actions of a card identified by its UID. It checks the card script for the specified UID and returns the value of the "activate_targeting" field, which indicates the targeting mode to be used when activating abilities of that card. If the card script is not found or if the "activate_targeting" field is not defined, it defaults to returning "auto". The targeting mode can influence how valid targets are determined and how the target picker dialog is presented to the user during activation.
     def _activate_targeting_mode(self, uid: str) -> str:
         script = self._card_script(uid)
         if script is None:
             return "auto"
         return str(script.activate_targeting or "auto").strip().lower() or "auto"
 
+    # This method retrieves a list of candidate tokens for guided targeting based on the "on play" actions of a card identified by its UID. It checks the raw card script for the specified UID and iterates through the "on_play_actions" defined in the script. For each action, it checks if it has a "target" field and if the corresponding action specification in the card script has a condition that evaluates to True in the current game context. If both conditions are met, it checks if the target specification is of type "selected_target" or "selected_targets". If so, it adds the candidate tokens derived from the target specification to the output list. The method returns a list of candidate tokens that can be used for guided targeting when playing the card.
     def _play_owner_idx(self, uid: str) -> int:
         if self.engine is None:
             return 0
@@ -183,6 +197,7 @@ class GUITargetingMixin:
             return 1 - (self.current_human_idx() or 0)
         return self.current_human_idx() or 0
 
+    # This method retrieves a list of candidate tokens for guided targeting based on the "on activate" actions of a card identified by its UID. It checks the raw card script for the specified UID and iterates through the "on_activate_actions" defined in the script. For each action, it checks if it has a "target" field and if the corresponding action specification in the card script has a condition that evaluates to True in the current game context. If both conditions are met, it checks if the target specification is of type "selected_target" or "selected_targets". If so, it adds the candidate tokens derived from the target specification to the output list. The method returns a list of candidate tokens that can be used for guided targeting when activating abilities of the card.
     def _valid_play_targets(self, player_idx: int, hand_idx: int, uid: str, quick: bool) -> list[str]:
         if self.engine is None:
             return []
@@ -195,6 +210,7 @@ class GUITargetingMixin:
                 out.append(token)
         return out
 
+    # This method retrieves a list of valid attack target tokens for a given player index and source slot. It checks each potential target slot (including None for direct attacks) to see if an attack action can be performed from the source slot to that target slot using the `_can_attack_target` method. If an attack is valid for a target slot, it adds the corresponding token (e.g., "a1", "d2", "r3", "b") or None to the output list. The method returns a list of valid attack target tokens that the player can choose from when performing an attack action.
     def _valid_attack_targets(self, player_idx: int, from_slot: int) -> list[int | None]:
         out: list[int | None] = []
         if self._can_attack_target(player_idx, from_slot, None):
@@ -204,6 +220,7 @@ class GUITargetingMixin:
                 out.append(slot)
         return out
 
+    # This method retrieves a list of valid activation target tokens for a given player index, source, and card UID. It first determines the targeting mode for the card's activation based on its script. Depending on the targeting mode (e.g., "board_card", "auto", "guided", "manual"), it retrieves a list of candidate tokens that can be targeted for activation. It then checks each candidate token using the `_can_activate_target` method to determine if it is a valid target for activation. If a candidate token is valid, it is added to the output list. The method returns a list of valid activation target tokens that the player can choose from when activating an ability of the card.
     def _valid_activation_targets(self, player_idx: int, source: str, uid: str | None) -> list[str]:
         if self.engine is None:
             return []
@@ -225,6 +242,7 @@ class GUITargetingMixin:
                 out.append(token)
         return out
 
+    # This method checks if there are any valid activation targets available for a given player index and source. It first checks if the game engine is initialized and if the specified source can be resolved to a valid card instance UID. If both conditions are met, it retrieves the card script for the corresponding UID and checks if the activation mode is one that requires manual targeting (e.g., "scripted", "custom") and if there are defined activation actions in the script. If these criteria are satisfied, it then checks if there is a valid activation target using the `_can_activate_target` method or if there are any valid activation targets returned by the `_valid_activation_targets` method. If either of these checks returns True, it indicates that there is at least one valid activation target available, and the method returns True. Otherwise, it returns False.
     def _activation_has_any_valid_option(self, player_idx: int, source: str) -> bool:
         if self.engine is None:
             return False
@@ -251,6 +269,7 @@ class GUITargetingMixin:
             return True
         return bool(self._valid_activation_targets(player_idx, source, uid))
 
+    # This method checks if there are any valid play targets available for a given player index, hand index, and card UID. It first checks if the game engine is initialized and if the specified UID corresponds to a valid card instance in the game state. If both conditions are met, it retrieves the card script for the corresponding UID and checks if the play targeting mode is one that requires manual targeting (e.g., "scripted", "custom") and if there are defined on-play actions in the script. If these criteria are satisfied, it then checks if there is a valid play target using the `_can_play_target` method or if there are any valid play targets returned by the `_valid_play_targets` method. If either of these checks returns True, it indicates that there is at least one valid play target available, and the method returns True. Otherwise, it returns False.
     def _clear_slot_highlights(self) -> None:
         for widget, old in self._slot_highlights:
             try:
@@ -259,6 +278,7 @@ class GUITargetingMixin:
                 pass
         self._slot_highlights.clear()
 
+    # This method checks if a given token corresponds to a valid board token that can be targeted for actions such as attacks or activations. It uses the `_split_board_token` method to parse the token and then checks if the base component of the token matches known patterns for attack slots (a1, a2, a3), defense slots (d1, d2, d3), artifact slots (r1, r2, r3, r4), or the building slot (b). The method returns True if the token is recognized as a valid board token, and False otherwise.
     def _is_board_token(self, token: str) -> bool:
         _side, base = self._split_board_token(token)
 
@@ -272,6 +292,7 @@ class GUITargetingMixin:
             return 1 <= int(base[1]) <= 4
         return False
 
+    # This method retrieves hints for card targeting based on the card's UID. It checks the play targeting mode for the specified UID and returns a tuple of two boolean values indicating whether the card can target the player's own saint (True/False) and whether it can target the opponent's saint (True/False). The method also checks for manual targeting specifications in the card's script and determines if the target zones include the field and if the owner of the target is specified as "me", "opponent", or "any". Based on these checks, it sets the appropriate hints for targeting. If no specific targeting information is found, it defaults to returning (False, False).
     def _card_target_hints(self, card_uid: str | None) -> tuple[bool, bool]:
         if self.engine is None or card_uid is None:
             return (False, False)
@@ -302,6 +323,7 @@ class GUITargetingMixin:
 
         return (False, False)
 
+    # This method resolves a given token to a specific widget on the game board that can be highlighted as a potential target for actions such as attacks or activations. It takes into account the player's own index, an optional side hint (indicating whether to prioritize the player's own side or the opponent's side), and an optional card UID for additional targeting hints. The method checks if the token corresponds to a valid board token and then determines which widget on the board it refers to based on the current game state and the specified hints. If a valid widget is found for the token, it is returned; otherwise, the method returns None.
     def _resolve_highlight_widget(
         self,
         token: str,
@@ -414,6 +436,7 @@ class GUITargetingMixin:
             return None
         return None
 
+    # This method highlights the widgets corresponding to the specified target tokens on the game board. It first clears any existing highlights and then iterates through the list of target tokens. For each token, it resolves the corresponding widget using the `_resolve_highlight_widget` method, taking into account the player's own index, an optional side hint, and an optional card UID for additional targeting hints. If a valid widget is found for a token, it applies a visual highlight to indicate that it is a potential target. The method also keeps track of the original configuration of each highlighted widget so that it can be restored later when the highlights are cleared.
     def _set_slot_highlights(
         self,
         targets: list[str],
@@ -455,6 +478,7 @@ class GUITargetingMixin:
                 # ttk widgets do not always support relief/borderwidth in all themes.
                 continue
 
+    # This method opens a target picker dialog for the player to select targets on the game board. It takes various parameters to customize the behavior of the target picker, such as the title and prompt text, candidate tokens for targeting, whether multiple targets can be selected, limits on the number of targets, whether manual input is allowed, and hints for targeting based on a card UID. The method creates a modal dialog with a list of candidate targets and allows the player to select from them or enter a manual target if allowed. It returns a tuple indicating whether the selection was confirmed (True/False) and the selected target token (or None if no selection was made).
     def _open_board_target_picker(
         self,
         *,
@@ -476,11 +500,13 @@ class GUITargetingMixin:
 
         own_idx = self.current_human_idx() or 0
 
+        # If choices are not provided, generate them from the candidate tokens. Each choice is a tuple of (label, token), where the label is a user-friendly description of the token and the token is the actual identifier used for targeting. The `_format_guided_candidate` method is used to create the label for each candidate token. If choices are provided, they are normalized by stripping whitespace and removing duplicates while preserving order. Tokens that are empty or have already been seen are skipped during normalization.
         if choices is None:
             choices = []
             for token in (candidates or []):
                 choices.append((self._format_guided_candidate(token, own_idx), token))
 
+        # Normalize choices by stripping whitespace and removing duplicates while preserving order. This ensures that the list of choices presented to the player is clean and does not contain redundant entries. The normalized choices are stored in a new list, and a set is used to track seen tokens to efficiently skip duplicates.
         normalized_choices: list[tuple[str, str]] = []
         seen_tokens: set[str] = set()
         for label, token in choices:
@@ -490,18 +516,22 @@ class GUITargetingMixin:
             normalized_choices.append((label, token))
             seen_tokens.add(token)
 
+        # If there are no valid choices and manual input is not allowed and selecting none is not allowed, then there is nothing to select and the method can return immediately with a successful result but no selection.
         if not normalized_choices and not allow_manual and not allow_none:
             return (True, None)
 
+        # Extract the list of tokens from the normalized choices and determine which ones correspond to valid board tokens that can be highlighted. This is done by iterating through the normalized choices and using the `_resolve_highlight_widget` method to check if each token can be resolved to a valid widget on the board. Tokens that can be resolved are added to the list of `board_tokens`, which will be highlighted in the target picker dialog to indicate that they are valid targets.
         board_tokens: list[str] = []
         for _label, token in normalized_choices:
             if self._resolve_highlight_widget(token, own_idx=own_idx, side_hint=side_hint, card_uid=card_uid) is not None:
                 board_tokens.append(token)
-
+        
+        # Initialize the list of selected tokens and the result dictionary.
         selected_tokens: list[str] = []
         result: dict[str, str | None] = {"value": ""}
         bindings: list[tuple[tk.Widget, str]] = []
 
+        # Create a new top-level window for the target picker dialog. The window is configured with the specified title and centered on the screen with a fixed size. It is set as transient to the main application window to ensure it behaves as a modal dialog. The background color of the window is set according to the target picker palette defined in the application's theme.
         win = tk.Toplevel(cast(Any, self))
         win.title(title)
         self._center_toplevel(win, 700, 560)
@@ -514,6 +544,7 @@ class GUITargetingMixin:
 
         ttk.Label(container, text=prompt, wraplength=660, style="TargetPicker.TLabel").pack(anchor="w", pady=(0, 4))
 
+        # Display instructions for selecting targets, which may vary depending on whether multiple selection is allowed and if there are limits on the number of targets. If multiple selection is allowed, the instructions will indicate how many targets can be selected, and if there are specific minimum or maximum limits, those will be included in the instructions as well. If multiple selection is not allowed, the instructions will simply indicate that the player can select from the list or by clicking on the field.
         if allow_multi:
             lim = ""
             if min_targets > 0 and max_targets is not None and min_targets == max_targets:
@@ -553,6 +584,7 @@ class GUITargetingMixin:
 
         token_to_index = {token: i for i, (_label, token) in enumerate(normalized_choices)}
 
+        # If manual input is allowed, create an entry field for the player to enter a manual target. The value entered in this field will be considered as a valid selection if it is not empty, regardless of the selections made in the listbox. This allows for flexibility in targeting, enabling players to specify targets that may not be listed as candidates or to use custom tokens that are not recognized by the automatic highlighting system.
         manual_var = tk.StringVar(value="")
         if allow_manual:
             row = ttk.Frame(container, style="TargetPicker.TFrame")
@@ -565,6 +597,7 @@ class GUITargetingMixin:
         btn_ok = ttk.Button(btn_bar, text="OK", style="TargetPicker.Primary.TButton")
         btn_ok.pack(side="left")
 
+        # If selecting none is allowed, add a button for "Senza Target" (Without Target) that allows the player to confirm their selection without choosing any targets. This provides an option for players who may want to activate an ability or perform an action that does not require a target, or who may want to skip targeting altogether.
         def _selection_ok() -> bool:
             raw_manual = manual_var.get().strip() if allow_manual else ""
             if raw_manual:
@@ -573,6 +606,7 @@ class GUITargetingMixin:
             upper = max_targets if max_targets is not None else (9999 if allow_multi else 1)
             return min_targets <= count <= upper
 
+        # This function synchronizes the selection in the listbox with the current list of selected tokens. It clears the current selection in the listbox and then iterates through the selected tokens, using the `token_to_index` mapping to find the corresponding index in the listbox for each token. If an index is found, it sets that index as selected in the listbox. This ensures that the visual representation of the selection in the listbox accurately reflects the internal state of which tokens are currently selected.
         def _sync_listbox() -> None:
             lb.selection_clear(0, tk.END)
             for token in selected_tokens:
@@ -580,6 +614,7 @@ class GUITargetingMixin:
                 if idx is not None:
                     lb.selection_set(idx)
 
+        # This function refreshes the state of the target picker dialog, updating the counter of selected targets, the display of selected targets, the highlights on the board for valid targets, and the enabled/disabled state of the OK button based on whether the current selection is valid according to the specified criteria (e.g., minimum and maximum number of targets). It constructs a user-friendly message indicating how many targets are currently selected and what the limits are, and it updates the display accordingly. It also calls `_set_slot_highlights` to visually indicate which tokens on the board are currently selected as targets.
         def _refresh_state() -> None:
             upper_txt = str(max_targets) if max_targets is not None else ("n" if allow_multi else "1")
             counter_var.set(f"Selezionati {len(selected_tokens)} bersagli (min {min_targets}, max {upper_txt})")
@@ -598,11 +633,13 @@ class GUITargetingMixin:
             self._set_slot_highlights(board_tokens, selected_targets=selected_tokens, card_uid=card_uid, side_hint=side_hint)
             btn_ok.configure(state=("normal" if _selection_ok() else "disabled"))
 
+        # This function handles the logic for toggling the selection of a token when it is clicked on the board. If multiple selection is allowed, clicking a token will add it to the selection if it is not already selected, or remove it from the selection if it is already selected. If multiple selection is not allowed, clicking a token will set it as the only selected token, or clear the selection if it is already selected. After updating the selection based on the click, it calls `_refresh_state` to update the display and state of the target picker dialog accordingly.
         def _set_single(token: str) -> None:
             selected_tokens.clear()
             selected_tokens.append(token)
             _refresh_state()
 
+        # This function is called when a token on the board is clicked. It toggles the selection of the token based on whether multiple selection is allowed and updates the list of selected tokens accordingly. If multiple selection is allowed, it adds or removes the token from the selection. If multiple selection is not allowed, it sets the token as the only selected token or clears the selection if it was already selected. After updating the selection, it calls `_refresh_state` to update the visual state of the target picker dialog.
         def _toggle_token(token: str):
             if allow_multi:
                 if token in selected_tokens:
@@ -620,6 +657,7 @@ class GUITargetingMixin:
             _refresh_state()
             return "break"
 
+        # This function is called when the selection in the listbox changes. It retrieves the currently selected indices from the listbox and maps them to the corresponding tokens using the `normalized_choices` list. It then updates the list of selected tokens based on the new selection, taking into account whether multiple selection is allowed and whether the order of selection should be preserved. If multiple selection is allowed and order preservation is enabled, it maintains the order of previously selected tokens while adding new selections in the order they appear in the listbox. After updating the selection, it calls `_refresh_state` to update the visual state of the target picker dialog.
         def _on_listbox_select(_event=None):
             idxs = list(lb.curselection())
             tokens = [normalized_choices[i][1] for i in idxs]
@@ -654,6 +692,7 @@ class GUITargetingMixin:
 
         lb.bind("<<ListboxSelect>>", _on_listbox_select)
 
+        # Bind click events to the widgets corresponding to the board tokens so that clicking on them will toggle their selection in the target picker dialog. The `_toggle_token` function is called when a token widget is clicked, and it updates the selection state accordingly. The bindings are stored in a list so that they can be cleaned up later when the dialog is closed.
         for token in board_tokens:
             widget = self._resolve_highlight_widget(token, own_idx=own_idx, side_hint=side_hint, card_uid=card_uid)
             if widget is None:
@@ -661,6 +700,7 @@ class GUITargetingMixin:
             func_id = widget.bind("<Button-1>", lambda e, t=token: _toggle_token(t), add="+")
             bindings.append((widget, func_id))
 
+        # This function is responsible for cleaning up the event bindings and highlights when the target picker dialog is closed. It iterates through the list of bindings and attempts to unbind the click events from the corresponding widgets. It also calls `_clear_slot_highlights` to remove any visual highlights from the board tokens that were highlighted during the target selection process. This ensures that the game board returns to its normal state after the target picker dialog is closed.
         def _cleanup() -> None:
             for widget, func_id in bindings:
                 try:
@@ -669,6 +709,7 @@ class GUITargetingMixin:
                     pass
             self._clear_slot_highlights()
 
+        # This function is called when the OK button is clicked in the target picker dialog. It first checks if there is a valid manual input if manual input is allowed. If there is a valid manual input, it sets the result value to the manual input and closes the dialog. If there is no valid manual input, it checks if the current selection of tokens is valid according to the specified criteria (e.g., minimum and maximum number of targets). If the selection is not valid, it shows a warning message to the user indicating what the requirements are for a valid selection. If the selection is valid, it sets the result value to a comma-separated string of the selected tokens (or None if no tokens are selected and allow_none is True), cleans up the bindings and highlights, and closes the dialog.
         def _ok() -> None:
             raw_manual = manual_var.get().strip() if allow_manual else ""
             if raw_manual:
@@ -677,6 +718,7 @@ class GUITargetingMixin:
                 win.destroy()
                 return
 
+            # Validate the selection of tokens based on the specified criteria. If the selection is not valid, show a warning message to the user indicating what the requirements are for a valid selection. The message will vary depending on whether there are specific limits on the number of targets and whether multiple selection is allowed. If the selection is valid, proceed to set the result value and close the dialog.
             if not _selection_ok():
                 if max_targets is not None and min_targets == max_targets:
                     messagebox.showwarning("Selezione non valida", f"Devi selezionare esattamente {min_targets} bersagli.")
@@ -694,11 +736,13 @@ class GUITargetingMixin:
             _cleanup()
             win.destroy()
 
+        # This function is called when the "Senza Target" (Without Target) button is clicked, if selecting none is allowed. It sets the result value to None to indicate that no target was selected, cleans up the bindings and highlights, and closes the dialog. This provides a way for the player to confirm their choice of not selecting any targets.
         def _no_target() -> None:
             result["value"] = None
             _cleanup()
             win.destroy()
 
+        # This function is called when the dialog is closed without confirming a selection (e.g., by clicking the close button on the window). It sets the result value to an empty string to indicate that no valid selection was made, cleans up the bindings and highlights, and closes the dialog. This ensures that if the player exits the target picker without making a valid selection, the method will return a consistent result indicating that no selection was made.
         def _cancel() -> None:
             result["value"] = ""
             _cleanup()

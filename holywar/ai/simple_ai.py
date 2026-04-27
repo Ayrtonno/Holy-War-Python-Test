@@ -107,7 +107,7 @@ def _permanent_value(engine: GameEngine, uid: str) -> int:
             value += 10
         if "evoca" in text or "token" in text:
             value += 12
-        if "distrugg" in text or "escomunic" in text:
+        if "distrugg" in text or "scomunic" in text:
             value += 12
         if "ogni fine turno" in text or "fine turno" in text:
             value += 10

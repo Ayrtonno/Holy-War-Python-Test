@@ -19,10 +19,10 @@ from holywar.data.deck_builder import (
 )
 from holywar.data.importer import load_cards_from_xlsx, write_cards_json, load_cards_json
 
-
+# This module implements a command-line interface for the Holy War game engine. It allows users to load card data, start new games, play against an AI opponent, and manage game state through various commands. The CLI provides options for loading card data from an Excel file, exporting test decks, managing premade decks, and saving/loading game states. The main game loop handles user input for playing cards, attacking, activating abilities, and other game actions, while also allowing for quick reactions from the opponent. The CLI is designed to be a simple terminal-based interface for testing and playing the Holy War game engine.
 DEFAULT_JSON = bundled_data_dir() / "cards.json"
 
-
+# This function builds the argument parser for the CLI, defining the various command-line options that can be used to configure the game. It includes options for specifying the path to the card data, loading a saved game state, exporting test decks, managing premade decks, setting a random seed, and configuring AI behavior. The parser is used to parse the command-line arguments when the CLI is executed.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Holy War - MVP terminale")
     parser.add_argument("--deck-xlsx", type=str, default=None, help="Percorso a Holy War.xlsx")
@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ai-delay", type=float, default=1.2, help="Secondi di pausa tra azioni AI")
     return parser
 
-
+# This function ensures that the card data is loaded and available for the game engine. It checks if a JSON file with the card data exists at the specified path, and if not, it attempts to load the card data from an Excel file and write it to the JSON file for future use. If neither source is available, it raises an error prompting the user to provide the necessary data. This function is essential for initializing the game engine with the correct card information before starting a game.
 def ensure_cards(args: argparse.Namespace):
     json_path = Path(args.cards_json)
     if args.deck_xlsx:
@@ -46,7 +46,7 @@ def ensure_cards(args: argparse.Namespace):
         return load_cards_json(json_path)
     raise SystemExit("Serve --deck-xlsx almeno al primo avvio per generare il JSON carte.")
 
-
+# This function prints the current state of the game in a human-readable format. It displays information about the current phase, turn number, active player, and the state of each player's hand, deck, attack/defense/artifact/building slots. The function uses helper functions to format the card information for display. This is useful for players to understand the current game state and make informed decisions during their turn.
 def print_state(engine: GameEngine) -> None:
     st = engine.state
     print("\n" + "=" * 70)
@@ -64,7 +64,7 @@ def print_state(engine: GameEngine) -> None:
         print("  Edificio:", _fmt_card(engine, p.building))
     print("=" * 70)
 
-
+# This function formats the information of a card instance for display. It takes the game engine and the unique identifier of the card as parameters. It retrieves the card instance from the game state and constructs a string that includes the card's name, current faith, and effective strength (if applicable). If the card is not present (e.g., an empty slot), it returns a placeholder string. This function is used to display the cards in the player's attack/defense/artifact/building slots in a readable format.
 def _fmt_card(engine: GameEngine, uid: str | None) -> str:
     if not uid:
         return "-"
@@ -78,11 +78,11 @@ def _fmt_card(engine: GameEngine, uid: str | None) -> str:
     strength = f" P:{strength_val}" if strength_val is not None else ""
     return f"{inst.definition.name}{faith}{strength}"
 
-
+# This function formats a list of card instances for display by calling the `_fmt_card` function on each card in the list and joining the results with a separator. It is used to display the contents of the player's attack, defense, artifact, and building slots in a readable format.
 def _fmt_slots(engine: GameEngine, slots: list[str | None]) -> str:
     return " | ".join(_fmt_card(engine, uid) for uid in slots)
 
-
+# This function prints the current state of the game in a human-readable format. It displays information about the current phase, turn number, active player, and the state of each player's hand, deck, attack/defense/artifact/building slots. The function uses helper functions to format the card information for display. This is useful for players to understand the current game state and make informed decisions during their turn.
 def print_hand(engine: GameEngine, player_idx: int) -> None:
     p = engine.state.players[player_idx]
     print(f"\nMano di {p.name}:")
@@ -91,7 +91,7 @@ def print_hand(engine: GameEngine, player_idx: int) -> None:
         cost = c.faith if c.faith is not None else 0
         print(f"  [{idx}] {c.name} ({c.card_type}) costo={cost} croci={c.crosses}")
 
-
+# This function prompts the player to choose an expansion from the available options. It displays a list of expansions and asks the player to input the corresponding index to select one. The function validates the input and returns the name of the chosen expansion. This is used during game setup to allow players to select which expansion they want to use for their game.
 def choose_expansion(cards, prompt: str) -> str:
     expansions = available_religions(cards)
     print(prompt)
@@ -103,7 +103,7 @@ def choose_expansion(cards, prompt: str) -> str:
             return expansions[int(val)]
         print("Scelta non valida.")
 
-
+# This function prompts the player to choose a premade deck for a given religion. It displays a list of available premade decks for the specified religion and asks the player to input the corresponding index to select one. The function also includes an option for "Auto (deck test)" which allows the engine to automatically select a deck for testing purposes. The function validates the input and returns the identifier of the chosen premade deck, or `None` if the auto option is selected. This is used during game setup to allow players to select a premade deck based on their chosen religion.
 def choose_premade_for_religion(religion: str, prompt: str) -> str | None:
     decks = available_premade_decks(religion)
     print(prompt)
@@ -120,7 +120,7 @@ def choose_premade_for_religion(religion: str, prompt: str) -> str | None:
                 return decks[idx - 1][0]
         print("Scelta non valida.")
 
-
+# This function prompts the player to choose a premade deck for a given religion. It displays a list of available premade decks for the specified religion and asks the player to input the corresponding index to select one. The function also includes an option for "Auto (deck test)" which allows the engine to automatically select a deck for testing purposes. The function validates the input and returns the identifier of the chosen premade deck, or `None` if the auto option is selected. This is used during game setup to allow players to select a premade deck based on their chosen religion.
 def prompt_reaction(engine: GameEngine, defender_idx: int) -> None:
     p = engine.state.players[defender_idx]
     while True:
@@ -145,7 +145,7 @@ def prompt_reaction(engine: GameEngine, defender_idx: int) -> None:
             continue
         print("Comando reazione non valido.")
 
-
+# This function runs the AI's turn in an automated manner. It allows the AI to take up to 12 actions during its turn, checking after each action if the game has been won. It also prints the logs of the AI's actions and prompts the opponent for reactions after each action that is not a pass. The function includes a delay between AI actions to simulate thinking time and improve the user experience. After the AI finishes its actions or decides to pass, it ends its turn.
 def run_ai_turn(engine: GameEngine, rng: random.Random, player_idx: int, ai_delay: float) -> None:
     for _ in range(12):
         if engine.state.winner is not None:
@@ -165,7 +165,7 @@ def run_ai_turn(engine: GameEngine, rng: random.Random, player_idx: int, ai_dela
             time.sleep(ai_delay)
     engine.end_turn()
 
-
+# This function runs the main game loop, allowing players to take turns and perform actions until a winner is determined. It handles user input for various commands such as playing cards, attacking, activating abilities, saving/loading game states, and more. The function also manages the flow of the game, including starting turns, ending turns, and prompting for reactions when necessary. The game state is printed after each action to keep players informed of the current situation. Once a winner is determined, it announces the winner and ends the game.
 def run_game(engine: GameEngine, mode: str, seed: int, ai_delay: float) -> None:
     rng = random.Random(seed)
     while engine.state.winner is None:
@@ -261,7 +261,7 @@ def run_game(engine: GameEngine, mode: str, seed: int, ai_delay: float) -> None:
     winner = engine.state.players[engine.state.winner].name
     print(f"\nPartita terminata. Vincitore: {winner}")
 
-
+# This function runs the main game loop, allowing players to take turns and perform actions until a winner is determined. It handles user input for various commands such as playing cards, attacking, activating abilities, saving/loading game states, and more. The function also manages the flow of the game, including starting turns, ending turns, and prompting for reactions when necessary. The game state is printed after each action to keep players informed of the current situation. Once a winner is determined, it announces the winner and ends the game.
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()

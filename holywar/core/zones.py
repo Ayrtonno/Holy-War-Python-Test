@@ -80,7 +80,7 @@ def remove_from_board(engine: "GameEngine", player: PlayerState, uid: str) -> No
                 f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
             )
 
-
+# Promotes a card from defense to attack if there is an empty attack slot and a valid card in the corresponding defense slot.
 def promote_defense_frontline(engine: "GameEngine", player_idx: int) -> None:
     player = engine.state.players[player_idx]
     for i in range(min(ATTACK_SLOTS, DEFENSE_SLOTS)):
@@ -98,7 +98,7 @@ def promote_defense_frontline(engine: "GameEngine", player_idx: int) -> None:
         player.defense[i] = None
         engine.state.log(f"{inst.definition.name} avanza dalla difesa all'attacco.")
 
-
+# Checks if the given equipment UID is currently linked to a host card and returns the host's UID if so.
 def _equipped_target_uid(engine: "GameEngine", equipment_uid: str) -> str | None:
     inst = engine.state.instances.get(equipment_uid)
     if inst is None:
@@ -111,7 +111,7 @@ def _equipped_target_uid(engine: "GameEngine", equipment_uid: str) -> str | None
             return target_uid
     return None
 
-
+# Clears any equipment link tags from the given equipment and its current host, optionally specifying the target UID to avoid redundant lookups.
 def _clear_equipment_link(engine: "GameEngine", equipment_uid: str, target_uid: str | None = None) -> None:
     equip_inst = engine.state.instances.get(equipment_uid)
     if equip_inst is None:
@@ -125,7 +125,7 @@ def _clear_equipment_link(engine: "GameEngine", equipment_uid: str, target_uid: 
         target_inst = engine.state.instances[target_uid]
         target_inst.blessed = [tag for tag in target_inst.blessed if str(tag) != f"equipped_by:{equipment_uid}"]
 
-
+# Handles cleanup of equipment links when a card leaves the field, including detaching equipment from hosts and sending attached equipment to the graveyard if they also leave the field.
 def cleanup_equipment_links_on_leave_field(engine: "GameEngine", uid: str) -> None:
     # If the leaving card is equipment, detach it from its host.
     host_uid = _equipped_target_uid(engine, uid)

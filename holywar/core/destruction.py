@@ -82,6 +82,7 @@ def destroy_saint_by_uid(
         engine.state.log(f"Bende Consacrate salva {inst.definition.name}: rimane con 1 Fede.")
         return
 
+    # Check if the card is currently in an attack or defense slot and clear that slot, keeping track of which slot it was in for later. If the card is not found in either slot, treat it as being on the field without a specific slot. This allows the destruction process to correctly handle the card's position on the board and apply any relevant effects based on whether it was in attack, defense, or just on the field.
     attack_slot = None
     defense_slot = None
     for i, slot_uid in enumerate(board_player.attack):
@@ -99,6 +100,7 @@ def destroy_saint_by_uid(
     if defense_slot is not None:
         board_player.defense[defense_slot] = None
 
+    # Handle any battle survival mechanics if the cause of destruction is a battle, which can allow the card to avoid destruction by sacrificing a token from the field or excommunicating a card from the graveyard, depending on the card's definition and the current game state. This includes checking for any battle survival modes defined for the card, and if applicable, performing the necessary actions to prevent destruction while applying any relevant effects such as restoring faith or promoting defense slots.
     if cause == "battle":
         survival_mode = runtime_cards.get_battle_survival_mode(inst.definition.name)
         if survival_mode == "sacrifice_token_from_field":
@@ -111,6 +113,7 @@ def destroy_saint_by_uid(
                     if _norm(engine.state.instances[s_uid].definition.name) == _norm(token_name):
                         token_uid = s_uid
                         break
+            # If a valid token is found, sacrifice it to prevent the destruction of the saint, restore the saint's faith as needed, and promote any defense slots if applicable. This allows the card to survive the battle by sacrificing a specific token from the field, while also applying any relevant effects such as restoring faith or adjusting the board state based on the sacrifice.
             if token_uid is not None:
                 destroy_saint_by_uid(engine, engine.state.instances[token_uid].owner, token_uid, cause="effect")
                 inst.current_faith = max(
@@ -124,6 +127,7 @@ def destroy_saint_by_uid(
                 zone_ops.promote_defense_frontline(engine, board_owner_idx)
                 engine.state.log(f"{inst.definition.name} evita la distruzione sacrificando {token_name}.")
                 return
+        # Note: the "excommunicate_card_from_graveyard" mode is intentionally checked after the token sacrifice mode, so that if a card has both modes it will try to sacrifice a token first before excommunicating from the graveyard.
         if survival_mode == "excommunicate_card_from_graveyard":
             rescue_names = {_norm(name) for name in runtime_cards.get_battle_survival_names(inst.definition.name)}
             rescue_uid = None
@@ -132,6 +136,7 @@ def destroy_saint_by_uid(
                 if g_name in rescue_names:
                     rescue_uid = g_uid
                     break
+            # If a valid card is found in the graveyard, excommunicate it to prevent the destruction of the saint, restore the saint's faith as needed, and promote any defense slots if applicable. This allows the card to survive the battle by excommunicating a specific card from the graveyard, while also applying any relevant effects such as restoring faith or adjusting the board state based on the excommunication.
             if rescue_uid is not None:
                 board_player.graveyard.remove(rescue_uid)
                 board_player.excommunicated.append(rescue_uid)
@@ -150,6 +155,7 @@ def destroy_saint_by_uid(
                 )
                 return
 
+    # Handle the gain of Sin for the controller of the card if it's not a token, applying any relevant effects or prevention based on the card's blessed tags and the current game state. This includes calculating the Sin gain based on the card's definition and any relevant blessed tags, determining who should receive the Sin, and applying any prevention effects from artifacts or blessed tags before granting the Sin and logging it in the game state.
     if _norm(inst.definition.card_type) != "token":
         sin_gain = max(0, inst.definition.faith or 0)
         if sin_gain <= 0:
@@ -162,10 +168,12 @@ def destroy_saint_by_uid(
                     sin_gain = 0
                 break
 
+        # Determine who should receive the Sin gain, which is usually the controller of the card but can be the owner if the card is on the field without a specific slot, and apply any prevention effects from blessed tags or artifacts before granting the Sin. This ensures that the correct player receives the Sin gain based on the card's position and any relevant effects, while also applying any prevention from blessed tags or artifacts that can negate Sin gain on death.
         sin_receiver_idx = int(board_owner_idx) if board_owner_idx in (0, 1) else int(owner_idx)
         if "sin_to_controller_on_death" in inst.blessed and board_owner_idx in (0, 1):
             sin_receiver_idx = int(board_owner_idx)
 
+        # Apply any prevention of Sin gain from blessed tags or artifacts, then grant the Sin to the appropriate player and log it in the game state. This includes checking for any relevant blessed tags that can prevent Sin gain on death, as well as any artifacts that can negate Sin gain, before applying the Sin gain to the determined receiver and logging the event in the game state for transparency.
         if "no_sin_on_death" in inst.blessed:
             sin_gain = 0
         if engine._has_artifact(sin_receiver_idx, "Umanit????") and inst.blessed:
@@ -177,6 +185,7 @@ def destroy_saint_by_uid(
     else:
         engine.state.log(f"{inst.definition.name} (Token) viene distrutto.")
 
+    # Emit all relevant events for the destruction of the card, including specific events for battle destruction or effect destruction, as well as general events for any saint being defeated or destroyed, and then handle the actual removal of the card from the board and sending it to the graveyard or excommunicating it as needed. This ensures that all relevant events are emitted for the destruction of the card, allowing other effects to trigger in response, while also correctly handling the removal of the card from the board and its placement in the graveyard or excommunication zone based on the context of its destruction.
     engine._emit_event(
         "on_this_card_destroyed",
         owner_idx,
@@ -195,6 +204,7 @@ def destroy_saint_by_uid(
         source=by_whom,
         reason=cause,
     )
+    # Note: the "on_card_destroyed_on_field" event is intentionally emitted for all cards destroyed on the field, including tokens, while the more specific "on_this_card_destroyed" event is emitted for all cards but can be used to filter for specific cards or types in response. This allows for more flexible event handling where effects can respond to any card being destroyed on the field, or specifically to certain cards being destroyed, depending on the needs of the effect.
     if excommunicate:
         engine.excommunicate_card(owner_idx, uid, from_zone_override=from_zone)
     else:
@@ -207,6 +217,7 @@ def destroy_saint_by_uid(
             engine.state.log(
                 f"{engine.state.instances[back_uid].definition.name} avanza dalla difesa all'attacco."
             )
+    # Note: the "on_saint_defeated_in_battle" event is intentionally emitted only for battle destruction, while the "on_saint_destroyed_by_effect" event is emitted for effect destruction, allowing effects to specifically respond to the context of the saint's destruction if needed.
     if cause == "battle":
         engine._emit_event(
             "on_saint_defeated_in_battle",

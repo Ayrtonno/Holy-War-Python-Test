@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 EventHandler = Callable[["RuleEventContext"], None]
 
-
+# Context passed to event handlers when a rule event is emitted.
 @dataclass(slots=True)
 class RuleEventContext:
     engine: GameEngine
@@ -18,7 +18,7 @@ class RuleEventContext:
     event: str
     payload: dict[str, Any]
 
-
+# Simple pub-sub system for rule events. Each event is identified by a string, and handlers are functions that take a RuleEventContext.
 class RuleEventBus:
     def __init__(self) -> None:
         self._subs: dict[str, list[EventHandler]] = {}
@@ -28,6 +28,7 @@ class RuleEventBus:
         if handler not in handlers:
             handlers.append(handler)
 
+    # Unsubscribe a handler from an event. If the handler is not subscribed, do nothing.
     def unsubscribe(self, event: str, handler: EventHandler) -> None:
         handlers = self._subs.get(event)
         if not handlers:
@@ -39,11 +40,12 @@ class RuleEventBus:
         if not handlers:
             self._subs.pop(event, None)
 
+    # Emit an event, calling all subscribed handlers with the given context. Handlers are called in the order they were subscribed. If a handler is unsubscribed while events are being emitted, it will not be called for the current emission.
     def emit(self, ctx: RuleEventContext) -> None:
         for cb in tuple(self._subs.get(ctx.event, [])):
             cb(ctx)
 
-
+# List of all possible rule events that can be emitted. This is not strictly necessary, but can be useful for validation and auto-completion.
 class RuleEvents:
     ALL = [
         "on_card_played",
@@ -116,7 +118,7 @@ class RuleEvents:
         "on_player_sacrifices_saint",
     ]
 
-
+# List of all functions that can be called from card scripts. This is used for validation and auto-completion, and also to prevent calling undefined functions.
 DECLARED_FUNCTIONS = {
     # Condizioni / query / target / azioni: full surface requested.
     "controller_has",
@@ -294,7 +296,6 @@ DECLARED_FUNCTIONS = {
     "count_cards_in_excommunicated",
     "count_cards_sent_from_hand_or_field_to_graveyard_this_turn",
     "is_card_type",
-    # extra advanced list
     "at_end_of_turn_if",
     "before_draw_phase_forced_effect",
     "next_opponent_turn_effect",
@@ -329,17 +330,17 @@ DECLARED_FUNCTIONS = {
     "return_all_excommunicated_to_relicario",
 }
 
-
+# Utility functions for normalizing text and parsing cross values. These are used internally by the API methods to allow for more flexible input formats (e.g., "Croce Bianca" or "White" both count as 11 crosses).
 def _norm(txt: str) -> str:
     return (txt or "").strip().lower()
 
-
+# Normalize a string by removing accents and converting to lowercase. This is used for more flexible matching of card names and types.
 def _norm_ascii(text: str) -> str:
     value = unicodedata.normalize("NFKD", text or "")
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
 
-
+# Parse a cross value from a string. If the string is "white" or "croce bianca" (case-insensitive, accents ignored), return 11. Otherwise, try to parse it as a number and return the integer value. If parsing fails or the string is empty, return None.
 def _cross_value(crosses: str | None) -> int | None:
     txt = _norm_ascii(crosses or "")
     if not txt:
@@ -351,7 +352,7 @@ def _cross_value(crosses: str | None) -> int | None:
     except ValueError:
         return None
 
-
+# The main API class that will be passed to card scripts. It provides methods for subscribing to events, emitting events, querying the game state, and performing actions. Each method corresponds to a possible function that can be called from card scripts, and they interact with the game engine and state to implement the desired behavior.
 class RuleAPI:
     def __init__(self, engine: GameEngine, controller_idx: int) -> None:
         self.engine = engine
@@ -364,18 +365,23 @@ class RuleAPI:
         self.bus: RuleEventBus = engine._rule_event_bus  # type: ignore[attr-defined]
         self._stats: dict[str, int] = engine._script_call_stats  # type: ignore[attr-defined]
 
+    # Methods for event subscription and emission. These allow card scripts to react to game events and also to emit custom events that other scripts can listen to.
     def subscribe(self, event: str, handler: EventHandler) -> None:
         self.bus.subscribe(event, handler)
 
+    # Unsubscribe a handler from an event. If the handler is not subscribed, do nothing.
     def unsubscribe(self, event: str, handler: EventHandler) -> None:
         self.bus.unsubscribe(event, handler)
 
+    # Emit an event with the given name and payload. The payload is passed as keyword arguments and will be included in the RuleEventContext that handlers receive. Handlers subscribed to this event will be called with the context.
     def emit(self, event: str, **payload: Any) -> None:
         self.bus.emit(RuleEventContext(self.engine, self.controller_idx, event, payload))
 
+    # Check if a function name is declared in the API. This can be used for validation before attempting to call a function from a card script.
     def has_function(self, name: str) -> bool:
         return name in DECLARED_FUNCTIONS
 
+    # Internal helper methods for iterating over card UIDs in different zones and finding the controller of a card by its UID. These are used by the public API methods to implement their functionality.
     def _iter_uids(self, player_idx: int, zone: str) -> list[str]:
         p = self.state.players[player_idx]
         z = _norm(zone)
@@ -397,6 +403,7 @@ class RuleAPI:
             return out
         return []
 
+    # Find the controller and zone of a card by its UID. This is used for operations that need to know who controls a card and where it is located (e.g., sending a card from the field to the graveyard).
     def _find_controller_of_uid(self, uid: str) -> tuple[int, str] | None:
         for idx in (0, 1):
             p = self.state.players[idx]
@@ -426,6 +433,7 @@ class RuleAPI:
                 return True
         return False
 
+    # Similar to controller_has, but checks the opponent's field instead. This is used for conditions that depend on the opponent controlling a specific card.
     def opponent_has(self, card_name: str) -> bool:
         key = _norm_ascii(card_name)
         opp = 1 - self.controller_idx
@@ -434,6 +442,7 @@ class RuleAPI:
                 return True
         return False
 
+    # Check if there's a saint with the given name on the field, controlled by either player. This is used for conditions that depend on the presence of a specific saint on the field.
     def in_hand(self, card_name: str) -> bool:
         key = _norm_ascii(card_name)
         for uid in self.state.players[self.controller_idx].hand:
@@ -441,6 +450,7 @@ class RuleAPI:
                 return True
         return False
 
+    # Check if there's a card with the given name in the controller's graveyard. This is used for conditions that depend on having a specific card in the graveyard.
     def in_graveyard(self, card_name: str) -> bool:
         key = _norm_ascii(card_name)
         for uid in self.state.players[self.controller_idx].graveyard:
@@ -448,6 +458,7 @@ class RuleAPI:
                 return True
         return False
 
+    # Check if there's a card with the given name in the controller's relicario (deck). This is used for conditions that depend on having a specific card in the deck.
     def in_relicario(self, card_name: str) -> bool:
         key = _norm_ascii(card_name)
         for uid in self.state.players[self.controller_idx].deck:
@@ -455,6 +466,7 @@ class RuleAPI:
                 return True
         return False
 
+    # Check if there's a card with the given name in the controller's excommunicated zone. This is used for conditions that depend on having a specific card in the excommunicated zone.
     def in_excommunicated(self, card_name: str) -> bool:
         key = _norm_ascii(card_name)
         for uid in self.state.players[self.controller_idx].excommunicated:
@@ -462,16 +474,19 @@ class RuleAPI:
                 return True
         return False
 
+    # Action methods for performing game actions. These methods interact with the game engine and state to implement the desired effects of card scripts. They also emit events when appropriate to allow other scripts to react to these actions.
     def draw_cards(self, player: int, amount: int, from_zone: str = "relicario") -> int:
         if _norm(from_zone) not in {"relicario", "deck"}:
             return 0
         return self.engine.draw_cards(int(player), int(amount))
 
+    # Shuffle the controller's relicario (deck) and emit an event. This can be used for card effects that involve shuffling the deck, and allows other scripts to react to the shuffle if needed.
     def shuffle_relicario(self, player: int) -> None:
         idx = int(player)
         self.engine.rng.shuffle(self.state.players[idx].deck)
         self.emit("on_player_shuffles_relicario", player=idx)
 
+    # Mill cards from the top of the specified player's relicario (deck) to their graveyard. This is used for card effects that involve milling cards, and emits events for each card sent to the graveyard as well as a summary event with the total amount milled.
     def mill_cards(self, player: int, amount: int) -> int:
         idx = int(player)
         p = self.state.players[idx]
@@ -487,6 +502,7 @@ class RuleAPI:
             self.emit("on_player_mills_cards", player=idx, amount=moved)
         return moved
 
+    # Discard a card from the controller's hand to the graveyard. This is used for card effects that involve discarding cards, and emits events for the discard action as well as a summary event with the total amount discarded.
     def send_from_hand_to_graveyard(self, card_uid: str) -> bool:
         p = self.state.players[self.controller_idx]
         if card_uid not in p.hand:
@@ -497,6 +513,7 @@ class RuleAPI:
         self.emit("on_card_sent_to_graveyard", card=card_uid, from_zone="hand", owner=self.controller_idx)
         return True
 
+    # Send a card from the controller's relicario (deck) to the graveyard. This is used for card effects that involve sending cards from the deck to the graveyard, and emits an event for the action.
     def send_from_relicario_to_graveyard(self, card_uid: str) -> bool:
         p = self.state.players[self.controller_idx]
         if card_uid not in p.deck:
@@ -506,6 +523,7 @@ class RuleAPI:
         self.emit("on_card_sent_to_graveyard", card=card_uid, from_zone="relicario", owner=self.controller_idx)
         return True
 
+    # Send a card from the field to the graveyard. This is used for card effects that involve destroying or sacrificing cards on the field, and emits an event for the action. If generate_sin is True (the default), also reduce the controller's sin by the amount of faith the card had, if any.
     def send_from_field_to_graveyard(self, card_uid: str, generate_sin: bool = True) -> bool:
         where = self._find_controller_of_uid(card_uid)
         if where is None:
@@ -518,6 +536,7 @@ class RuleAPI:
             self.state.players[owner_idx].sin = max(0, self.state.players[owner_idx].sin - max(0, self.state.instances[card_uid].definition.faith or 0))
         return True
 
+    # Targeting methods for selecting cards based on various criteria. These methods return lists of card UIDs that match the specified filters, and can be used by card scripts to implement effects that target specific cards on the field, in the graveyard, etc.
     def target_saint_on_field(self, filter_function: Callable[[Any], bool] | None = None) -> list[str]:
         out: list[str] = []
         for idx in (0, 1):
@@ -527,6 +546,7 @@ class RuleAPI:
                     out.append(uid)
         return out
 
+    # Similar to target_saint_on_field, but only checks the opponent's field. This is used for effects that need to target saints controlled by the opponent.
     def target_saint_opponent_field(self, filter_function: Callable[[Any], bool] | None = None) -> list[str]:
         out: list[str] = []
         opp = 1 - self.controller_idx
@@ -536,6 +556,7 @@ class RuleAPI:
                 out.append(uid)
         return out
 
+    # General method for targeting up to n cards across specified zones, with an optional filter function. This is a flexible method that can be used for a wide variety of targeting needs, allowing card scripts to specify exactly which zones to search and what criteria to apply when selecting targets.
     def target_up_to_n_cards(self, n: int, filter_function: Callable[[Any], bool] | None = None, zones: list[str] | None = None) -> list[str]:
         zones = zones or ["field"]
         out: list[str] = []
@@ -557,6 +578,7 @@ class RuleAPI:
                             return out
         return out
 
+    # Target cards that have a certain number of croci, using the _cross_value function to parse the croci from the card definition. This allows for targeting cards based on their cross value, which can be an important attribute for certain card effects.
     def target_card_with_croci(self, operator: str, value: int, zones: list[str] | None = None) -> list[str]:
         zones = zones or ["field"]
         value = int(value)
@@ -576,24 +598,29 @@ class RuleAPI:
                 out.append(uid)
         return out
 
+    # Methods for modifying card attributes like faith and strength. These methods update the card's attributes in the game state and emit events to notify other scripts of the changes. They also ensure that values do not go below zero, and can optionally make faith changes permanent (i.e., affecting both current and initial faith).
     def increase_faith(self, card_uid: str, amount: int, is_permanent: bool = True) -> None:
         inst = self.state.instances[card_uid]
         old = inst.current_faith or 0
         inst.current_faith = max(0, old + int(amount))
         self.emit("on_faith_changed", card=card_uid, old_value=old, new_value=inst.current_faith)
 
+    # Decrease faith by calling increase_faith with a negative amount. This ensures that the same logic for updating faith and emitting events is used for both increasing and decreasing faith, and also allows for the is_permanent flag to be applied consistently.
     def decrease_faith(self, card_uid: str, amount: int) -> None:
         self.increase_faith(card_uid, -int(amount))
 
+    # Set faith to a specific value, optionally making it permanent. This is used for effects that need to set a card's faith to a specific number, rather than just increasing or decreasing it by a certain amount.
     def increase_strength(self, card_uid: str, amount: int) -> None:
         inst = self.state.instances[card_uid]
         old = int(inst.definition.strength or 0)
         inst.definition.strength = max(0, old + int(amount))
         self.emit("on_strength_changed", card=card_uid, old_value=old, new_value=inst.definition.strength)
 
+    # Decrease strength by calling increase_strength with a negative amount. This ensures that the same logic for updating strength and emitting events is used for both increasing and decreasing strength.
     def decrease_strength(self, card_uid: str, amount: int) -> None:
         self.increase_strength(card_uid, -int(amount))
 
+    # Set strength to a specific value. This is used for effects that need to set a card's strength to a specific number, rather than just increasing or decreasing it by a certain amount.
     def inflict_sin(self, player: int, amount: int) -> None:
         idx = int(player)
         old = int(self.state.players[idx].sin)
@@ -601,6 +628,7 @@ class RuleAPI:
         self.emit("on_sin_changed", player=idx, old_value=old, new_value=self.state.players[idx].sin)
         self.emit("on_player_receives_sin", player=idx, amount=int(amount))
 
+    # Remove sin from a player, ensuring it does not go below zero. This is used for effects that reduce a player's sin, and emits events to notify other scripts of the change.
     def remove_sin(self, player: int, amount: int) -> None:
         idx = int(player)
         old = int(self.state.players[idx].sin)
@@ -608,6 +636,7 @@ class RuleAPI:
         self.emit("on_sin_changed", player=idx, old_value=old, new_value=self.state.players[idx].sin)
         self.emit("on_player_removes_sin", player=idx, amount=int(amount))
 
+    # Add inspiration to a player, ensuring it does not go below zero. This is used for effects that grant inspiration to a player, and emits events to notify other scripts of the change. The duration parameter can be used to indicate how long the inspiration should last (e.g., "this_turn", "permanent", etc.), which can be useful for effects that have temporary inspiration bonuses.
     def add_inspiration(self, player: int, amount: int, duration: str = "this_turn") -> None:
         idx = int(player)
         old = int(self.state.players[idx].inspiration)
@@ -620,6 +649,7 @@ class RuleAPI:
             duration=duration,
         )
 
+    # Pay inspiration by reducing the player's inspiration by the specified amount. If the player does not have enough inspiration, return False (or True if optional is True). If the payment is successful, emit events to notify other scripts of the change and the payment action.
     def pay_inspiration(self, player: int, amount: int, optional: bool = False) -> bool:
         idx = int(player)
         p = self.state.players[idx]
@@ -632,24 +662,31 @@ class RuleAPI:
         self.emit("on_player_pays_inspiration", player=idx, amount=amt)
         return True
 
+    # Query methods for retrieving current values of card attributes and player stats. These methods access the game state to return the current faith, strength, croci, inspiration, and sin values for cards and players. They are used by card scripts to make decisions based on the current game state.
     def get_current_faith(self, card_uid: str) -> int:
         return int(self.state.instances[card_uid].current_faith or 0)
 
+    # Get the initial faith of a card, which is defined in the card definition and does not change during the game. This is used for effects that need to reference the card's original faith value, regardless of any modifications that may have occurred during the game.
     def get_initial_faith(self, card_uid: str) -> int:
         return int(self.state.instances[card_uid].definition.faith or 0)
 
+    # Get the current strength of a card, which may be modified by effects during the game. This is used for effects that need to reference the card's current strength value, which can change due to various effects.
     def get_current_strength(self, card_uid: str) -> int:
         return int(self.engine.get_effective_strength(card_uid))
 
+    # Get the number of croci on a card by parsing the crosses attribute from the card definition. This allows for effects that depend on the card's cross value, which can be an important attribute for certain cards.
     def get_croci(self, card_uid: str) -> int:
         return int(_cross_value(self.state.instances[card_uid].definition.crosses) or 0)
 
+    # Get the number of seal counters on a card. This is used for effects that depend on the number of seal counters, which can be added or removed during the game.
     def get_remaining_inspiration(self, player: int) -> int:
         return int(self.state.players[int(player)].inspiration)
 
+    # Get the current sin of a player. This is used for effects that depend on the player's sin level, which can change during the game due to various actions and effects.
     def get_current_sin(self, player: int) -> int:
         return int(self.state.players[int(player)].sin)
 
+    # Count the number of saints on the field for a given player, optionally filtering by position (attack or defense). This is used for effects that depend on the number of saints a player has on the field, and allows for more specific queries based on the position of the saints.
     def count_saints_on_field(self, player: int, position_filter: str | None = None) -> int:
         idx = int(player)
         p = self.state.players[idx]
@@ -660,21 +697,27 @@ class RuleAPI:
             return sum(1 for uid in p.defense if uid is not None and _norm_ascii(self.state.instances[uid].definition.card_type) in {"santo", "token"})
         return len(self.engine.all_saints_on_field(idx))
 
+    # Count the number of tokens on the field for a given player. This is used for effects that depend on the number of tokens a player has on the field, which can be important for certain strategies and card effects.
     def count_cards_in_hand(self, player: int) -> int:
         return len(self.state.players[int(player)].hand)
 
+    # Count the number of cards in the player's graveyard. This is used for effects that depend on the number of cards in the graveyard, which can be important for certain strategies and card effects that interact with the graveyard.
     def count_cards_in_graveyard(self, player: int) -> int:
         return len(self.state.players[int(player)].graveyard)
 
+    # Count the number of cards in the player's relicario (deck). This is used for effects that depend on the number of cards remaining in the deck, which can be important for certain strategies and card effects that interact with the deck.
     def count_cards_in_relicario(self, player: int) -> int:
         return len(self.state.players[int(player)].deck)
 
+    # Count the number of cards in the player's excommunicated zone. This is used for effects that depend on the number of cards in the excommunicated zone, which can be important for certain strategies and card effects that interact with this zone.
     def count_cards_in_excommunicated(self, player: int) -> int:
         return len(self.state.players[int(player)].excommunicated)
 
+    # Count the number of cards sent from hand or field to graveyard this turn for a player. This is used for effects that depend on how many cards a player has lost during the turn, which can be important for certain strategies and card effects that trigger based on card loss.
     def is_card_type(self, card_uid: str, type: str) -> bool:
         return _norm_ascii(self.state.instances[card_uid].definition.card_type) == _norm_ascii(type)
 
+    # Method for declaring a player as the winner of the game, with an optional reason. This can be used for card effects that have a win condition, allowing them to end the game immediately when the condition is met. The reason can be included in the game log for clarity.
     def win_the_game(self, player: int, reason: str = "") -> None:
         self.state.winner = int(player)
         if reason:

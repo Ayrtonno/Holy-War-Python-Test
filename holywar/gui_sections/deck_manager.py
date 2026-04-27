@@ -9,13 +9,14 @@ from tkinter import messagebox, ttk
 from holywar.data.deck_builder import runtime_premade_decks, reset_runtime_premades, register_premades_from_json
 from holywar.effects.runtime import _norm
 
-
+# Deck manager UI, filters, validation and persistence helpers.
 class GUIDeckManagerMixin:
     """Deck editor UI, filters, validation and persistence helpers."""
 
     if TYPE_CHECKING:
         def __getattr__(self, _name: str) -> Any: ...
 
+    # Builds the deck manager UI components and layout.
     def _build_deck_manager_ui(self) -> None:
         p = self._deck_palette
         self.deck_manager_frame.configure(style="DeckRoot.TFrame")
@@ -338,7 +339,7 @@ class GUIDeckManagerMixin:
             padx=8,
             pady=8,
         )
-
+    # Normalizes card names for consistent lookup, handling common character encoding issues and applying a general normalization function.
     def _norm(self, text: str) -> str:
         value = (
             str(text or "")
@@ -351,6 +352,7 @@ class GUIDeckManagerMixin:
         )
         return _norm(value)
 
+    # Parses the cross value from a card's crosses attribute, handling both numeric and "Croce Bianca" cases, and returns None for invalid inputs.
     def _cross_value(self, crosses: str) -> int | None:
         txt = str(crosses or "").strip().lower()
         if txt in {"white", "croce bianca"}:
@@ -360,6 +362,7 @@ class GUIDeckManagerMixin:
         except Exception:
             return None
 
+    # Determines the maximum allowed copies of a card in a deck based on its cross value, following specific rules for different rarity bands.
     def _max_copies_for_crosses(self, crosses: str) -> int:
         value = self._cross_value(crosses)
         if value is None:
@@ -370,6 +373,7 @@ class GUIDeckManagerMixin:
             return 3
         return 1
 
+    # Loads the premade decks from the JSON file, ensuring the structure is valid and returning a dictionary with a "decks" key containing a list of deck dictionaries.
     def _premades_payload(self) -> dict:
         if not self.premades_path.exists():
             return {"decks": []}
@@ -386,17 +390,21 @@ class GUIDeckManagerMixin:
         except Exception:
             return {"decks": []}
 
+    # Saves the given premade decks payload to the JSON file, ensuring the parent directory exists and writing the data with proper formatting and encoding.
     def _save_premades_payload(self, payload: dict) -> None:
         self.premades_path.parent.mkdir(parents=True, exist_ok=True)
         self.premades_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # Loads the premade decks from the JSON file into the runtime, allowing them to be accessed and used within the application.
     def _load_premades_into_runtime(self) -> None:
         if self.premades_path.exists():
             register_premades_from_json(self.premades_path)
 
+    # Creates a mapping of normalized card names to their definitions for quick lookup when validating deck contents against the card catalog.
     def _deck_name_to_def(self) -> dict[str, Any]:
         return {self._norm(c.name): c for c in self.cards}
 
+    # Generates a report on the current deck's compliance with the game rules, checking for total card count, individual card limits based on rarity, and providing feedback on any issues found.
     def _deck_rules_report(self) -> tuple[list[str], list[str], int, dict[str, int]]:
         hard: list[str] = []
         soft: list[str] = []
@@ -456,6 +464,7 @@ class GUIDeckManagerMixin:
             hard.append(f"Carte Croce Bianca: {total_white}/1 (massimo 1).")
         return hard, soft, total, stats
 
+    # Renders the deck rules report in the UI, showing total card count, limits based on rarity bands, and any errors or notes related to the current deck composition.
     def _render_deck_rules(self) -> None:
         hard, soft, total, stats = self._deck_rules_report()
         lines = [
@@ -480,6 +489,7 @@ class GUIDeckManagerMixin:
             lines.extend(f"- {m}" for m in soft)
         self.deck_rules_label.configure(text="\n".join(lines))
 
+    # Reloads the user decks from the runtime, updates the listbox with the current decks, and refreshes the deck rules and card candidates based on the loaded decks.
     def _deck_manager_reload_user_decks(self) -> None:
         self._deck_entries = runtime_premade_decks()
         self.deck_listbox.delete(0, tk.END)
@@ -489,6 +499,7 @@ class GUIDeckManagerMixin:
         self._deck_manager_new()
         self._refresh_deck_card_candidates()
 
+    # Creates a new deck by resetting the editor state, clearing the current deck composition, and preparing the UI for a new deck entry.
     def _deck_manager_new(self) -> None:
         self._deck_editor_selected_id = None
         self._deck_editor_cards = {}
@@ -499,6 +510,7 @@ class GUIDeckManagerMixin:
         self.deck_listbox.selection_clear(0, tk.END)
         self._render_deck_rules()
 
+    # Deletes the selected deck after confirming with the user, updates the premades payload, and refreshes the UI to reflect the changes.
     def _deck_manager_delete(self) -> None:
         sel = self.deck_listbox.curselection()
         if not sel:
@@ -520,6 +532,7 @@ class GUIDeckManagerMixin:
         self.update_premade_options()
         self._deck_manager_reload_user_decks()
 
+    # Handles the selection of a deck from the listbox, loading its details into the editor fields, parsing the card list, and refreshing the UI to show the selected deck's composition and rules compliance.
     def _on_deck_manager_select(self, _event=None) -> None:
         sel = self.deck_listbox.curselection()
         if not sel:
@@ -549,6 +562,7 @@ class GUIDeckManagerMixin:
         self._sync_deck_filter_expansions()
         self._refresh_deck_current_list()
 
+    # Determines the rarity bucket for a card based on its cross value, categorizing it into specific bands or marking it as "Bianca" for special cases, and returning "?" for invalid inputs.
     def _rarity_bucket(self, crosses: str) -> str:
         val = self._cross_value(crosses)
         if val is None:
@@ -563,6 +577,7 @@ class GUIDeckManagerMixin:
             return "10"
         return "Bianca"
 
+    # Synchronizes the expansion filter options for the deck editor based on the expansions present in the card catalog, ensuring that all available expansions are listed and that the current selection remains valid.
     def _sync_deck_filter_expansions(self) -> None:
         values = ["Tutte"]
         seen = set(values)
@@ -575,6 +590,7 @@ class GUIDeckManagerMixin:
         if self.deck_filter_expansion_var.get() not in seen:
             self.deck_filter_expansion_var.set("Tutte")
 
+    # Parses a numeric filter value from a string, returning an integer if valid or None if the input is empty or cannot be converted to a number, allowing for flexible filtering in the deck editor.
     def _parse_filter_number(self, value: str) -> int | None:
         raw = str(value or "").strip()
         if not raw:
@@ -584,6 +600,7 @@ class GUIDeckManagerMixin:
         except Exception:
             return None
 
+    # Compares a current numeric value against a wanted value using a specified operator, supporting common comparison operators and returning a boolean result based on the comparison, which is used for filtering cards in the deck editor.
     def _compare_number(self, current: int, operator: str, wanted: int) -> bool:
         op = str(operator or "=").strip()
         if op == "<":
@@ -596,6 +613,7 @@ class GUIDeckManagerMixin:
             return current >= wanted
         return current == wanted
 
+    # Resets all deck filters to their default states, clearing search terms, resetting dropdowns to "Tutte" or default values, and refreshing the card candidates list to show all cards without any filters applied.
     def _reset_deck_filters(self) -> None:
         self.deck_search_var.set("")
         self.deck_filter_expansion_var.set("Tutte")
@@ -614,6 +632,7 @@ class GUIDeckManagerMixin:
         self._deck_current_value_filters = {}
         self._refresh_deck_card_candidates()
 
+    # Opens a dialog for filtering the deck candidates or current deck cards in an Excel-like manner, allowing the user to select a column, search for values, and apply filters based on the unique values present in that column, with options to sort and select/deselect all values.
     def _open_excel_like_filter_dialog(self, table: str) -> None:
         table_key = str(table or "").strip().lower()
         if table_key not in {"candidates", "current"}:
@@ -771,6 +790,7 @@ class GUIDeckManagerMixin:
         ttk.Button(bottom, text="OK", command=apply_and_close).pack(side="right")
         ttk.Button(bottom, text="Annulla", command=cancel).pack(side="right", padx=6)
 
+    # Displays the effect text of a card in the deck editor based on the provided key, looking up the card definition and updating the UI with the card's name and effect description, or showing a default message if no effect text is available.
     def _show_deck_effect_from_key(self, key: str | None) -> None:
         if not key:
             return
@@ -786,6 +806,7 @@ class GUIDeckManagerMixin:
         self.deck_effect_text.insert("1.0", text)
         self.deck_effect_text.configure(state="disabled")
 
+    # Handles the selection of a card from the deck candidates list, retrieving the corresponding card key and displaying its effect text in the UI for the user to review before adding it to the deck.
     def _on_deck_candidates_select(self, _event=None) -> None:
         selected = self.deck_candidates.selection()
         if not selected:
@@ -793,12 +814,14 @@ class GUIDeckManagerMixin:
         key = self._deck_candidate_iid_to_key.get(str(selected[0]))
         self._show_deck_effect_from_key(key)
 
+    # Handles the selection of a card from the current deck list, retrieving the corresponding card key and displaying its effect text in the UI for the user to review or modify their deck composition.
     def _selected_tree_key(self, tree: ttk.Treeview, iid_to_key: dict[str, str]) -> str | None:
         sel = tree.selection()
         if not sel:
             return None
         return iid_to_key.get(str(sel[0]))
 
+    # Restores the selection in a treeview based on a given card key, iterating through the items to find a matching key and setting the selection, focus, and visibility accordingly, returning True if successful or False if the key is not found or an error occurs.
     def _restore_tree_selection_by_key(self, tree: ttk.Treeview, iid_to_key: dict[str, str], key: str | None) -> bool:
         if not key:
             return False
@@ -814,12 +837,14 @@ class GUIDeckManagerMixin:
             return True
         return False
 
+    # Applies a zebra striping style to the rows of a treeview, configuring tags for even and odd rows with different background colors, and iterating through the items to assign the appropriate tag based on their position in the list.
     def _apply_treeview_zebra(self, tree: ttk.Treeview) -> None:
         tree.tag_configure("even", background=self._deck_palette["surface"])
         tree.tag_configure("odd", background="#fdfcff")
         for pos, item_id in enumerate(tree.get_children("")):
             tree.item(item_id, tags=("even" if (pos % 2 == 0) else "odd",))
 
+    # Refreshes the list of candidate cards for the deck editor based on the current search and filter criteria, sorting options, and the card catalog, updating the treeview with the matching cards and maintaining selection if possible.
     def _refresh_deck_card_candidates(self) -> None:
         selected_key_before = self._selected_tree_key(
             self.deck_candidates,
@@ -977,6 +1002,7 @@ class GUIDeckManagerMixin:
         if self._restore_tree_selection_by_key(self.deck_candidates, self._deck_candidate_iid_to_key, selected_key_before):
             self._show_deck_effect_from_key(selected_key_before)
 
+    # Refreshes the list of cards currently in the deck editor, updating the treeview with the current composition, applying sorting and value filters, and maintaining selection if possible, while also refreshing the card candidates and deck rules based on the current deck state.
     def _refresh_deck_current_list(self) -> None:
         selected_key_before = self._selected_tree_key(
             self.deck_current,
@@ -1071,6 +1097,7 @@ class GUIDeckManagerMixin:
         self._refresh_deck_card_candidates()
         self._render_deck_rules()
 
+    # Adds the selected card from the candidates list to the current deck composition, respecting the maximum allowed copies based on the card's crosses, updating the deck editor state, and refreshing the UI to reflect the changes.
     def _deck_add_selected_card(self) -> None:
         selected = self.deck_candidates.selection()
         if not selected:
@@ -1094,10 +1121,12 @@ class GUIDeckManagerMixin:
         self._deck_editor_cards[key] = int(self._deck_editor_cards.get(key, 0)) + qty
         self._refresh_deck_current_list()
 
+    # Handles the selection of a card from the current deck list, allowing the user to adjust its quantity or remove it from the deck, and updating the deck editor state and UI accordingly.
     def _on_deck_current_select(self, _event=None) -> None:
         key = self._selected_current_deck_key()
         self._show_deck_effect_from_key(key)
 
+    # Sorts the deck candidates list based on the specified column, toggling the sort order if the same column is selected again, and refreshing the UI to reflect the new sorting.
     def _sort_deck_candidates_by(self, column: str) -> None:
         col = str(column or "nome")
         if self._deck_candidates_sort_col == col:
@@ -1107,6 +1136,7 @@ class GUIDeckManagerMixin:
             self._deck_candidates_sort_asc = True
         self._refresh_deck_card_candidates()
 
+    # Sorts the current deck list based on the specified column, toggling the sort order if the same column is selected again, and refreshing the UI to reflect the new sorting.
     def _sort_deck_current_by(self, column: str) -> None:
         col = str(column or "nome")
         if self._deck_current_sort_col == col:
@@ -1116,12 +1146,14 @@ class GUIDeckManagerMixin:
             self._deck_current_sort_asc = True
         self._refresh_deck_current_list()
 
+    # Retrieves the key of the currently selected card in the current deck list, returning None if no selection is made, which is used for displaying card effects and managing deck composition.
     def _selected_current_deck_key(self) -> str | None:
         sel = self.deck_current.selection()
         if not sel:
             return None
         return self._deck_current_iid_to_key.get(str(sel[0]))
 
+    # Adjusts the quantity of the selected card in the current deck by a specified delta, ensuring that the quantity does not drop below zero and refreshing the UI to reflect the changes in the deck composition.
     def _deck_adjust_selected_card(self, delta: int) -> None:
         key = self._selected_current_deck_key()
         if key is None:
@@ -1133,6 +1165,7 @@ class GUIDeckManagerMixin:
             self._deck_editor_cards[key] = new_qty
         self._refresh_deck_current_list()
 
+    # Removes the selected card from the current deck composition, updating the deck editor state and refreshing the UI to reflect the removal.
     def _deck_remove_selected_card(self) -> None:
         key = self._selected_current_deck_key()
         if key is None:
@@ -1140,6 +1173,7 @@ class GUIDeckManagerMixin:
         self._deck_editor_cards.pop(key, None)
         self._refresh_deck_current_list()
 
+    # Validates the current deck composition against the defined rules, checking for issues such as missing name or religion, and ensuring that the card quantities adhere to the maximum allowed based on their crosses, and displays appropriate warnings if any problems are found.
     def _deck_manager_save(self) -> None:
         name = str(self.deck_name_var.get() or "").strip()
         religion = str(self.deck_religion_var.get() or "").strip()

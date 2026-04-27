@@ -8,13 +8,14 @@ from tkinter import messagebox, ttk
 
 from holywar.effects.runtime import runtime_cards
 
-
+# This mixin class provides methods for rendering the game board and hand, as well as handling user interactions related to these elements. It includes methods for updating the display of player resources, showing card details, and managing interactions with cards in the player's hand and on the board. The methods in this class are designed to work with the game engine's state to ensure that the GUI accurately reflects the current game situation and allows players to interact with their cards effectively.
 class GUIGameViewMixin:
     """Board/hand rendering and user interaction handlers."""
 
     if TYPE_CHECKING:
         def __getattr__(self, _name: str) -> Any: ...
 
+    # This method arranges the widgets for the attack, defense, artifacts, and building slots in a grid layout within the specified parent frame. It organizes the widgets into rows and columns, with labels indicating the type of slot (attack, defense, artifacts, building) and the corresponding widgets for each slot type. The method uses padding to ensure proper spacing between the widgets and labels for a clean and organized display of the game board elements.
     def _grid_slots(self, parent, attack, defense, artifacts, building) -> None:
         ttk.Label(parent, text="Attacco").grid(row=0, column=0, sticky="w")
         for i, w in enumerate(attack):
@@ -28,6 +29,7 @@ class GUIGameViewMixin:
         ttk.Label(parent, text="Edificio").grid(row=6, column=0, sticky="w")
         building.grid(row=7, column=0, padx=2, pady=2)
 
+    # This method builds the resource panel for a player, which displays the player's name, sin level, inspiration, hand size, and deck size. It creates labels and a progress bar to visually represent these resources and organizes them in a grid layout within the specified parent frame. The method also stores references to the created widgets in lists for later updates when the game state changes.
     def _build_resource_panel(self, parent, caption: str) -> None:
         panel = ttk.Frame(parent)
         panel.pack(side="left", fill="x", expand=True, padx=4, pady=4)
@@ -53,6 +55,7 @@ class GUIGameViewMixin:
         self.resource_deck_labels.append(deck_lbl)
         self.resource_sin_bars.append(sin_bar)
 
+    # This method refreshes the game view by updating the display of player resources, card slots, hand, and logs based on the current state of the game engine. It retrieves the relevant information for both players, updates the labels and widgets accordingly, and handles any necessary visual highlights for equipped cards. The method also checks for any runtime reveal prompts that may need to be displayed and updates the status message to reflect the current game situation.
     def refresh(self) -> None:
         if self.engine is None:
             return
@@ -101,6 +104,7 @@ class GUIGameViewMixin:
             self.status_var.set(status)
         self.after_idle(self._maybe_show_runtime_reveal)
 
+    # This method checks if there is a pending runtime reveal prompt that needs to be displayed to the player. It verifies the relevant flags in the game engine's state to determine if a reveal is waiting, retrieves the card instance to be revealed, and displays the appropriate prompt or information to the player. The method also handles any choices that may be associated with the reveal and updates the game state accordingly after the player interacts with the prompt.
     def _maybe_show_runtime_reveal(self) -> None:
         if self.engine is None or self._reveal_prompt_open:
             return
@@ -219,6 +223,7 @@ class GUIGameViewMixin:
         if pending_actor is not None:
             self.start_chain(actor_idx=pending_actor)
 
+    # This method updates the resource panel for a player by setting the text of the labels and progress bar to reflect the player's current name, sin level, inspiration, hand size, and deck size. It takes the index of the panel to update and the player object as parameters, and it ensures that the displayed information is accurate based on the player's current state in the game.
     def _update_resource_panel(self, panel_idx: int, player) -> None:
         if panel_idx >= len(self.resource_name_labels):
             return
@@ -230,6 +235,7 @@ class GUIGameViewMixin:
         self.resource_deck_labels[panel_idx].configure(text=f"Deck {len(player.deck)}")
         self.resource_sin_bars[panel_idx]["value"] = max(0, min(100, player.sin))
 
+    # This method generates a label for a card in the player's hand based on its index and unique identifier (UID). It retrieves the card instance from the game engine's state, extracts relevant information such as the card's name, type, faith, and strength (if applicable), and formats this information into a string that can be displayed in the hand list. The method also handles cases where the card may not have certain attributes or when the game engine is not initialized, providing appropriate fallback values in those situations.
     def hand_entry_label(self, hand_idx: int, uid: str) -> str:
         if self.engine is None:
             return "-"
@@ -242,6 +248,7 @@ class GUIGameViewMixin:
             p_txt = f" | P:{self.engine.get_effective_strength(uid)}"
         return f"[{hand_idx}] {c.name} ({c.card_type}) | {f_txt}{p_txt}"
 
+    # This method updates the text of the widgets corresponding to the card slots (attack, defense, artifacts) based on the unique identifiers (UIDs) of the cards currently occupying those slots. It iterates through the provided list of UIDs and updates each widget's text to reflect the card's name and relevant attributes. If the `hide_equipped` flag is set to True, it will display a placeholder instead of the card's information for any equipment cards that are currently equipped, while still applying any necessary visual highlights for equipped cards.
     def _set_slot_widgets(self, widgets, slots, *, hide_equipped: bool = False) -> None:
         for i, uid in enumerate(slots):
             widget = widgets[i]
@@ -251,6 +258,7 @@ class GUIGameViewMixin:
             widget.configure(text=self.card_label(display_uid))
             self._apply_equipment_highlight(widget, display_uid)
 
+    # This method retrieves a list of unique identifiers (UIDs) for cards that are currently equipped to the specified card UID. It checks the game engine's state for the card instance corresponding to the provided UID and looks for any tags that indicate an "equipped_by" relationship. If such tags are found, it extracts the UIDs of the equipped cards and returns them in a list. The method also handles cases where the game engine is not initialized or when the provided UID is invalid, returning an empty list in those situations.
     def _equipped_uids_for(self, uid: str | None) -> list[str]:
         if self.engine is None or not uid:
             return []
@@ -268,6 +276,7 @@ class GUIGameViewMixin:
                 out.append(eq_uid)
         return out
 
+    # This method checks if a given card UID corresponds to an equipment card that is currently equipped to another card. It retrieves the card instance from the game engine's state and looks for any tags that indicate an "equipped_by" relationship. If such tags are found, it returns True to indicate that the card is equipped, otherwise it returns False. The method also handles cases where the game engine is not initialized or when the provided UID is invalid, returning False in those situations.
     def _is_equipment_card_equipped(self, uid: str | None) -> bool:
         if self.engine is None or not uid:
             return False
@@ -279,6 +288,7 @@ class GUIGameViewMixin:
                 return True
         return False
 
+    # This method applies a visual highlight to a widget based on whether the corresponding card UID has any equipment cards currently equipped. It checks if the card has equipped cards using the `_equipped_uids_for` method and sets the text color of the widget to red if it does, or black if it does not. The method also handles differences in widget types, attempting to configure both "fg" and "foreground" properties as needed, while gracefully handling any exceptions that may arise from unsupported configurations.
     def _apply_equipment_highlight(self, widget, uid: str | None) -> None:
         has_equipment = bool(self._equipped_uids_for(uid))
         color = "red" if has_equipment else "black"
@@ -291,6 +301,7 @@ class GUIGameViewMixin:
             except tk.TclError:
                 pass
 
+    # This method clears any visual highlights from the card slot widgets by resetting their text color to the default (black). It iterates through all the widgets corresponding to the attack, defense, and artifact slots for both players and sets their text color to black, effectively removing any highlights that may have been applied previously.
     def _append_new_logs(self) -> None:
         if self.engine is None:
             return
@@ -304,6 +315,7 @@ class GUIGameViewMixin:
         self.log_text.see(tk.END)
         self.log_text.configure(state="disabled")
 
+    # This method generates a label for a card based on its unique identifier (UID) by retrieving the card instance from the game engine's state and extracting relevant information such as the card's name, faith, strength (if applicable), and any counters. It formats this information into a string that can be displayed in the GUI to represent the card's current state. The method also handles cases where the UID is invalid or when the game engine is not initialized, returning a placeholder value in those situations.
     def card_label(self, uid: str | None) -> str:
         if not uid or self.engine is None:
             return "-"
@@ -326,6 +338,7 @@ class GUIGameViewMixin:
             break
         return f"{inst.definition.name}{faith}{strength}{counter_txt}"
 
+    # This method handles the right-click event on a card in the player's hand, providing a context menu with options for playing the card or activating its effects. It checks if the game engine is initialized and if the player can take actions, then determines which card was clicked based on the event's coordinates. Depending on the type of card and the current game state, it generates a context menu with appropriate options for playing the card or activating its effects, including any valid targets for those actions. The method also manages visual highlights for valid targets and ensures that the menu is displayed at the correct location on the screen.
     def on_hand_right_click(self, event) -> None:
         if self.engine is None or not self.can_human_act():
             return
@@ -342,7 +355,7 @@ class GUIGameViewMixin:
         ctype = inst.definition.card_type.lower()
         is_moribondo = inst.definition.name.lower().strip() == "moribondo"
 
-        menu = tk.Menu(self, tearoff=0)
+        menu = tk.Menu(cast(tk.Misc, self), tearoff=0)
         if self._is_monsone_card(uid):
             menu.add_command(label="Gioca Effetto...", command=lambda uu=uid: self.ask_guided_quick_target(uu))
             try:
@@ -406,6 +419,7 @@ class GUIGameViewMixin:
         finally:
             menu.grab_release()
 
+    # This method handles the selection event when a player clicks on a card in their hand. It checks if the game engine is initialized and retrieves the index of the selected card based on the current selection in the hand list. If a valid card is selected, it calls the `show_card_detail` method to display the details of the selected card, showing only the effect text if the `effect_only` flag is set to True. The method ensures that it gracefully handles cases where no card is selected or when the selection index is out of bounds.
     def on_hand_select(self, _event) -> None:
         if self.engine is None:
             return
@@ -419,6 +433,7 @@ class GUIGameViewMixin:
             return
         self.show_card_detail(hand[idx], effect_only=True)
 
+    # This method retrieves the unique identifier (UID) of the currently selected card in the player's hand. It checks if the game engine is initialized and retrieves the index of the selected card based on the current selection in the hand list. If a valid card is selected, it returns the UID of that card; otherwise, it returns None. The method also handles cases where no card is selected or when the selection index is out of bounds, ensuring that it returns None in those situations.
     def _selected_hand_uid(self) -> str | None:
         if self.engine is None:
             return None
@@ -432,6 +447,7 @@ class GUIGameViewMixin:
             return None
         return hand[idx]
 
+    # This method finds the first available slot for a card to be played in either the attack or defense lane for a given player. It checks the player's current slots in the specified lane and returns the identifier of the first open slot (e.g., "a1", "a2", "a3" for attack or "d1", "d2", "d3" for defense). If all slots in the specified lane are occupied, it returns None. The method also handles cases where the game engine is not initialized, returning None in that situation.
     def _first_open_slot(self, player_idx: int, lane: str) -> str | None:
         if self.engine is None:
             return None
@@ -442,6 +458,7 @@ class GUIGameViewMixin:
                 return f"{lane}{i + 1}"
         return None
 
+    # This method handles the action of playing the currently selected card from the player's hand. It checks if the game engine is initialized and if the player can take actions, then retrieves the UID of the selected card. Depending on the type of card and whether it requires a target, it either prompts the player to select a target or determines an appropriate target based on the card's type (e.g., placing a "santo" or "token" in an open attack or defense slot). If no valid target is available, it shows a warning message. Finally, it calls the `play_uid` method to execute the action of playing the card with the determined target.
     def play_selected_card(self) -> None:
         if self.engine is None or not self.can_human_act():
             return
@@ -464,6 +481,7 @@ class GUIGameViewMixin:
                 return
         self.play_uid(uid, target)
 
+    # This method handles the action of showing the details of a card that is currently on the board (in attack, defense, artifacts, or building slots). It checks if the game engine is initialized and retrieves the player index based on the relative player parameter. Then, it determines the unique identifier (UID) of the card in the specified zone and index, and if a valid UID is found, it calls the `show_card_detail` method to display the details of that card. The method ensures that it gracefully handles cases where the game engine is not initialized or when the specified zone and index do not correspond to a valid card, returning without action in those situations.
     def show_board_card_detail(self, relative_player: int, zone: str, idx: int) -> None:
         if self.engine is None:
             return
@@ -482,6 +500,7 @@ class GUIGameViewMixin:
         if uid:
             self.show_card_detail(uid)
 
+    # This method displays the details of a card based on its unique identifier (UID). It retrieves the card instance from the game engine's state and extracts relevant information such as the card's name, effect text, and any equipped cards. The method formats this information into a detailed string that can be displayed in the GUI, showing the card's name, its effect, and any equipped cards along with their effects. If the `effect_only` flag is set to True, it will display only the effect text without the card's name or equipped cards. The method also handles cases where the game engine is not initialized or when the provided UID is invalid, returning without action in those situations.
     def show_card_detail(self, uid: str, effect_only: bool = False) -> None:
         if self.engine is None:
             return
@@ -506,6 +525,7 @@ class GUIGameViewMixin:
         self.card_detail_text.insert(tk.END, detail)
         self.card_detail_text.configure(state="disabled")
 
+    # This method opens a debug window that displays the contents of a specified zone (deck, graveyard, or excommunicated) for the current player. It retrieves the relevant information from the game engine's state and creates a new window with a list of cards in the selected zone, allowing the user to view details of each card by selecting it from the list. The method also handles cases where the game engine is not initialized or when an invalid zone is specified, showing appropriate messages in those situations.
     def open_debug_zone(self, zone: str) -> None:
         engine = self.engine
         if engine is None:

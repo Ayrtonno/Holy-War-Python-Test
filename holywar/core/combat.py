@@ -11,13 +11,13 @@ from holywar.effects.state_flags import ensure_runtime_state, refresh_player_fla
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
 
-
+# Utility function to normalize text for consistent comparisons, removing accents and converting to lowercase. This is used for comparing card types and other string attributes in a way that is insensitive to formatting differences.
 def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
 
-
+# Checks if there is an active "no attacks until draw" effect in the current game state, which can block all attacks until a player draws a card. This is used to enforce effects that prevent attacking for a turn or until a specific condition is met, and it cleans up any invalid sources of this effect from the runtime state.
 def _has_active_no_attack_until_draw(engine: "GameEngine") -> bool:
     runtime_state = engine.state.flags.setdefault("runtime_state", {})
     raw_sources = list(runtime_state.get("no_attacks_until_draw_sources", []) or [])
@@ -26,12 +26,12 @@ def _has_active_no_attack_until_draw(engine: "GameEngine") -> bool:
     runtime_state["no_attacks_until_draw_sources"] = [uid for uid in raw_sources if str(uid).strip()]
     return bool(runtime_state["no_attacks_until_draw_sources"])
 
-
+# Checks if the attacker has an extra attack available for the current turn, which can allow it to attack again even if it is exhausted. This is used to support effects that grant additional attacks to a card for a specific turn, and it looks for a specific tag in the card's blessed list to determine if the extra attack is available.
 def _has_extra_attack_for_turn(attacker: CardInstance, turn_number: int) -> bool:
     wanted = f"extra_attack_turn:{int(turn_number)}"
     return any(str(tag) == wanted for tag in list(attacker.blessed))
 
-
+# Consumes an extra attack for the turn if available, removing the corresponding tag from the attacker's blessed list. This is called when an attack is declared with an extra attack available, and it ensures that the extra attack is only used once per turn by removing the tag that grants it.
 def _consume_extra_attack_for_turn(attacker: CardInstance, turn_number: int) -> bool:
     wanted = f"extra_attack_turn:{int(turn_number)}"
     if wanted not in attacker.blessed:
@@ -80,6 +80,7 @@ def validate_attack_preconditions(
             if attacker_crosses <= int(threshold):
                 return ActionResult(False, f"{aura_inst.definition.name} impedisce questo attacco.")
 
+    # Check the generic can_attack conditions from the runtime card scripts, which may include various custom rules and restrictions for whether the card can attack in the current context. This allows for a flexible system of attack requirements that can be defined on a per-card basis in the runtime scripts.
     if not runtime_cards.get_can_attack(attacker.definition.name):
         return ActionResult(False, f"{attacker.definition.name} non puo attaccare.")
     can_attack_now, blocked_msg = runtime_cards.can_attack_now(engine, player_idx, attacker_uid)
@@ -148,6 +149,7 @@ def apply_fiamma_primordiale_after_attack(
     if burn <= 0:
         return
 
+    # Check for retaliation multipliers from friendly artifacts, which can increase the burn damage if the defender has certain artifacts equipped that are linked to the building. This allows for synergies between buildings and artifacts that can enhance retaliation effects after combat.
     multiplier_count = 0
     for a_uid in defender_player.artifacts:
         if not a_uid:
@@ -163,6 +165,7 @@ def apply_fiamma_primordiale_after_attack(
     if multiplier_count > 0:
         burn = burn * (2 ** multiplier_count)
 
+    # Check if the attacker is still on the board and is a valid target for retaliation damage, which can prevent the retaliation from applying if the attacker has been removed from the field or is no longer a valid target due to changes in the game state after combat. This ensures that retaliation effects are only applied to valid targets that are still present after combat.
     if attacker_uid not in engine.state.instances:
         return
     attacker_player = engine.state.players[attacker_idx]
@@ -196,6 +199,7 @@ def resolve_direct_attack(
     attacker_player = engine.state.players[player_idx]
     defender_player = engine.state.players[defender_idx]
 
+    # Check if the attacker can attack based on its current state and any active effects.
     mark_attack_committed(engine, player_idx, attacker, defender_uid=None)
     if engine._consume_attack_shield(defender_idx):
         engine.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
@@ -231,6 +235,7 @@ def resolve_targeted_attack(
     attacker_player = engine.state.players[player_idx]
     defender_player = engine.state.players[defender_idx]
 
+    # Validate the target slot and check for any forced attack targets that must be attacked if present, ensuring that the player selects a valid target for the attack and adheres to any restrictions on which targets can be attacked based on the defender's current board state and active effects.
     if target_slot is None or not (0 <= target_slot < ATTACK_SLOTS):
         return ActionResult(False, "Indica bersaglio valido t1..t3.")
     forced_slots = [
@@ -260,6 +265,7 @@ def resolve_targeted_attack(
         if others:
             return ActionResult(False, f"{defender_name} puo essere bersagliato solo se non ci sono altri santi in attacco.")
 
+    # Check if the attacker can attack based on its current state and any active effects.
     mark_attack_committed(engine, player_idx, attacker, defender_uid=defender_uid)
     if engine._consume_attack_shield(defender_idx):
         engine.state.log(f"{defender_player.name} annulla il primo attacco ricevuto in questo turno.")
@@ -271,6 +277,7 @@ def resolve_targeted_attack(
         apply_fiamma_primordiale_after_attack(engine, player_idx, defender_idx, attacker_uid)
         return ActionResult(True, "Attacco annullato da barriera.")
 
+    # Calculate the damage, applying any relevant mitigation from defender auras or other effects, and then apply the damage to the defender's current faith. This includes checking for any special damage mitigation rules based on the attacker's type and the defender's auras, as well as applying any generic damage mitigation from the engine before finalizing the damage dealt.
     base_strength = max(0, attacker.definition.strength or 0)
     damage = engine.get_effective_strength(attacker_uid)
     attacker_type_key = _norm(attacker.definition.card_type)
@@ -298,6 +305,7 @@ def resolve_targeted_attack(
         )
         return ActionResult(True, "Nessun danno inflitto.")
 
+    # Apply the damage to the defender's current faith, ensuring that it does not go below zero, and emit the appropriate events for dealing and receiving damage. This updates the defender's current faith based on the damage dealt, and also logs the attack and its effects in the game state for transparency and record-keeping.
     before_def = def_faith
     defender.current_faith = max(0, def_faith - damage)
     engine._emit_event(
@@ -338,6 +346,7 @@ def resolve_targeted_attack(
         if gain:
             attacker.definition.strength = (attacker.definition.strength or 0) + int(gain)
 
+    # Check for any post-battle forced destruction effects from the attacker or defender, which can cause one or both of the combatants to be destroyed after combat based on their definitions and the current game state. This includes checking for effects that trigger on either the attacker or defender that can force the destruction of one or both cards after combat, and applying those effects accordingly.
     forced_destroy: list[tuple[int, str]] = []
     attacker_on_board = attacker_uid in (attacker_player.attack + attacker_player.defense)
     defender_on_board = defender_uid in (defender_player.attack + defender_player.defense)
@@ -373,6 +382,7 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
     if player_idx != engine.state.active_player:
         return ActionResult(False, "Puoi attaccare solo nel tuo turno.")
 
+    # Check if the battle phase is needed and start it if required.
     start_battle_phase_if_needed(engine, player_idx)
     attacker_player = engine.state.players[player_idx]
     defender_idx = 1 - player_idx
@@ -382,6 +392,7 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
     if not (0 <= slot_idx < ATTACK_SLOTS):
         return ActionResult(False, "Slot attacco non valido.")
 
+    # Determine the attacker based on the requested slot, checking both attack and defense slots as needed, and validate that there is a valid attacker in the chosen slot. This allows for attacks to be declared from either the attack or defense rows, depending on the player's choice and the current board state, while ensuring that a valid attacker is selected for the combat.
     attacker_uid = None
     if requested_defense:
         defense_uid = attacker_player.defense[slot_idx]
@@ -402,6 +413,7 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
                 return ActionResult(False, "Nessun Santo in quello slot.")
             attacker_uid = defense_uid
 
+    # Validate that the attacker exists in the game state and is a valid card instance, ensuring that the selected attacker is still present on the board and has a valid instance in the game state before proceeding with the attack. This prevents issues with invalid or missing attackers during combat resolution.
     attacker = engine.state.instances[attacker_uid]
     engine._emit_event(
         "on_attack_declared",
@@ -412,10 +424,12 @@ def attack(engine: "GameEngine", player_idx: int, from_slot: int, target_slot: i
     )
     engine._emit_event("on_this_card_attacks", player_idx, card=attacker_uid, target_slot=target_slot)
 
+    # Perform all pre-attack validations that can block the attack before damage calculation, including checking for any special targeting rules, attack restrictions, or other conditions that can prevent the attack from being declared based on the current game state and the specific cards involved in the combat.
     validation_error = validate_attack_preconditions(engine, player_idx, defender_idx, attacker_uid, attacker, target_slot)
     if validation_error is not None:
         return validation_error
 
+    # Route to the correct combat resolution branch based on whether the defender has any saints on the board, ensuring that direct attacks are resolved differently from targeted attacks with a defender, while still applying all relevant checks and effects for both cases.
     if all(slot is None for slot in defender_player.attack + defender_player.defense):
         return resolve_direct_attack(engine, player_idx, defender_idx, attacker_uid, attacker)
     return resolve_targeted_attack(engine, player_idx, defender_idx, attacker_uid, attacker, target_slot)

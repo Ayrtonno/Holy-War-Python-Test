@@ -30,12 +30,13 @@ from holywar.effects.runtime import (
 if TYPE_CHECKING:
     from holywar.core.engine import GameEngine
 
-
+# This module defines the `RuntimeEffectsMixin` class, which provides helper methods for resolving targets, moving cards between zones, summoning tokens, and applying effects based on the card scripts defined in the game. The mixin includes methods for handling various target specifications, managing equipment links, and applying specific effect actions such as increasing faith or returning cards to hand. The methods interact with the game engine's state and instances to perform the necessary operations while ensuring that the game rules are respected. This mixin can be used by the main game engine class to implement the core mechanics of card effects during gameplay.
 class RuntimeEffectsMixin:
     """Target resolution, zone moves and low-level effect execution helpers."""
     if TYPE_CHECKING:
         _temp_faith: dict[int, dict[str, list[tuple[str, int, str]]]]
 
+        # The following are method signatures for helper methods that are used within the `RuntimeEffectsMixin` class. These methods are responsible for various tasks such as resolving targets based on the current game state, moving cards between zones, managing equipment links, and evaluating conditions for effects. The actual implementations of these methods would contain the logic to interact with the game engine's state and perform the necessary operations according to the rules of the game.
         def _selected_target_raw_for_current_action(self, engine: GameEngine) -> str: ...
         def _selected_target_uid_for_current_action(self, engine: GameEngine, owner_idx: int) -> str | None: ...
         def _collect_selectable_targets_for_manual_target(
@@ -58,6 +59,7 @@ class RuntimeEffectsMixin:
         def get_is_altare_sigilli(self, card_name: str) -> bool: ...
         def get_is_pyramid(self, card_name: str) -> bool: ...
 
+    # This method resolves the targets specified by a `TargetSpec` based on the current game state and the owner of the effect. It handles various types of target specifications, such as cards controlled by the owner, event cards, source cards, equipped targets, and selected targets. The method collects potential targets into a pool and then filters them according to the criteria defined in the `TargetSpec`. Finally, it returns a list of resolved target UIDs, limited by the `max_targets` property if specified.
     def _resolve_targets(self, engine: GameEngine, owner_idx: int, target: TargetSpec) -> list[str]:
         pool: list[str] = []
         ttype = _norm(target.type)
@@ -109,6 +111,7 @@ class RuntimeEffectsMixin:
                 if selected.startswith("buff:"):
                     selected = selected.split(":", 1)[1]
 
+                # If the selected target is directly a UID of an instance, add it to the pool. Otherwise, attempt to resolve it based on the specified syntax and the current game state.
                 if selected in engine.state.instances:
                     pool.append(selected)
                 else:
@@ -117,6 +120,7 @@ class RuntimeEffectsMixin:
                     allow_any_owner = owner_key in {"any", "both", "all", "either"}
                     owner_candidates = self._target_owner_indices(owner_idx, target.owner)
 
+                    # The following block checks if the selected target includes a side prefix (e.g., "opp:", "self:") and adjusts the owner candidates and the selected token accordingly. This allows for more flexible target specifications where the player can indicate whether they are referring to their own cards or their opponent's cards.
                     if ":" in selected:
                         side, token = selected.split(":", 1)
                         side_key = _norm(side)
@@ -127,6 +131,7 @@ class RuntimeEffectsMixin:
                             owner_candidates = [owner_idx]
                             selected = token.strip()
 
+                    # The following block attempts to resolve the selected target by checking various zones (attack, defense, artifacts, building) for each of the owner candidates. If a matching UID is found in the specified zone, it is added to the pool. If the selected target cannot be resolved through these means, it falls back to checking if the selected token matches any selectable targets based on the current game state and the criteria defined in the `TargetSpec`.
                     resolved = False
                     fallback_uid: str | None = None
                     for real_owner in owner_candidates:
@@ -171,10 +176,12 @@ class RuntimeEffectsMixin:
                                 resolved = True
                                 break
 
+                    # If the target was not resolved through the specified syntax and zones, but a fallback UID was identified (e.g., when the selected target matches the source card and the specification allows for any owner), add the fallback UID to the pool.
                     if not resolved and fallback_uid:
                         pool.append(fallback_uid)
                         resolved = True
 
+                    # If the target was still not resolved, attempt to match the selected token against selectable targets based on the current game state and the criteria defined in the `TargetSpec`. This allows for more flexible targeting where the player can specify a token that matches certain characteristics of potential targets, rather than relying solely on specific syntax or UIDs.
                     if not resolved:
                         lookup = selected
                         if ":" in lookup:
@@ -188,6 +195,7 @@ class RuntimeEffectsMixin:
                                 pool.append(candidate_uid)
                                 break
 
+        # The following block handles the case where the target type is "selected_targets", which allows for multiple targets to be specified in a comma-separated format. It processes each selected target in the same way as the single "selected_target" case, allowing for flexible targeting based on the current game state and the criteria defined in the `TargetSpec`.
         elif ttype == "selected_targets":
             raw_selected = self._selected_target_raw_for_current_action(engine)
             if raw_selected:
@@ -196,6 +204,7 @@ class RuntimeEffectsMixin:
                 owner_key = _norm(target.owner)
                 allow_any_owner = owner_key in {"any", "both", "all", "either"}
 
+                # Process each selected target in the comma-separated list, applying the same resolution logic as for a single selected target. This allows for multiple targets to be specified and resolved in a single action, providing greater flexibility for effects that can affect multiple cards or instances based on player selection.
                 for selected in parts:
                     if selected.startswith("buff:"):
                         selected = selected.split(":", 1)[1]
@@ -204,6 +213,7 @@ class RuntimeEffectsMixin:
                         pool.append(selected)
                         continue
 
+                    # Check for side prefixes (e.g., "opp:", "self:") to determine owner candidates and adjust the selected token accordingly. This allows for more flexible targeting specifications where the player can indicate whether they are referring to their own cards or their opponent's cards for each selected target.
                     owner_candidates = self._target_owner_indices(owner_idx, target.owner)
                     if ":" in selected:
                         side, token = selected.split(":", 1)
@@ -215,6 +225,7 @@ class RuntimeEffectsMixin:
                             owner_candidates = [owner_idx]
                             selected = token.strip()
 
+                    # The following block attempts to resolve the selected target by checking various zones (attack, defense, artifacts, building) for each of the owner candidates. If a matching UID is found in the specified zone, it is added to the pool. If the selected target cannot be resolved through these means, it falls back to checking if the selected token matches any selectable targets based on the current game state and the criteria defined in the `TargetSpec`.
                     resolved = False
                     fallback_uid: str | None = None
                     for real_owner in owner_candidates:
@@ -258,10 +269,12 @@ class RuntimeEffectsMixin:
                             resolved = True
                             break
 
+                    # If the target was not resolved through the specified syntax and zones, but a fallback UID was identified (e.g., when the selected target matches the source card and the specification allows for any owner), add the fallback UID to the pool.
                     if not resolved and fallback_uid:
                         pool.append(fallback_uid)
                         resolved = True
 
+                    # If the target was still not resolved, attempt to match the selected token against selectable targets based on the current game state and the criteria defined in the `TargetSpec`. This allows for more flexible targeting where the player can specify a token that matches certain characteristics of potential targets, rather than relying solely on specific syntax or UIDs.
                     if not resolved and selected not in engine.state.instances:
                         selectable = self._collect_selectable_targets_for_manual_target(engine, owner_idx, target)
                         for candidate_uid in selectable:
@@ -274,15 +287,18 @@ class RuntimeEffectsMixin:
         else:
             return []
 
+        # After collecting potential targets into the pool based on the target type and specifications, filter the pool according to the criteria defined in the `TargetSpec` using the `_filter_target_pool` method. This allows for further refinement of the targets based on additional conditions or attributes specified in the `TargetSpec`. Finally, if a `max_targets` limit is specified in the `TargetSpec`, return only up to that number of targets from the filtered pool.
         out = self._filter_target_pool(engine, owner_idx, target, pool)
         if target.max_targets is not None and target.max_targets >= 0:
             return out[: int(target.max_targets)]
         return out
 
+    # This helper function provides a template for initializing player-specific flags in the runtime state. It returns a dictionary with default values for various flags related to the player's turn ownership, current phase of the game, and other state information that will be used to determine what actions the player can take and the status of their saints on the field. This template is used when ensuring that the runtime state is properly initialized for each player in the game engine's state flags.
     def _resolve_owner_scope(self, owner_idx: int, owner_key: str | None) -> int:
         key = _norm(owner_key or "me")
         return owner_idx if key in {"me", "owner", "controller"} else 1 - owner_idx
 
+    # This helper function determines the relevant player indices based on the owner index and the owner key specified in the target. It normalizes the owner key and checks if it indicates that the targets should be from the opponent, any player, or just the owner. Based on this, it returns a list of player indices that should be considered when resolving targets for effects. This allows for flexible targeting specifications where effects can apply to the owner's cards, the opponent's cards, or both players' cards depending on the context of the effect.
     def _target_owner_indices(self, owner_idx: int, owner_key: str | None) -> list[int]:
         key = _norm(owner_key or "me")
         if key in {"opponent", "enemy", "other"}:
@@ -291,10 +307,12 @@ class RuntimeEffectsMixin:
             return [owner_idx, 1 - owner_idx]
         return [owner_idx]
 
+    # This method retrieves the list of card UIDs in a specified zone for a given player. It normalizes the zone name and checks which zone is being requested (e.g., deck, hand, graveyard, field) and returns the corresponding list of card UIDs from the player's state. For the field zone, it combines the attack, defense, artifacts, and building zones to return all cards currently on the field for that player. This method is used to access the cards in different zones when resolving effects that target specific zones or when applying effects that move cards between zones.
     def _get_zone_cards(self, engine: GameEngine, owner_idx: int, zone_name: str) -> list[str]:
         player = engine.state.players[owner_idx]
         zone = _norm(zone_name)
 
+        # The following block checks the specified zone and returns the corresponding list of card UIDs for that zone. It handles various zones such as deck, hand, graveyard, excommunicated, and field. For the field zone, it combines the attack, defense, artifacts, and building zones to return all cards currently on the field for that player. This allows for easy access to the cards in different zones when resolving effects that target specific zones or when applying effects that move cards between zones.
         if zone in {"deck", "relicario"}:
             return list(player.deck)
         if zone == "hand":
@@ -304,6 +322,7 @@ class RuntimeEffectsMixin:
         if zone == "excommunicated":
             return list(player.excommunicated)
 
+        # For the field zone, combine the attack, defense, artifacts, and building zones to return all cards currently on the field for that player. This allows for easy access to all cards on the field when resolving effects that target the field or when applying effects that interact with cards on the field.
         out: list[str] = []
         if zone == "field":
             for uid in player.attack + player.defense + player.artifacts:
@@ -322,6 +341,7 @@ class RuntimeEffectsMixin:
             return [player.building] if player.building else []
         return out
 
+    # This method removes a specified card UID from all zones of a given player. It checks each zone (hand, deck, graveyard, excommunicated, attack, defense, artifacts, building) for the presence of the UID and removes it if found. For cards on the field (attack, defense, artifacts), if a card is removed from the attack zone and there is a corresponding card in the defense zone, it promotes the defense card to the attack zone. This method is used to ensure that when a card is moved or removed from play, it is properly taken out of all zones where it might be present for that player.
     def _remove_uid_from_all_player_zones(self, engine: GameEngine, owner_idx: int, uid: str) -> bool:
         player = engine.state.players[owner_idx]
 
@@ -338,6 +358,7 @@ class RuntimeEffectsMixin:
             player.excommunicated.remove(uid)
             return True
 
+        # The following block iterates through the attack, defense, and artifacts zones to find and remove the specified UID. If the UID is found in the attack zone, it checks if there is a corresponding card in the defense zone at the same slot. If there is a card in the defense zone and the attack slot becomes empty after removal, it promotes the defense card to the attack zone and clears the defense slot. This ensures that the game state remains consistent when cards are removed from play, especially when they are on the field.
         for zone_list in (player.attack, player.defense, player.artifacts):
             for i, slot_uid in enumerate(zone_list):
                 if slot_uid == uid:
@@ -358,6 +379,7 @@ class RuntimeEffectsMixin:
 
         return False
 
+    # This method moves a specified card UID to a target zone for a given player. It first checks if the card instance exists and retrieves the real owner of the card. It then determines the current zone of the card and whether it is leaving the field. Depending on the target zone, it performs the necessary operations to move the card, such as adding it to the player's hand, deck, graveyard, or field. If the card is moving from the field, it resets its runtime state. The method returns True if the move was successful and False if it was not possible (e.g., if trying to move a card to hand when the hand is full).
     def _move_uid_to_zone(self, engine: GameEngine, uid: str, to_zone: str, owner_idx: int) -> bool:
         inst = engine.state.instances.get(uid)
         if inst is None:
@@ -369,6 +391,7 @@ class RuntimeEffectsMixin:
         from_zone = engine._locate_uid_zone(real_owner, uid)
         leaving_field = from_zone in {"attack", "defense", "artifact", "building"}
 
+        # The following block handles moving the card to the hand zone. It checks if the card is already in the player's hand, and if not, it checks if there is space in the hand (not exceeding MAX_HAND). If there is space, it removes the card from all other zones and adds it to the player's hand. If the card is leaving the field, it also resets its runtime state. This ensures that the card is properly moved to the hand while respecting game rules such as hand size limits.
         if zone == "hand":
             if uid in player.hand:
                 return True
@@ -380,10 +403,12 @@ class RuntimeEffectsMixin:
             player.hand.append(uid)
             return True
 
+        # For other zones (deck, graveyard, excommunicated, field), the method removes the card from all other zones and adds it to the target zone. If the card is leaving the field, it resets its runtime state. The method returns True if the move was successful and False if it was not possible (e.g., if trying to move a card to an unsupported zone).
         self._remove_uid_from_all_player_zones(engine, real_owner, uid)
         if leaving_field:
             engine._reset_card_runtime_state(uid)
 
+        # The following block handles moving the card to the deck. If the card is not already in the deck, it adds it to the bottom of the deck. If the card is already in the deck, it moves it to the bottom. This ensures that the card is properly placed in the deck according to game rules.
         if zone in {"deck_bottom", "bottom_of_deck"}:
             if uid not in player.deck:
                 player.deck.insert(0, uid)
@@ -391,16 +416,19 @@ class RuntimeEffectsMixin:
                 player.deck.insert(0, player.deck.pop(player.deck.index(uid)))
             return True
 
+        # For the relicario zone, it treats it the same as the deck, adding the card to the bottom if it's not already there. This allows for effects that move cards to the relicario to function similarly to moving cards to the deck, while still keeping them in a separate zone for game mechanics purposes.
         if zone in {"deck", "relicario"}:
             if uid not in player.deck:
                 player.deck.append(uid)
             return True
 
+        # The following block handles moving the card to the graveyard. If the card is not already in the graveyard, it adds it to the graveyard. This allows for effects that move cards to the graveyard to function properly, ensuring that the card is placed in the correct zone for game mechanics purposes.
         if zone == "graveyard":
             if uid not in player.graveyard:
                 player.graveyard.append(uid)
             return True
 
+        # The following block handles moving the card to the excommunicated zone. If the card is not already in the excommunicated zone, it adds it to that zone. This allows for effects that move cards to the excommunicated zone to function properly, ensuring that the card is placed in the correct zone for game mechanics purposes.
         if zone == "excommunicated":
             if uid not in player.excommunicated:
                 player.excommunicated.append(uid)
@@ -408,6 +436,7 @@ class RuntimeEffectsMixin:
 
         return False
 
+    # This method retrieves the UID of the card that is currently equipped to a given equipment UID. It checks the blessed tags of the equipment instance for a tag that indicates which card it is equipped to (in the format "equipped_to:target_uid"). If such a tag is found, it returns the target UID. If no such tag is found or if the equipment instance does not exist, it returns None. This method is used to determine which card is currently benefiting from an equipment's effects.
     def _equipment_target_uid(self, engine: GameEngine, equipment_uid: str) -> str | None:
         inst = engine.state.instances.get(equipment_uid)
         if inst is None:
@@ -420,6 +449,7 @@ class RuntimeEffectsMixin:
                 return target_uid
         return None
 
+    # This method clears the equipment link for a given equipment UID. It retrieves the equipment instance and checks its blessed tags for any tag that indicates which card it is equipped to. If such a tag is found, it removes that tag from the equipment's blessed list and also removes the corresponding "equipped_by:equipment_uid" tag from the target card's blessed list. This effectively breaks the link between the equipment and the card it was equipped to. The method returns the target UID that was previously equipped, or None if there was no valid equipment instance or no equipped target.
     def _clear_equipment_link(self, engine: GameEngine, equipment_uid: str) -> str | None:
         equipment = engine.state.instances.get(equipment_uid)
         if equipment is None:
@@ -435,6 +465,7 @@ class RuntimeEffectsMixin:
             ]
         return target_uid
 
+    # This method places a specified equipment UID onto the field for a given player. It first checks if the equipment is already in the player's artifacts zone, and if so, it returns True. If not, it looks for an empty slot in the artifacts zone. If there are no empty slots, it takes the last slot and sends any existing equipment in that slot to the graveyard. It then removes the equipment UID from all other zones of the player and places it in the determined slot in the artifacts zone. The method returns True if the equipment was successfully placed on the field.
     def _place_equipment_on_field(self, engine: GameEngine, owner_idx: int, uid: str) -> bool:
         player = engine.state.players[owner_idx]
         if uid in player.artifacts:
@@ -450,6 +481,7 @@ class RuntimeEffectsMixin:
         player.artifacts[slot] = uid
         return True
 
+    # This method summons a token onto the field for a given player. It takes the token name and an optional preferred zone (attack or defense) as parameters. It looks up the token definition in the cards.json file, creates a new card instance for the token, and places it in the appropriate zone based on the preferred zone and available space. If the preferred zone is full, it tries to place the token in the other zone. If there is no space in either zone, it logs a message and returns None. If the token is successfully summoned, it emits relevant events and resolves any "enter field" effects associated with the token.
     def _summon_generated_token(
         self,
         engine: GameEngine,
@@ -474,6 +506,7 @@ class RuntimeEffectsMixin:
         slot = None
         zone = ""
 
+        # The following block determines where to place the summoned token based on the preferred zone and available space. If the preferred zone is defense, it first tries to find an open slot in the defense zone, and if none are available, it tries the attack zone. If the preferred zone is attack, it first tries the attack zone, and if none are available, it tries the defense zone. If no preferred zone is specified, it defaults to trying the attack zone first and then the defense zone. If there is no space in either zone, it logs a message indicating that there is no space to summon the token and returns None.
         if preferred == "defense":
             slot = engine._first_open(player.defense)
             zone = "defense"
@@ -496,6 +529,7 @@ class RuntimeEffectsMixin:
             engine.state.log(f"{player.name} non ha spazio per evocare {token_name}.")
             return None
 
+        # To generate a unique UID for the new token instance, the method looks through all existing instances in the game state to find the maximum numeric suffix used in UIDs that start with "c". It then creates a new UID by incrementing this maximum number and formatting it as "cXXXXX" where XXXXX is a zero-padded number. This ensures that the new token instance has a unique identifier that does not conflict with existing instances.
         max_num = 0
         for uid in engine.state.instances:
             if uid.startswith("c"):
@@ -505,6 +539,7 @@ class RuntimeEffectsMixin:
                     pass
         new_uid = f"c{max_num + 1:05d}"
 
+        # The method creates a new card instance for the token using the token definition. It copies the token definition to ensure that the new instance has its own separate definition data. It then adds the new instance to the game state with the generated UID, setting its owner, current faith, and other relevant attributes. Finally, it places the new token in the appropriate zone on the field and emits events related to the token entering the field and being summoned.
         token_copy = CardDefinition.from_dict(token_def.to_dict())
         engine.state.instances[new_uid] = CardInstance(
             uid=new_uid,
@@ -513,6 +548,7 @@ class RuntimeEffectsMixin:
             current_faith=token_copy.faith,
         )
 
+        # Depending on the determined zone (attack or defense), the method places the new token in the appropriate slot for that zone. It then emits events to indicate that the token has entered the field and has been summoned, allowing other effects and game mechanics to respond to these events as needed.
         if zone == "attack":
             player.attack[slot] = new_uid
         else:
@@ -531,6 +567,7 @@ class RuntimeEffectsMixin:
 
         return new_uid
 
+    # This method applies a specified effect to a list of target UIDs. It first normalizes the action specified in the effect and checks if it matches any known effect actions or aliases. Depending on the action, it performs the corresponding operations to apply the effect to the target instances. For example, it can increase faith, increase strength, grant attack barriers, prevent attacks, negate activations, grant extra attacks, equip or unequip cards, and destroy equipment. The method also checks if the effect usage can be applied based on the game state and ensures that any necessary conditions are met before applying the effect.
     def _apply_effect(
         self,
         engine: GameEngine,
@@ -2539,7 +2576,9 @@ class RuntimeEffectsMixin:
             player.inspiration = normal
             return
 
+    #endregion
     @staticmethod
+    #region Utility methods for effects
     def _resolve_player_scope(owner_idx: int, scope: str | None) -> int:
         key = _norm(scope or "me")
         if key in {"me", "owner", "controller", "self"}:
@@ -2552,6 +2591,7 @@ class RuntimeEffectsMixin:
             return 1
         return owner_idx
 
+    # This method is not currently used but can be helpful for future effects that need to count specific cards on the field.
     def _count_named_cards_on_field(self, engine: GameEngine, card_name: str) -> int:
         key = _norm(card_name)
         total = 0
@@ -2564,27 +2604,33 @@ class RuntimeEffectsMixin:
                 total += 1
         return total
 
+    # This method is not currently used but can be helpful for future effects that need to count specific cards in a player's hand.
     def _effect_usage_state(self, engine: GameEngine) -> dict[str, int]:
         return engine.state.flags.setdefault("effect_usage_per_turn", {})
 
+    # This method generates a unique key for tracking the usage of an effect based on the engine state, owner index, source UID, and effect details. This allows the system to enforce usage limits on effects that can only be used a certain number of times per turn.
     def _effect_usage_key(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> str:
         group = _norm(effect.action or "effect")
         return f"{group}:{owner_idx}:{source_uid}:{engine.state.turn_number}"
 
+    # This method determines the usage limit for an effect based on its specification. If the effect has a defined usage limit per turn, it returns that limit (ensuring it's at least 1). If there is no usage limit specified, it returns 0, indicating that the effect can be used unlimited times.
     def _effect_usage_limit(self, effect: EffectSpec) -> int:
         if effect.usage_limit_per_turn is not None:
             return max(1, int(effect.usage_limit_per_turn))
         return 0
 
+    # This method checks how many times a specific effect has been used by a player in the current turn. It retrieves the usage count from the engine's state using a unique key generated for that effect. If the effect has not been used yet, it defaults to 0.
     def _effect_usage_used(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> int:
         return int(self._effect_usage_state(engine).get(self._effect_usage_key(engine, owner_idx, source_uid, effect), 0))
 
+    # This method checks if a specific effect can be used by a player based on its usage limit. If the effect has a usage limit of 0 or less, it can be used unlimited times, so the method returns True. Otherwise, it compares the number of times the effect has already been used with the defined limit and returns True if the effect can still be used, or False if the limit has been reached.
     def _effect_usage_can_use(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> bool:
         limit = self._effect_usage_limit(effect)
         if limit <= 0:
             return True
         return self._effect_usage_used(engine, owner_idx, source_uid, effect) < limit
 
+    # This method should be called whenever an effect is successfully used to increment the usage count for that effect in the engine's state. It first checks the usage limit for the effect, and if there is a limit, it generates the unique key for that effect and increments the count in the state. If there is no limit, it does nothing.
     def _effect_usage_consume(self, engine: GameEngine, owner_idx: int, source_uid: str, effect: EffectSpec) -> None:
         limit = self._effect_usage_limit(effect)
         if limit <= 0:
@@ -2593,6 +2639,7 @@ class RuntimeEffectsMixin:
         usage = self._effect_usage_state(engine)
         usage[key] = int(usage.get(key, 0)) + 1
 
+    # This method implements the logic for an effect that allows a player to return a card to their hand once per turn. It checks if the effect has already been used this turn by looking for a specific marker in the source instance's blessed list. If the effect has not been used, it iterates through the target UIDs, attempts to move each card back to its owner's hand, and if successful, adds the marker to prevent further use of the effect this turn. It also emits an event for each card that leaves the field and returns to the hand.
     def _apply_return_to_hand_once_per_turn(
         self,
         engine: GameEngine,
@@ -2615,11 +2662,13 @@ class RuntimeEffectsMixin:
                 source_inst.blessed.append(marker)
             engine._emit_event("on_this_card_leaves_field", owner, card=uid, destination="hand")
 
+    # This method checks if a given event context matches the specified conditions for an effect. It evaluates the conditions recursively, allowing for complex logical structures using "all_of", "any_of", and "not". If the conditions are met, it returns True; otherwise, it returns False.
     def _event_matches(self, ctx: "RuleEventContext", owner_idx: int, condition: dict[str, Any]) -> bool:
         if not condition:
             return True
         return self._eval_condition_node(ctx, owner_idx, condition)
 
+    # This method evaluates a condition node, which can contain logical operators ("all_of", "any_of", "not") and leaf conditions. It processes the logical structure accordingly and ultimately evaluates the leaf conditions to determine if the overall condition is satisfied.
     def _eval_condition_node(self, ctx: "RuleEventContext", owner_idx: int, node: dict[str, Any]) -> bool:
         if not node:
             return True
@@ -2642,6 +2691,7 @@ class RuntimeEffectsMixin:
             return False
         return self._eval_condition_leaf(ctx, owner_idx, node)
 
+    # This method evaluates a leaf condition by checking various properties of the event context against the specified criteria. It checks for conditions related to the event's payload, such as zones, card ownership, card types, turn scope, phase, source card status, and target card properties. If any of the conditions are not met, it returns False; if all conditions are satisfied, it returns True.
     def _eval_condition_leaf(self, ctx: "RuleEventContext", owner_idx: int, condition: dict[str, Any]) -> bool:
         payload = ctx.payload
         event_card_uid = str(payload.get("card", payload.get("saint", payload.get("token", ""))))
@@ -2955,6 +3005,7 @@ class RuntimeEffectsMixin:
                 return False
         return True
 
+    # This method collects card UIDs that match the specified requirement criteria for a given player. It considers the zones to search, applies card filters, and returns a list of matching card UIDs. The method also handles special script-based filters for specific card types.
     def _collect_cards_for_requirement(self, engine: GameEngine, owner_idx: int, requirement: dict[str, Any]) -> list[str]:
         owner_key = str(requirement.get("owner", "me"))
         zones = list(requirement.get("zones", []) or [])
@@ -3022,6 +3073,7 @@ class RuntimeEffectsMixin:
             ]
         return filtered
 
+    # This method is responsible for resolving any pending temporary control returns at the end of a player's turn. It checks the engine's state for any records of cards that need to be returned to their original controllers, verifies if the conditions for return are met (such as the current turn and the presence of the card on the field), and then moves the card back to its original position if necessary. If the card cannot be returned to its original position, it attempts to place it in an open slot on the field. The method also ensures that any "sin_to_controller_on_death" blessings are removed from the card when it is returned.
     def resolve_end_turn_runtime_hooks(self, engine: GameEngine, current_player_idx: int) -> None:
         runtime_state = engine.state.flags.setdefault("runtime_state", {})
         pending_returns = list(runtime_state.get("temporary_control_returns", []) or [])

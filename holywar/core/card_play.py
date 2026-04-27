@@ -16,31 +16,31 @@ if TYPE_CHECKING:
 SAINT_TYPES = {"santo", "token"}
 QUICK_TYPES = {"benedizione", "maledizione"}
 
-
+# Normalizes text for comparison by removing accents, converting to lowercase, and stripping whitespace. This is used for flexible matching of card names and types, allowing for variations in input while still correctly identifying the intended card or type.
 def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
 
-
+# A more ASCII-focused normalization that also removes accents and converts to lowercase, but is specifically designed for card type comparisons where non-ASCII characters might be present. This can help ensure consistent matching of card types regardless of the presence of accents or other diacritics.
 def _aliases_of(inst: "CardInstance") -> list[str]:
     raw_aliases = getattr(inst.definition, "aliases", []) or []
     if isinstance(raw_aliases, str):
         return [part.strip() for part in raw_aliases.split(",") if part.strip()]
     return [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
 
-
+# Generates a set of normalized name variants for a card instance, including the main name and any aliases. This is used for flexible matching of card names in various contexts, allowing for recognition of the card even if different naming conventions or aliases are used.
 def _name_variants(inst: "CardInstance") -> set[str]:
     variants = {_norm(inst.definition.name)}
     variants.update(_norm(alias) for alias in _aliases_of(inst))
     return {v for v in variants if v}
 
-
+# Creates a single normalized string containing the card's name and aliases, which can be used for "contains" style matching. This allows for checking if a certain substring is present in any of the card's names or aliases, providing a more flexible way to identify cards based on partial name matches.
 def _name_haystack(inst: "CardInstance") -> str:
     parts = [inst.definition.name, *_aliases_of(inst)]
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
-
+# Checks if the player has any unplayed Innate cards in hand, which can affect the ability to play other cards during the preparation phase. This is used to enforce the rule that if a player has an unplayed Innate card in hand during the preparation phase, they cannot play other cards until they either play or remove the Innate card.
 def _has_unplayed_innate_in_hand(engine: "GameEngine", player_idx: int) -> bool:
     player = engine.state.players[player_idx]
     active_innate = set(engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).get(str(player_idx), []) or [])
@@ -52,7 +52,7 @@ def _has_unplayed_innate_in_hand(engine: "GameEngine", player_idx: int) -> bool:
             return True
     return False
 
-
+# Removes any unplayed Innate cards from the player's hand and logs the reason. This is used when a player attempts to play a non-Innate card during the preparation phase while having an unplayed Innate card in hand, enforcing the rule that they must first deal with the Innate card before playing other cards.
 def _remove_unplayed_innate_from_hand(engine: "GameEngine", player_idx: int) -> None:
     player = engine.state.players[player_idx]
     active_innate = set(engine.state.flags.setdefault("innate_active_uids", {"0": [], "1": []}).get(str(player_idx), []) or [])
@@ -82,6 +82,7 @@ def validate_play_constraints(
     zone: str | None = None
     slot = -1
 
+    # Validate placement rules based on card type and target directives, ensuring that the card can be played in the intended location and context. This includes checking for valid zones for Saints/Tokens, ensuring that only one Building is present, and handling any specific placement rules for Artifacts.
     if ctype in SAINT_TYPES:
         if _norm(runtime_cards.get_play_owner(card.definition.name)) in {"opponent", "enemy", "other"}:
             place_owner_idx = 1 - player_idx
@@ -99,7 +100,7 @@ def validate_play_constraints(
 
     return True, "", place_owner_idx, zone, slot
 
-
+# Finds a card on the player's field by name, which is used for legacy scripted play requirements that specify sacrificing a card by name. This allows for matching the required sacrifice card even if the player has multiple cards on the field, as long as one of them matches the specified name.
 def _find_owned_field_uid_by_name(engine: "GameEngine", owner_idx: int, card_name: str) -> str | None:
     wanted = _norm(card_name)
     player = engine.state.players[owner_idx]
@@ -110,7 +111,7 @@ def _find_owned_field_uid_by_name(engine: "GameEngine", owner_idx: int, card_nam
         return player.building
     return None
 
-
+# Retrieves the list of card UIDs in the specified zone(s) for the given owner, which is used for collecting candidate cards that can be sacrificed or otherwise interacted with based on play requirements. This function abstracts away the details of how cards are stored in different zones and provides a unified way to access them based on the owner's perspective and the specified zone.
 def _zone_uids_for_owner(engine: "GameEngine", owner_idx: int, zone_name: str) -> list[str]:
     player = engine.state.players[owner_idx]
     zone = _norm(zone_name)
@@ -137,7 +138,7 @@ def _zone_uids_for_owner(engine: "GameEngine", owner_idx: int, zone_name: str) -
         return list(player.excommunicated)
     return []
 
-
+# Checks if a card instance matches the specified filter criteria, which is used for validating whether candidate cards meet the requirements for sacrifices or other interactions based on play requirements. This includes checking for name equality, name containment, and card type matching according to the provided filter configuration.
 def _match_requirement_filter(engine: "GameEngine", uid: str, card_filter: dict) -> bool:
     inst = engine.state.instances.get(uid)
     if inst is None:
@@ -158,7 +159,7 @@ def _match_requirement_filter(engine: "GameEngine", uid: str, card_filter: dict)
         return False
     return True
 
-
+# Collects card UIDs that meet the specified requirement criteria, which is used for gathering potential sacrifice candidates or other relevant cards based on play requirements. This function combines the logic of determining the relevant owners and zones with the filtering of cards based on the provided criteria to return a list of matching card UIDs.
 def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement: dict) -> list[str]:
     owner_key = _norm(str(requirement.get("owner", "me")))
     if owner_key in {"opponent", "enemy", "other"}:
@@ -181,7 +182,7 @@ def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement
                     out.append(uid)
     return list(dict.fromkeys(out))
 
-
+# Parses the play target string to extract the main placement target and any additional directives, which is used for handling complex play requirements that may involve specific targeting or selection of cards. This allows for a flexible way to encode both the intended placement of the card being played and any additional instructions for how to handle sacrifices or other interactions.
 def _split_play_target_with_directives(target: str | None) -> tuple[str | None, dict[str, str]]:
     raw = str(target or "").strip()
     if not raw:
@@ -201,7 +202,7 @@ def _split_play_target_with_directives(target: str | None) -> tuple[str | None, 
         directives[key] = value.strip()
     return placement, directives
 
-
+# Consumes the costs associated with scripted play requirements, such as sacrifices, and returns any relevant information such as total sacrificed faith. This function handles the logic for processing the "can_play_by_sacrificing" requirement, including selecting the appropriate cards to sacrifice based on the requirement configuration and applying any necessary effects or flags to those cards.
 def _consume_scripted_play_costs(
     engine: "GameEngine",
     player_idx: int,
@@ -243,6 +244,7 @@ def _consume_scripted_play_costs(
             engine.send_to_graveyard(owner, uid)
         return None, sacrificed_total_faith
 
+    # Legacy single-card sacrifice by name requirement for backward compatibility with older scripts. This checks for the "can_play_by_sacrificing_specific_card_from_field" requirement and processes it by finding a card with the specified name on the player's field and sacrificing it. This allows older card scripts that use this specific requirement to still function without needing to be updated to the new format.
     legacy_requirement = str(script.play_requirements.get("can_play_by_sacrificing_specific_card_from_field", "")).strip()
     if legacy_requirement:
         sacrifice_uid = _find_owned_field_uid_by_name(engine, player_idx, legacy_requirement)
@@ -490,6 +492,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
     selected_uid = player.hand[hand_index]
     script = runtime_cards.get_script(card.definition.name)
 
+    # Determine the card type and handle preparation phase restrictions for Innate cards, including the requirement to play or remove unplayed Innate cards before playing other cards during the preparation phase. This ensures that the rules regarding Innate cards are enforced correctly based on the current game phase and the player's hand.
     ctype = _norm(card.definition.card_type)
     if ctype == "innata":
         if engine.state.phase != "preparation":
@@ -508,6 +511,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
 
     placement_target, _directives = _split_play_target_with_directives(target)
 
+    # Check the generic can_play conditions from the runtime card scripts, which may include various custom rules and restrictions for whether the card can be played in the current context. This allows for a flexible system of play requirements that can be defined on a per-card basis in the runtime scripts.
     can_play, reason = runtime_cards.can_play(
         engine,
         player_idx,
@@ -517,10 +521,12 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
     if not can_play:
         return ActionResult(False, reason or "Non puoi giocare questa carta.")
 
+    # Validate placement constraints based on card type and target, ensuring that the card can be played in the intended location and context according to the game rules and any specific requirements for that card type.
     is_valid, error_message, place_owner_idx, zone, slot = validate_play_constraints(engine, player_idx, card, placement_target)
     if not is_valid:
         return ActionResult(False, error_message)
 
+    # Calculate the cost of playing the card, including any modifiers from other cards or game state, and attempt to spend the required Inspiration. This handles the payment of costs for playing the card and ensures that the player has sufficient resources to play it, while also applying any relevant cost modifications based on the current game context.
     paid_inspiration = 0
     if ctype not in QUICK_TYPES:
         use_all_remaining = bool(
@@ -538,6 +544,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
             if spend_error is not None:
                 return spend_error
 
+    # Remove the card from hand and handle any special logic for Saints/Tokens that depends on the paid Inspiration, such as setting current faith or storing the paid inspiration as a tag on the card. This ensures that the card is properly removed from the player's hand and that any relevant effects based on the cost payment are applied to the card before it is placed on the field or resolved.
     uid = player.hand.pop(hand_index)
     if script is not None and ctype in SAINT_TYPES:
         faith_mult_raw = script.play_requirements.get("set_source_faith_from_paid_inspiration_multiplier")
@@ -567,6 +574,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
                     card.blessed.append("no_sin_on_death")
     emit_play_events(engine, player_idx, uid, ctype, placement_target)
 
+    # Dispatch to the correct resolver branch based on card type, handling the specific logic for placing Saints/Tokens, Artifacts, Buildings, and resolving Innate effects, while also providing a fallback for unimplemented card types. This ensures that each card type is processed according to its specific rules and effects when played from hand.
     if ctype in SAINT_TYPES:
         result = handle_saint_play(engine, player_idx, place_owner_idx, uid, zone, slot)
     elif ctype == "artefatto":
@@ -588,6 +596,7 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
         engine.state.log(f"{player.name} usa {card.definition.name} senza effetto implementato.")
         result = ActionResult(True, "Carta giocata.")
 
+    # After resolving the play, perform cleanup of any zero-faith saints and check for win conditions, ensuring that the game state is updated correctly after the card is played and that any relevant end-of-turn checks are performed.
     if not result.ok:
         return result
 
@@ -622,5 +631,4 @@ def quick_play(engine: "GameEngine", player_idx: int, hand_index: int, target: s
         engine.check_win_conditions()
         return ActionResult(True, f"{player.name} scomunica Moribondo e protegge {target_card.definition.name}.")
     return resolve_quick_play_from_hand(engine, player_idx, uid, target)
-
 
