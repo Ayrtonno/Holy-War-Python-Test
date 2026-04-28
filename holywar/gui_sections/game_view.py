@@ -532,6 +532,52 @@ class GUIGameViewMixin:
             messagebox.showinfo("Debug Zone", "Avvia prima una partita.")
             return
         zone_key = str(zone).strip().lower()
+        if zone_key in {"innate", "innata", "innate_active"}:
+            active_map = engine.state.flags.get("innate_active_uids", {"0": [], "1": []}) or {"0": [], "1": []}
+            players = engine.state.players
+
+            win = tk.Toplevel(cast(Any, self))
+            win.title("Innate Attive")
+            self._center_toplevel(win, 760, 560)
+            win.transient(cast(Any, self))
+
+            both_active = bool(active_map.get("0")) and bool(active_map.get("1"))
+            if both_active:
+                status_text = "Entrambi i giocatori hanno carte Innata attive."
+            elif bool(active_map.get("0")):
+                status_text = f"Solo {players[0].name} ha carte Innata attive."
+            elif bool(active_map.get("1")):
+                status_text = f"Solo {players[1].name} ha carte Innata attive."
+            else:
+                status_text = "Nessun giocatore ha carte Innata attive."
+
+            ttk.Label(win, text=status_text).pack(anchor="w", padx=8, pady=(8, 4))
+
+            details = tk.Text(win, wrap="word")
+            details.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+            details.configure(state="normal")
+
+            for p_idx in (0, 1):
+                p_name = players[p_idx].name
+                active_uids = list(active_map.get(str(p_idx), []) or [])
+                details.insert(tk.END, f"{p_name}\n")
+                if not active_uids:
+                    details.insert(tk.END, "  - Nessuna Innata attiva.\n\n")
+                    continue
+                for uid in active_uids:
+                    inst = engine.state.instances.get(uid)
+                    if inst is None:
+                        details.insert(tk.END, f"  - [UID {uid}] carta non trovata.\n")
+                        continue
+                    cdef = inst.definition
+                    effect = (cdef.effect_text or "").strip() or "Nessun effetto testuale disponibile."
+                    details.insert(tk.END, f"  - {cdef.name}\n")
+                    details.insert(tk.END, f"    {effect}\n")
+                details.insert(tk.END, "\n")
+
+            details.configure(state="disabled")
+            return
+
         labels = {
             "deck": "Deck",
             "graveyard": "Cimitero",

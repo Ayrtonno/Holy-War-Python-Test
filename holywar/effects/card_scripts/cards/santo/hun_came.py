@@ -21,6 +21,18 @@ SCRIPT = {
             },
         }
     ],
+    "faith_bonus_rules": [
+        {
+            "amount_mode": "per_count_div_floor",
+            "threshold": 5,
+            "divisor": 5,
+            "amount": 2,
+            "requirement": {
+                "owner": "me",
+                "zone": "graveyard",
+            },
+        }
+    ],
     "triggered_effects": [],
     "on_play_actions": [],
 }

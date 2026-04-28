@@ -103,6 +103,7 @@ class GameEngine:
             "on_token_summoned",
             "on_card_sent_to_graveyard",
             "on_card_excommunicated",
+            "on_card_drawn",
         }:
             runtime_cards.refresh_conditional_faith_bonuses(self, 0)
             runtime_cards.refresh_conditional_faith_bonuses(self, 1)

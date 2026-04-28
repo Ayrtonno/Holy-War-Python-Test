@@ -198,6 +198,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "destroy_linked_targets_from_source_tags",
     "move_all_from_zone_to_zone",
     "activate_oltretomba_promise",
+    "discard_hand_then_pressure_opponent",
+    "choose_draw_amount_with_self_sin_cost",
 }
 
 # This set defines the supported effect conditions that can be used in card scripts or effect definitions. These conditions are used to determine whether certain effects should be applied based on the current game state, the event context, or other factors. The runtime will evaluate these conditions when processing effects to ensure that they are only applied when the specified conditions are met.

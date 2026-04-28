@@ -25,6 +25,14 @@ def _norm(text: str) -> str:
     return value.strip().lower()
 
 
+def _shuffle_graveyard_if_oltretomba_active(engine: "GameEngine", player_idx: int) -> None:
+    promise_state = dict(
+        engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False}
+    )
+    if bool(promise_state.get(str(player_idx), False)):
+        engine.rng.shuffle(engine.state.players[player_idx].graveyard)
+
+
 # Returns the logical zone of a card for event emission and movement rules.
 def locate_uid_zone(engine: "GameEngine", owner_idx: int, uid: str) -> str:
     player = engine.state.players[owner_idx]
@@ -192,6 +200,7 @@ def send_to_graveyard(
 
     if uid not in engine.state.players[grave_target_idx].graveyard:
         engine.state.players[grave_target_idx].graveyard.append(uid)
+        _shuffle_graveyard_if_oltretomba_active(engine, grave_target_idx)
 
     remove_from_board(engine, player, uid)
 
@@ -265,6 +274,7 @@ def absolve_card_to_graveyard(engine: "GameEngine", owner_idx: int, uid: str) ->
     if uid in player.excommunicated:
         player.excommunicated.remove(uid)
         player.graveyard.append(uid)
+        _shuffle_graveyard_if_oltretomba_active(engine, owner_idx)
 
 
 # Removes a card from the field without applying sin penalties.
@@ -281,6 +291,7 @@ def remove_from_board_no_sin(engine: "GameEngine", owner_idx: int, uid: str) -> 
 
     if uid not in player.graveyard:
         player.graveyard.append(uid)
+        _shuffle_graveyard_if_oltretomba_active(engine, owner_idx)
     remove_from_board(engine, player, uid)
 
     if leaving_field:
@@ -373,6 +384,7 @@ def move_graveyard_card_to_deck_bottom(engine: "GameEngine", player_idx: int, ui
         return False
     player.graveyard.remove(uid)
     player.deck.insert(0, uid)
+    _shuffle_graveyard_if_oltretomba_active(engine, player_idx)
     return True
 
 

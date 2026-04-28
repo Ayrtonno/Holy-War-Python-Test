@@ -135,6 +135,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         ttk.Button(actions, text="Deck", command=lambda: self.open_debug_zone("deck")).pack(side="left", padx=(12, 4))
         ttk.Button(actions, text="Cimitero", command=lambda: self.open_debug_zone("graveyard")).pack(side="left", padx=4)
         ttk.Button(actions, text="Scomunicate", command=lambda: self.open_debug_zone("excommunicated")).pack(side="left", padx=4)
+        ttk.Button(actions, text="Innate", command=lambda: self.open_debug_zone("innate")).pack(side="left", padx=4)
 
         top.columnconfigure(7, weight=1)
         top.columnconfigure(13, weight=1)

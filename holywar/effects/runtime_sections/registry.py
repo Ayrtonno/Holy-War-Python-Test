@@ -686,6 +686,18 @@ class RuntimeRegistryMixin:
             # Recalculate bonuses
             new_bonus = 0
             for rule in self.get_faith_bonus_rules(inst.definition.name):
+                amount_mode_key = _norm(str(rule.get("amount_mode", "flat")))
+                if amount_mode_key == "per_count_div_floor":
+                    req = dict(rule.get("requirement", {}) or {})
+                    candidates = self._collect_cards_for_requirement(engine, owner_idx, req)
+                    threshold = max(0, int(rule.get("threshold", 1) or 1))
+                    if len(candidates) < threshold:
+                        continue
+                    divisor = max(1, int(rule.get("divisor", 1) or 1))
+                    per_amount = int(rule.get("amount", 0) or 0)
+                    new_bonus += (len(candidates) // divisor) * per_amount
+                    continue
+
                 required_name = str(rule.get("controller_has_card_with_name", "")).strip()
                 required_zone = str(rule.get("controller_has_card_zone", "field")).strip().lower() or "field"
                 required_self_name = str(rule.get("if_card_name", "")).strip()
