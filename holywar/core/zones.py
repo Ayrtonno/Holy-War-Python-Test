@@ -223,6 +223,10 @@ def excommunicate_card(
         board_owner_idx = owner_idx
     inst = engine.state.instances.get(uid)
     if inst is not None:
+        if runtime_cards.is_immune_to_action(inst.definition.name, "excommunicate_card") or runtime_cards.is_immune_to_action(
+            inst.definition.name, "excommunicate_card_no_sin"
+        ):
+            return
         script = runtime_cards.get_script(inst.definition.name)
         if script and bool(script.indestructible_except_own_activation):
             allowed_uid = str(engine.state.flags.get("_allow_indestructible_uid", "")).strip()

@@ -874,7 +874,13 @@ class RuntimeRegistryMixin:
                 threshold = max(0, int(rule.get("threshold", 1) or 1))
                 if len(candidates) < threshold:
                     continue
-                amount = int(rule.get("amount", 0) or 0)
+                amount_mode_key = _norm(str(rule.get("amount_mode", "flat")))
+                if amount_mode_key == "per_count_div_floor":
+                    divisor = max(1, int(rule.get("divisor", 1) or 1))
+                    per_amount = int(rule.get("amount", 0) or 0)
+                    amount = (len(candidates) // divisor) * per_amount
+                else:
+                    amount = int(rule.get("amount", 0) or 0)
                 if amount == 0:
                     continue
                 group = str(rule.get("group", "")).strip() or f"{source_uid}:{idx}"
@@ -1000,6 +1006,7 @@ class RuntimeRegistryMixin:
         target_owner: str,
         source_card_type: str,
         target_card_type: str,
+        target_card_name: str | None = None,
         target_equipped_by_card_types: list[str] | None = None,
     ) -> bool:
         event_key = _norm(event)
@@ -1021,6 +1028,12 @@ class RuntimeRegistryMixin:
                 continue
             tgt_types = {_norm(str(v)) for v in list(rule.get("target_card_types", []) or []) if str(v).strip()}
             if tgt_types and tgt_type_key not in tgt_types:
+                continue
+            target_names = {_norm(str(v)) for v in list(rule.get("target_names", []) or []) if str(v).strip()}
+            if target_names and _norm(target_card_name or "") not in target_names:
+                continue
+            target_name_contains = _norm(str(rule.get("target_name_contains", "")))
+            if target_name_contains and target_name_contains not in _norm(target_card_name or ""):
                 continue
             required_equips = {
                 _norm(str(v))

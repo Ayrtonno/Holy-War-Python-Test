@@ -326,9 +326,13 @@ class RuntimeEffectsMixin:
     def _get_zone_cards(self, engine: GameEngine, owner_idx: int, zone_name: str) -> list[str]:
         player = engine.state.players[owner_idx]
         zone = _norm(zone_name)
+        promise_state = dict(engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+        promise_active = bool(promise_state.get(str(owner_idx), False))
 
         # The following block checks the specified zone and returns the corresponding list of card UIDs for that zone. It handles various zones such as deck, hand, graveyard, excommunicated, and field. For the field zone, it combines the attack, defense, artifacts, and building zones to return all cards currently on the field for that player. This allows for easy access to the cards in different zones when resolving effects that target specific zones or when applying effects that move cards between zones.
         if zone in {"deck", "relicario"}:
+            if promise_active:
+                return list(player.graveyard)
             return list(player.deck)
         if zone == "hand":
             return list(player.hand)
@@ -425,6 +429,14 @@ class RuntimeEffectsMixin:
 
         # The following block handles moving the card to the deck. If the card is not already in the deck, it adds it to the bottom of the deck. If the card is already in the deck, it moves it to the bottom. This ensures that the card is properly placed in the deck according to game rules.
         if zone in {"deck_bottom", "bottom_of_deck"}:
+            promise_state = dict(engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+            promise_active = bool(promise_state.get(str(real_owner), False))
+            if promise_active:
+                if uid not in player.graveyard:
+                    player.graveyard.insert(0, uid)
+                else:
+                    player.graveyard.insert(0, player.graveyard.pop(player.graveyard.index(uid)))
+                return True
             if uid not in player.deck:
                 player.deck.insert(0, uid)
             else:
@@ -433,6 +445,12 @@ class RuntimeEffectsMixin:
 
         # For the relicario zone, it treats it the same as the deck, adding the card to the bottom if it's not already there. This allows for effects that move cards to the relicario to function similarly to moving cards to the deck, while still keeping them in a separate zone for game mechanics purposes.
         if zone in {"deck", "relicario"}:
+            promise_state = dict(engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+            promise_active = bool(promise_state.get(str(real_owner), False))
+            if promise_active:
+                if uid not in player.graveyard:
+                    player.graveyard.append(uid)
+                return True
             if uid not in player.deck:
                 player.deck.append(uid)
             return True
@@ -1625,11 +1643,237 @@ class RuntimeEffectsMixin:
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
             return
+        if action == "sacrifice_time_resolution":
+            flags = engine.state.flags
+            owner_player = engine.state.players[owner_idx]
+            opponent_idx = 1 - owner_idx
+            opponent_player = engine.state.players[opponent_idx]
+            state_key = f"_sacrifice_time_state_{source_uid}"
+            local_state = dict(flags.get(state_key, {}) or {})
+            pending = int(local_state.get("pending", 0))
+
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+
+            if not local_state:
+                discarded_count = 0
+                for hand_uid in list(owner_player.hand):
+                    owner_player.hand.remove(hand_uid)
+                    if hand_uid not in owner_player.graveyard:
+                        owner_player.graveyard.append(hand_uid)
+                    discarded_count += 1
+                    engine._emit_event(
+                        "on_card_discarded",
+                        owner_idx,
+                        card=hand_uid,
+                        from_hand_to_graveyard=True,
+                    )
+                    engine._emit_event(
+                        "on_card_sent_to_graveyard",
+                        owner_idx,
+                        card=hand_uid,
+                        from_zone="hand",
+                        owner=owner_idx,
+                    )
+                pending = discarded_count
+
+            if pending <= 0:
+                flags.pop(state_key, None)
+                return
+
+            if choice_ready and choice_source == source_uid:
+                mode = str(local_state.get("mode", "")).strip()
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                selected_uids = [uid for uid in selected_uids if uid in candidates]
+
+                if mode == "field":
+                    for t_uid in selected_uids:
+                        if t_uid in engine.state.instances:
+                            engine.send_to_graveyard(engine.state.instances[t_uid].owner, t_uid)
+                    pending = max(0, pending - len(selected_uids))
+                elif mode == "hand":
+                    for t_uid in selected_uids:
+                        if t_uid in opponent_player.hand:
+                            opponent_player.hand.remove(t_uid)
+                            if t_uid not in opponent_player.graveyard:
+                                opponent_player.graveyard.append(t_uid)
+                            pending = max(0, pending - 1)
+                            engine._emit_event(
+                                "on_card_discarded",
+                                opponent_idx,
+                                card=t_uid,
+                                from_hand_to_graveyard=True,
+                            )
+                            engine._emit_event(
+                                "on_card_sent_to_graveyard",
+                                opponent_idx,
+                                card=t_uid,
+                                from_zone="hand",
+                                owner=opponent_idx,
+                            )
+
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+
+            enemy_field: list[str] = []
+            for uid in opponent_player.attack + opponent_player.defense + opponent_player.artifacts:
+                if uid:
+                    enemy_field.append(uid)
+            if opponent_player.building:
+                enemy_field.append(opponent_player.building)
+
+            if pending > 0 and enemy_field:
+                max_pick = min(pending, len(enemy_field))
+                flags[state_key] = {"pending": pending, "mode": "field"}
+                flags["_runtime_choice_source"] = source_uid
+                flags["_runtime_choice_candidates"] = ";;".join(enemy_field)
+                flags["_runtime_choice_owner"] = str(owner_idx)
+                flags["_runtime_choice_title"] = "Sacrificio del Tempo"
+                flags["_runtime_choice_prompt"] = "Seleziona le carte avversarie sul terreno da inviare al cimitero."
+                flags["_runtime_choice_min_targets"] = str(max_pick)
+                flags["_runtime_choice_max_targets"] = str(max_pick)
+                flags["_runtime_choice_ready"] = False
+                flags["_runtime_resume_same_action"] = True
+                flags["_runtime_reveal_card"] = source_uid
+                flags["_runtime_waiting_for_reveal"] = True
+                return
+
+            if pending > 0 and opponent_player.hand:
+                max_pick = min(pending, len(opponent_player.hand))
+                flags[state_key] = {"pending": pending, "mode": "hand"}
+                flags["_runtime_choice_source"] = source_uid
+                flags["_runtime_choice_candidates"] = ";;".join(opponent_player.hand)
+                flags["_runtime_choice_owner"] = str(owner_idx)
+                flags["_runtime_choice_title"] = "Sacrificio del Tempo"
+                flags["_runtime_choice_prompt"] = "Seleziona le carte della mano avversaria da scartare."
+                flags["_runtime_choice_min_targets"] = str(max_pick)
+                flags["_runtime_choice_max_targets"] = str(max_pick)
+                flags["_runtime_choice_ready"] = False
+                flags["_runtime_resume_same_action"] = True
+                flags["_runtime_reveal_card"] = source_uid
+                flags["_runtime_waiting_for_reveal"] = True
+                return
+
+            while pending > 0 and opponent_player.deck:
+                top_uid = opponent_player.deck.pop()
+                if top_uid not in opponent_player.graveyard:
+                    opponent_player.graveyard.append(top_uid)
+                pending -= 1
+                engine._emit_event(
+                    "on_card_sent_to_graveyard",
+                    opponent_idx,
+                    card=top_uid,
+                    from_zone="relicario",
+                    owner=opponent_idx,
+                )
+
+            if pending > 0 and not opponent_player.deck:
+                flags.pop(state_key, None)
+                engine.state.winner = owner_idx
+                engine.state.game_over = True
+                engine.state.log(f"{owner_player.name} vince per effetto di Sacrificio del Tempo.")
+                return
+
+            if pending > 0:
+                flags[state_key] = {"pending": pending}
+                flags["_runtime_resume_same_action"] = True
+                return
+
+            flags.pop(state_key, None)
+            return
         if action == "store_target_count":
             flag_name = str(effect.flag or "").strip()
             if not flag_name:
                 return
             engine.state.flags[flag_name] = int(len(targets))
+            return
+        if action == "add_link_tag_to_source_from_selected_target":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            tag_prefix = str(effect.flag or "link").strip() or "link"
+            for t_uid in targets:
+                if t_uid not in engine.state.instances:
+                    continue
+                link_tag = f"{tag_prefix}:{t_uid}"
+                if link_tag not in source_inst.blessed:
+                    source_inst.blessed.append(link_tag)
+            return
+        if action == "destroy_linked_targets_from_source_tags":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            tag_prefix = str(effect.flag or "link").strip() or "link"
+            to_destroy: list[str] = []
+            for tag in list(source_inst.blessed):
+                if not isinstance(tag, str) or not tag.startswith(f"{tag_prefix}:"):
+                    continue
+                linked_uid = tag.split(":", 1)[1].strip()
+                if linked_uid and linked_uid in engine.state.instances:
+                    to_destroy.append(linked_uid)
+            for linked_uid in to_destroy:
+                linked_inst = engine.state.instances.get(linked_uid)
+                if linked_inst is None:
+                    continue
+                engine.destroy_any_card(linked_inst.owner, linked_uid)
+            source_inst.blessed = [
+                tag
+                for tag in source_inst.blessed
+                if not (isinstance(tag, str) and tag.startswith(f"{tag_prefix}:"))
+            ]
+            return
+        if action == "move_all_from_zone_to_zone":
+            from_zone = _norm(effect.from_zone or effect.zone or "")
+            to_zone = str(effect.to_zone or "").strip()
+            if not from_zone or not to_zone:
+                return
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            if from_zone == "graveyard":
+                pool = list(player.graveyard)
+            elif from_zone in {"deck", "relicario"}:
+                pool = list(player.deck)
+            elif from_zone == "hand":
+                pool = list(player.hand)
+            elif from_zone == "excommunicated":
+                pool = list(player.excommunicated)
+            elif from_zone == "field":
+                pool = [uid for uid in (player.attack + player.defense + player.artifacts) if uid]
+                if player.building:
+                    pool.append(player.building)
+            else:
+                pool = []
+            for uid in pool:
+                self._move_uid_to_zone(engine, uid, to_zone, target)
+            if bool(effect.shuffle_after):
+                engine.rng.shuffle(player.deck)
+            return
+        if action == "activate_oltretomba_promise":
+            flags = engine.state.flags
+            promise_state = dict(flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+            promise_state[str(owner_idx)] = True
+            flags["oltretomba_promise_active"] = promise_state
+
+            player = engine.state.players[owner_idx]
+            for uid in list(player.deck):
+                if uid not in player.graveyard:
+                    player.graveyard.append(uid)
+            player.deck = []
+            engine.rng.shuffle(player.graveyard)
+            engine.state.log("Promessa dell'oltretomba attiva: reliquiario e cimitero diventano la stessa zona.")
             return
         if action == "floor_divide_flag":
             flag_name = str(effect.flag or "").strip()
@@ -1987,6 +2231,28 @@ class RuntimeEffectsMixin:
                 if inst is None:
                     continue
                 inst.current_faith = int(inst.current_faith or 0) + amount
+            engine.state.flags.pop(flag_name, None)
+            return
+        if action == "decrease_faith_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = max(0, int(raw_value))
+            except (TypeError, ValueError):
+                amount = 0
+            if amount <= 0:
+                engine.state.flags.pop(flag_name, None)
+                return
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                current = int(inst.current_faith or 0)
+                inst.current_faith = current - amount
+                if _norm(inst.definition.card_type) in {"santo", "token"} and int(inst.current_faith or 0) <= 0:
+                    engine.destroy_saint_by_uid(inst.owner, t_uid, cause="effect")
             engine.state.flags.pop(flag_name, None)
             return
         if action == "add_inspiration":
@@ -2477,6 +2743,16 @@ class RuntimeEffectsMixin:
                     token_name,
                     preferred_zone=preferred_zone,
                 )
+            return
+        if action == "summon_generated_token_in_each_free_saint_slot":
+            token_name = str(effect.card_name or "").strip()
+            if not token_name:
+                return
+            summon_owner = self._resolve_owner_scope(owner_idx, effect.owner or "me")
+            player = engine.state.players[summon_owner]
+            free_slots = sum(1 for uid in player.attack if uid is None) + sum(1 for uid in player.defense if uid is None)
+            for _ in range(max(0, int(free_slots))):
+                self._summon_generated_token(engine, summon_owner, token_name)
             return
 
         if action == "summon_token":

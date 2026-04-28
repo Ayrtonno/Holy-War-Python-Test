@@ -141,6 +141,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "shuffle_deck",
     "shuffle_target_owner_decks",
     "summon_generated_token",
+    "summon_generated_token_in_each_free_saint_slot",
     "return_to_hand_once_per_turn",
     "swap_attack_defense",
     "swap_selected_attack_defense",
@@ -168,6 +169,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "inflict_sin_from_flag",
     "store_target_faith",
     "increase_faith_from_flag",
+    "decrease_faith_from_flag",
     "excommunicate_card_no_sin",
     "store_target_faith_and_excommunicate_no_sin",
     "move_first_to_hand",
@@ -191,6 +193,11 @@ SUPPORTED_EFFECT_ACTIONS = {
     "equip_card",
     "unequip_card",
     "destroy_equipment",
+    "sacrifice_time_resolution",
+    "add_link_tag_to_source_from_selected_target",
+    "destroy_linked_targets_from_source_tags",
+    "move_all_from_zone_to_zone",
+    "activate_oltretomba_promise",
 }
 
 # This set defines the supported effect conditions that can be used in card scripts or effect definitions. These conditions are used to determine whether certain effects should be applied based on the current game state, the event context, or other factors. The runtime will evaluate these conditions when processing effects to ensure that they are only applied when the specified conditions are met.

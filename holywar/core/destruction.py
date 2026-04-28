@@ -91,6 +91,7 @@ def destroy_saint_by_uid(
                         target_owner="friendly",
                         source_card_type=source_type,
                         target_card_type=_norm(inst.definition.card_type),
+                        target_card_name=inst.definition.name,
                     ):
                         engine.state.log(
                             f"{def_inst.definition.name} impedisce a {source.definition.name} di distruggere {inst.definition.name}."
@@ -220,6 +221,7 @@ def destroy_saint_by_uid(
                     target_owner="friendly",
                     source_card_type="any",
                     target_card_type=_norm(inst.definition.card_type),
+                    target_card_name=inst.definition.name,
                     target_equipped_by_card_types=equipped_types,
                 ):
                     sin_gain = 0

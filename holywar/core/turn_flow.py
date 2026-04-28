@@ -204,13 +204,16 @@ def initial_setup_draw(engine: "GameEngine") -> None:
 # Draws cards while applying draw-triggered effects and bookkeeping.
 def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
     player = engine.state.players[player_idx]
+    promise_state = dict(engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+    promise_active = bool(promise_state.get(str(player_idx), False))
     drawn = 0
     for _ in range(amount):
         if not hand_has_space_for_non_innata(player, engine.state.instances):
             break
-        if not player.deck:
+        source_pool = player.graveyard if promise_active else player.deck
+        if not source_pool:
             break
-        drawn_uid = player.deck.pop()
+        drawn_uid = source_pool.pop()
         player.hand.append(drawn_uid)
         drawn += 1
         engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []}).setdefault(str(player_idx), []).append(drawn_uid)
@@ -222,7 +225,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
             runtime_state["no_attacks_until_draw_sources"] = []
             engine.state.log("Giorno Festivo: il blocco agli attacchi termina per una pescata.")
 
-        engine._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
+        engine._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone=("graveyard" if promise_active else "relicario"))
         card_name = engine.state.instances[drawn_uid].definition.name
         drawn_faith = engine.state.instances[drawn_uid].definition.faith
 

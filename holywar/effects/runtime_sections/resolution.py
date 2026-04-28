@@ -793,6 +793,7 @@ class RuntimeResolutionMixin:
                             target_owner="friendly",
                             source_card_type=source_type,
                             target_card_type=target_card_type,
+                            target_card_name=inst.definition.name,
                         ):
                             blocked = True
                             break

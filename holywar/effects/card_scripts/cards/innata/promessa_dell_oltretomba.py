@@ -7,5 +7,10 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "triggered_effects": [],
-    "on_play_actions": [],
+    "on_play_actions": [
+        {
+            "target": {"type": "source_card"},
+            "effect": {"action": "activate_oltretomba_promise"},
+        }
+    ],
 }
