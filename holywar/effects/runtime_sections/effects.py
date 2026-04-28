@@ -36,6 +36,15 @@ class RuntimeEffectsMixin:
     if TYPE_CHECKING:
         _temp_faith: dict[int, dict[str, list[tuple[str, int, str]]]]
 
+        def get_script(self, card_name: str) -> CardScript | None: ...
+        def resolve_play(
+            self,
+            engine: GameEngine,
+            player_idx: int,
+            uid: str,
+            target: str | None,
+        ) -> object: ...
+
         # The following are method signatures for helper methods that are used within the `RuntimeEffectsMixin` class. These methods are responsible for various tasks such as resolving targets based on the current game state, moving cards between zones, managing equipment links, and evaluating conditions for effects. The actual implementations of these methods would contain the logic to interact with the game engine's state and perform the necessary operations according to the rules of the game.
         def _selected_target_raw_for_current_action(self, engine: GameEngine) -> str: ...
         def _selected_target_uid_for_current_action(self, engine: GameEngine, owner_idx: int) -> str | None: ...
@@ -654,6 +663,7 @@ class RuntimeEffectsMixin:
 
         return new_uid
 
+# pyright: reportGeneralTypeIssues=false
     # This method applies a specified effect to a list of target UIDs. It first normalizes the action specified in the effect and checks if it matches any known effect actions or aliases. Depending on the action, it performs the corresponding operations to apply the effect to the target instances. For example, it can increase faith, increase strength, grant attack barriers, prevent attacks, negate activations, grant extra attacks, equip or unequip cards, and destroy equipment. The method also checks if the effect usage can be applied based on the game state and ensures that any necessary conditions are met before applying the effect.
     def _apply_effect(
         self,
@@ -2562,7 +2572,7 @@ class RuntimeEffectsMixin:
                 engine.state.log("Tornado: selezione non valida, serve almeno un Santo avversario tra i bersagli.")
                 return
 
-            to_destroy: list[tuple[int, str]] = []
+            tornado_to_destroy: list[tuple[int, str]] = []
             for p_idx in (0, 1):
                 p = engine.state.players[p_idx]
                 for uid in list(p.attack + p.defense):
@@ -2575,9 +2585,9 @@ class RuntimeEffectsMixin:
                         continue
                     if _norm(inst.definition.card_type) not in {"santo", "token"}:
                         continue
-                    to_destroy.append((inst.owner, uid))
+                    tornado_to_destroy.append((inst.owner, uid))
 
-            for real_owner, uid in to_destroy:
+            for real_owner, uid in tornado_to_destroy:
                 if uid not in engine.state.instances:
                     continue
                 engine.destroy_saint_by_uid(real_owner, uid, cause="effect")
