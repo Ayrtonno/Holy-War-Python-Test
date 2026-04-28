@@ -394,6 +394,7 @@ class RuntimeRegistryMixin:
                 on_play_actions=on_play_actions,
                 on_enter_actions=on_enter_actions,
                 on_activate_actions=on_activate_actions,
+                faith_bonus_rules=[dict(v) for v in list(spec.get("faith_bonus_rules", []) or []) if isinstance(v, dict)],
                 counted_bonuses=[dict(v) for v in list(spec.get("counted_bonuses", []) or []) if isinstance(v, dict)],
             )
         )

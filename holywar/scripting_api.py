@@ -385,9 +385,18 @@ class RuleAPI:
     def _iter_uids(self, player_idx: int, zone: str) -> list[str]:
         p = self.state.players[player_idx]
         z = _norm(zone)
+        # If Promessa dell'oltretomba is active for this player, deck and graveyard are the same logical zone
+        promise_state = dict(getattr(self.engine.state, "flags", {}).get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+        merged = bool(promise_state.get(str(player_idx), False))
         if z in {"relicario", "deck"}:
+            if merged:
+                # include both deck and graveyard when merged (deck first)
+                return list(p.deck) + [uid for uid in p.graveyard if uid not in p.deck]
             return list(p.deck)
         if z == "graveyard":
+            if merged:
+                # include both graveyard and deck when merged (graveyard first)
+                return list(p.graveyard) + [uid for uid in p.deck if uid not in p.graveyard]
             return list(p.graveyard)
         if z == "excommunicated":
             return list(p.excommunicated)
@@ -409,7 +418,12 @@ class RuleAPI:
             p = self.state.players[idx]
             if uid in p.hand:
                 return idx, "hand"
+            # If Promessa dell'oltretomba is active for this player, consider deck cards as graveyard for queries
+            promise_state = dict(getattr(self.engine.state, "flags", {}).get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+            merged = bool(promise_state.get(str(idx), False))
             if uid in p.deck:
+                if merged:
+                    return idx, "graveyard"
                 return idx, "relicario"
             if uid in p.graveyard:
                 return idx, "graveyard"
@@ -453,7 +467,11 @@ class RuleAPI:
     # Check if there's a card with the given name in the controller's graveyard. This is used for conditions that depend on having a specific card in the graveyard.
     def in_graveyard(self, card_name: str) -> bool:
         key = _norm_ascii(card_name)
-        for uid in self.state.players[self.controller_idx].graveyard:
+        p = self.state.players[self.controller_idx]
+        promise_state = dict(getattr(self.engine.state, "flags", {}).get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+        merged = bool(promise_state.get(str(self.controller_idx), False))
+        uids = list(p.graveyard) + ([uid for uid in p.deck if uid not in p.graveyard] if merged else [])
+        for uid in uids:
             if _norm_ascii(self.state.instances[uid].definition.name) == key:
                 return True
         return False
@@ -703,7 +721,13 @@ class RuleAPI:
 
     # Count the number of cards in the player's graveyard. This is used for effects that depend on the number of cards in the graveyard, which can be important for certain strategies and card effects that interact with the graveyard.
     def count_cards_in_graveyard(self, player: int) -> int:
-        return len(self.state.players[int(player)].graveyard)
+        idx = int(player)
+        p = self.state.players[idx]
+        promise_state = dict(getattr(self.engine.state, "flags", {}).get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+        if bool(promise_state.get(str(idx), False)):
+            # merged zone: count unique cards in graveyard + deck
+            return len(list(dict.fromkeys(p.graveyard + p.deck)))
+        return len(p.graveyard)
 
     # Count the number of cards in the player's relicario (deck). This is used for effects that depend on the number of cards remaining in the deck, which can be important for certain strategies and card effects that interact with the deck.
     def count_cards_in_relicario(self, player: int) -> int:

@@ -389,6 +389,7 @@ class CardScript:
     on_play_actions: list[ActionSpec] = field(default_factory=list)
     on_enter_actions: list[ActionSpec] = field(default_factory=list)
     on_activate_actions: list[ActionSpec] = field(default_factory=list)
+    faith_bonus_rules: list[dict[str, Any]] = field(default_factory=list)
     counted_bonuses: list[dict[str, Any]] = field(default_factory=list)
 
 

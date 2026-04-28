@@ -114,9 +114,22 @@ class RuntimeEffectsMixin:
                     elif zone == "hand":
                         pool.extend(p.hand)
                     elif zone in {"deck", "relicario"}:
-                        pool.extend(p.deck)
+                        promise_state = dict(engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+                        merged = bool(promise_state.get(str(scoped_owner), False))
+                        if merged:
+                            # when merged, include both deck and graveyard
+                            pool.extend(p.deck)
+                            pool.extend([uid for uid in p.graveyard if uid not in p.deck])
+                        else:
+                            pool.extend(p.deck)
                     elif zone == "graveyard":
-                        pool.extend(p.graveyard)
+                        promise_state = dict(engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False}) or {"0": False, "1": False})
+                        merged = bool(promise_state.get(str(scoped_owner), False))
+                        if merged:
+                            pool.extend(p.graveyard)
+                            pool.extend([uid for uid in p.deck if uid not in p.graveyard])
+                        else:
+                            pool.extend(p.graveyard)
                     elif zone == "excommunicated":
                         pool.extend(p.excommunicated)
         elif ttype == "event_card":
@@ -356,14 +369,18 @@ class RuntimeEffectsMixin:
         promise_active = bool(promise_state.get(str(owner_idx), False))
 
         # The following block checks the specified zone and returns the corresponding list of card UIDs for that zone. It handles various zones such as deck, hand, graveyard, excommunicated, and field. For the field zone, it combines the attack, defense, artifacts, and building zones to return all cards currently on the field for that player. This allows for easy access to the cards in different zones when resolving effects that target specific zones or when applying effects that move cards between zones.
-        if zone in {"deck", "relicario"}:
+        if zone in {"deck", "relicario", "graveyard"}:
             if promise_active:
-                return list(player.graveyard)
-            return list(player.deck)
+                # When Promessa dell'oltretomba is active, deck and graveyard are the same logical zone.
+                # Return cards from both graveyard and deck so queries counting either zone include both pools.
+                # Preserve graveyard order first and avoid duplicates.
+                merged = list(player.graveyard) + [uid for uid in player.deck if uid not in player.graveyard]
+                return merged
+            if zone in {"deck", "relicario"}:
+                return list(player.deck)
+            return list(player.graveyard)
         if zone == "hand":
             return list(player.hand)
-        if zone == "graveyard":
-            return list(player.graveyard)
         if zone == "excommunicated":
             return list(player.excommunicated)
 
