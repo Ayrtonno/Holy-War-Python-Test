@@ -772,6 +772,32 @@ class RuntimeResolutionMixin:
                 drawn = engine.state.flags.get("cards_drawn_this_turn", {})
                 if uid not in set(drawn.get(str(owner_idx), [])):
                     continue
+            source_inst = engine.state.instances.get(source_uid) if source_uid else None
+            source_type = _norm(source_inst.definition.card_type) if source_inst is not None else ""
+            if source_type:
+                target_owner = int(inst.owner)
+                source_owner = int(source_inst.owner) if source_inst is not None else owner_idx
+                target_card_type = _norm(inst.definition.card_type)
+                if source_owner != target_owner and target_card_type in {"santo", "token"}:
+                    p = engine.state.players[target_owner]
+                    protector_uids = [cand for cand in (p.attack + p.defense + p.artifacts) if cand]
+                    if p.building:
+                        protector_uids.append(p.building)
+                    blocked = False
+                    for protector_uid in protector_uids:
+                        protector_name = engine.state.instances[protector_uid].definition.name
+                        if self.blocks_interaction(
+                            protector_name,
+                            event="target_by_effect",
+                            source_owner="enemy",
+                            target_owner="friendly",
+                            source_card_type=source_type,
+                            target_card_type=target_card_type,
+                        ):
+                            blocked = True
+                            break
+                    if blocked:
+                        continue
             out.append(uid)
         return out
 

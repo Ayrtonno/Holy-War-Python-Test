@@ -473,6 +473,13 @@ class GameEngine:
             return ActionResult(False, "Puoi attivare abilita solo nel tuo turno.")
         uid = self.resolve_board_uid(player_idx, source)
         if uid is None:
+            other_uid = self.resolve_board_uid(1 - player_idx, source)
+            if other_uid is not None:
+                other_inst = self.state.instances[other_uid]
+                other_script = runtime_cards.get_script(other_inst.definition.name)
+                if other_script and bool(other_script.can_activate_by_any_player):
+                    uid = other_uid
+        if uid is None:
             return ActionResult(False, "Sorgente non valida. Usa a1..a3, d1..d3, r1..r4 o b.")
         inst = self.state.instances[uid]
         if "silenced" in inst.cursed:

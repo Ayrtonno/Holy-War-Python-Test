@@ -9,7 +9,7 @@ SCRIPT = {
     "play_targeting": "none",
     "play_requirements": {
         "all_of": [
-            {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+            {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
             {"controller_altare_sigilli_gte": 7},
         ]
     },

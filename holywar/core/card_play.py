@@ -40,6 +40,22 @@ def _name_haystack(inst: "CardInstance") -> str:
     parts = [inst.definition.name, *_aliases_of(inst)]
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
+
+def _has_invert_saint_summon_aura(engine: "GameEngine") -> bool:
+    for p_idx in (0, 1):
+        player = engine.state.players[p_idx]
+        field_uids = [uid for uid in (player.attack + player.defense + player.artifacts) if uid]
+        if player.building:
+            field_uids.append(player.building)
+        for uid in field_uids:
+            inst = engine.state.instances.get(uid)
+            if inst is None:
+                continue
+            script = runtime_cards.get_script(inst.definition.name)
+            if script and bool(script.inverts_saint_summon_controller):
+                return True
+    return False
+
 # Checks if the player has any unplayed Innate cards in hand, which can affect the ability to play other cards during the preparation phase. This is used to enforce the rule that if a player has an unplayed Innate card in hand during the preparation phase, they cannot play other cards until they either play or remove the Innate card.
 def _has_unplayed_innate_in_hand(engine: "GameEngine", player_idx: int) -> bool:
     player = engine.state.players[player_idx]
@@ -86,6 +102,8 @@ def validate_play_constraints(
     if ctype in SAINT_TYPES:
         if _norm(runtime_cards.get_play_owner(card.definition.name)) in {"opponent", "enemy", "other"}:
             place_owner_idx = 1 - player_idx
+        if ctype == "santo" and _has_invert_saint_summon_aura(engine):
+            place_owner_idx = 1 - place_owner_idx
         zone, slot = engine._parse_zone_target(target)
         if zone not in {"attack", "defense"}:
             return False, "Per un Santo/Token indica zona: a1..a3 o d1..d3", place_owner_idx, zone, slot
@@ -262,6 +280,11 @@ def _consume_scripted_play_costs(
 def calculate_play_cost(engine: "GameEngine", player_idx: int, hand_index: int, card: "CardInstance") -> int:
     player = engine.state.players[player_idx]
     ctype = _norm(card.definition.card_type)
+    free_play_flags = engine.state.flags.setdefault("free_play_uids", {"0": [], "1": []})
+    free_uids = set(free_play_flags.get(str(player_idx), []) or [])
+    if hand_index >= 0 and hand_index < len(player.hand):
+        if player.hand[hand_index] in free_uids:
+            return 0
     cost = card.definition.faith or 0
 
     if ctype in SAINT_TYPES:
@@ -407,7 +430,15 @@ def handle_saint_play(
 def handle_artifact_play(engine: "GameEngine", player_idx: int, uid: str) -> ActionResult:
     player = engine.state.players[player_idx]
     card = engine.state.instances[uid]
-    blocked = min(ARTIFACT_SLOTS - 1, engine._count_artifact(1 - player_idx, "Gggnag'ljep"))
+    blocked = 0
+    opponent = engine.state.players[1 - player_idx]
+    enemy_field_uids = [cand for cand in (opponent.attack + opponent.defense + opponent.artifacts) if cand]
+    if opponent.building:
+        enemy_field_uids.append(opponent.building)
+    for enemy_uid in enemy_field_uids:
+        enemy_name = engine.state.instances[enemy_uid].definition.name
+        blocked += int(runtime_cards.get_blocks_enemy_artifact_slots(enemy_name))
+    blocked = min(ARTIFACT_SLOTS - 1, blocked)
     usable_slots = list(range(ARTIFACT_SLOTS - blocked))
     slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
     if slot is None:

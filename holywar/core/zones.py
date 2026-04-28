@@ -216,9 +216,18 @@ def excommunicate_card(
     uid: str,
     from_zone_override: str | None = None,
 ) -> None:
+    from holywar.effects.runtime import runtime_cards
+
     board_owner_idx = find_board_owner_of_uid(engine, uid)
     if board_owner_idx is None:
         board_owner_idx = owner_idx
+    inst = engine.state.instances.get(uid)
+    if inst is not None:
+        script = runtime_cards.get_script(inst.definition.name)
+        if script and bool(script.indestructible_except_own_activation):
+            allowed_uid = str(engine.state.flags.get("_allow_indestructible_uid", "")).strip()
+            if allowed_uid != uid:
+                return
     player = engine.state.players[board_owner_idx]
     from_zone = from_zone_override or locate_uid_zone(engine, board_owner_idx, uid)
 

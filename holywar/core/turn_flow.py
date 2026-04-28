@@ -124,6 +124,58 @@ def _resolve_deferred_auto_play_on_turn_start(engine: "GameEngine", current: int
 
     return False
 
+
+def _max_auto_play_drawn_faith_threshold(engine: "GameEngine", player_idx: int) -> int | None:
+    player = engine.state.players[player_idx]
+    field_uids = [uid for uid in (player.attack + player.defense + player.artifacts) if uid]
+    if player.building:
+        field_uids.append(player.building)
+    best: int | None = None
+    for uid in field_uids:
+        inst = engine.state.instances.get(uid)
+        if inst is None:
+            continue
+        value = runtime_cards.get_auto_play_drawn_cards_with_faith_lte(inst.definition.name)
+        if value is None:
+            continue
+        val = int(value)
+        best = val if best is None else max(best, val)
+    return best
+
+
+def _try_auto_play_drawn_card_free(engine: "GameEngine", player_idx: int, uid: str) -> bool:
+    player = engine.state.players[player_idx]
+    if uid not in player.hand:
+        return False
+    inst = engine.state.instances.get(uid)
+    if inst is None:
+        return False
+    ctype = _norm(inst.definition.card_type)
+    target: str | None = None
+    if ctype in {"santo", "token"}:
+        slots = _open_saint_slot_tokens(engine, player_idx)
+        if not slots:
+            return False
+        target = slots[0].lower()
+        chooser = getattr(engine, "choose_auto_play_slot_from_draw", None)
+        if callable(chooser):
+            chosen = str(chooser(player_idx, uid, slots) or "").strip().lower()
+            if chosen in {s.lower() for s in slots}:
+                target = chosen
+    free_flags = engine.state.flags.setdefault("free_play_uids", {"0": [], "1": []})
+    key = str(player_idx)
+    marked = list(free_flags.get(key, []) or [])
+    if uid not in marked:
+        marked.append(uid)
+    free_flags[key] = marked
+    try:
+        hand_index = player.hand.index(uid)
+        out = engine.play_card(player_idx, hand_index, target)
+    finally:
+        still_marked = [v for v in list(free_flags.get(key, []) or []) if v != uid]
+        free_flags[key] = still_marked
+    return bool(out.ok)
+
 # Performs the initial setup draw for both players at match start.
 def initial_setup_draw(engine: "GameEngine") -> None:
     for idx in (0, 1):
@@ -172,6 +224,7 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
 
         engine._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone="relicario")
         card_name = engine.state.instances[drawn_uid].definition.name
+        drawn_faith = engine.state.instances[drawn_uid].definition.faith
 
         # Debug logging for cards with draw-triggered effects, such as "Albero Sacro", to help track the state of the game when these cards are drawn. This can be useful for understanding how the auto-play and end-turn effects are being applied during the draw phase.
         if _norm(card_name) == _norm("Albero Sacro"):
@@ -183,8 +236,14 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
 
         auto_play_succeeded = False
 
+        # Generic aura-driven free auto-play for freshly drawn cards with low Faith (e.g. Nun).
+        if int(player_idx) == int(engine.state.active_player):
+            threshold = _max_auto_play_drawn_faith_threshold(engine, player_idx)
+            if threshold is not None and drawn_faith is not None and int(drawn_faith) <= int(threshold):
+                auto_play_succeeded = _try_auto_play_drawn_card_free(engine, player_idx, drawn_uid)
+
         # If the drawn card has the "auto_play_on_draw" effect, attempt to auto-play it from the hand. If the card was drawn during the opponent's turn, defer the auto-play attempt until the start of the player's next turn. If the card also has the "end_turn_on_draw" effect and was successfully auto-played, mark that the turn should end immediately after drawing.
-        if runtime_cards.get_auto_play_on_draw(card_name):
+        if runtime_cards.get_auto_play_on_draw(card_name) and drawn_uid in player.hand:
             is_controller_turn = int(player_idx) == int(engine.state.active_player)
 
             if is_controller_turn:

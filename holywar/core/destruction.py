@@ -16,6 +16,22 @@ def _norm(text: str) -> str:
     return value.strip().lower()
 
 
+def _equipped_card_types(engine: "GameEngine", saint_uid: str) -> list[str]:
+    inst = engine.state.instances.get(saint_uid)
+    if inst is None:
+        return []
+    out: list[str] = []
+    for tag in list(inst.blessed):
+        if not isinstance(tag, str) or not tag.startswith("equipped_by:"):
+            continue
+        equip_uid = tag.split(":", 1)[1].strip()
+        equip_inst = engine.state.instances.get(equip_uid)
+        if equip_inst is None:
+            continue
+        out.append(_norm(equip_inst.definition.card_type))
+    return out
+
+
 # Destroys all saints whose current Faith has reached zero or less.
 def cleanup_zero_faith_saints(engine: "GameEngine") -> None:
     saint_types = {"santo", "token"}
@@ -68,16 +84,27 @@ def destroy_saint_by_uid(
                     def_inst = engine.state.instances.get(def_uid)
                     if def_inst is None:
                         continue
-                    protected_types = runtime_cards.get_prevent_effect_destruction_of_friendly_saints_from_source_card_types(
-                        def_inst.definition.name
-                    )
-                    if source_type in {t.strip().lower() for t in protected_types}:
+                    if runtime_cards.blocks_interaction(
+                        def_inst.definition.name,
+                        event="destroy_by_effect",
+                        source_owner="enemy",
+                        target_owner="friendly",
+                        source_card_type=source_type,
+                        target_card_type=_norm(inst.definition.card_type),
+                    ):
                         engine.state.log(
                             f"{def_inst.definition.name} impedisce a {source.definition.name} di distruggere {inst.definition.name}."
                         )
                         return
-    if "bende_consacrate" in inst.blessed:
-        inst.blessed.remove("bende_consacrate")
+    bende_tags = [tag for tag in list(inst.blessed) if isinstance(tag, str) and tag.startswith("bende_consacrate")]
+    if bende_tags:
+        used_tag = bende_tags[0]
+        inst.blessed = [tag for tag in inst.blessed if tag != used_tag]
+        if ":" in used_tag:
+            source_uid = used_tag.split(":", 1)[1].strip()
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is not None:
+                engine.destroy_any_card(source_inst.owner, source_uid)
         inst.current_faith = 1
         engine.state.log(f"Bende Consacrate salva {inst.definition.name}: rimane con 1 Fede.")
         return
@@ -176,8 +203,27 @@ def destroy_saint_by_uid(
         # Apply any prevention of Sin gain from blessed tags or artifacts, then grant the Sin to the appropriate player and log it in the game state. This includes checking for any relevant blessed tags that can prevent Sin gain on death, as well as any artifacts that can negate Sin gain, before applying the Sin gain to the determined receiver and logging the event in the game state for transparency.
         if "no_sin_on_death" in inst.blessed:
             sin_gain = 0
-        if engine._has_artifact(sin_receiver_idx, "Umanit????") and inst.blessed:
-            sin_gain = 0
+        if _norm(inst.definition.card_type) in {"santo", "token"}:
+            receiver_player = engine.state.players[sin_receiver_idx]
+            defensive_sources = [uid for uid in receiver_player.artifacts if uid]
+            if receiver_player.building:
+                defensive_sources.append(receiver_player.building)
+            equipped_types = _equipped_card_types(engine, uid)
+            for def_uid in defensive_sources:
+                def_inst = engine.state.instances.get(def_uid)
+                if def_inst is None:
+                    continue
+                if runtime_cards.blocks_interaction(
+                    def_inst.definition.name,
+                    event="sin_on_death",
+                    source_owner="any",
+                    target_owner="friendly",
+                    source_card_type="any",
+                    target_card_type=_norm(inst.definition.card_type),
+                    target_equipped_by_card_types=equipped_types,
+                ):
+                    sin_gain = 0
+                    break
         engine.gain_sin(sin_receiver_idx, sin_gain)
         engine.state.log(
             f"{inst.definition.name} viene distrutto: {engine.state.players[sin_receiver_idx].name} guadagna {sin_gain} Peccato."
@@ -243,8 +289,80 @@ def destroy_saint_by_uid(
 def destroy_any_card(engine: "GameEngine", owner_idx: int, uid: str) -> None:
     if uid is None:
         return
-    ctype = _norm(engine.state.instances[uid].definition.card_type)
+    inst = engine.state.instances.get(uid)
+    if inst is None:
+        return
+    script = runtime_cards.get_script(inst.definition.name)
+    if script and bool(script.indestructible_except_own_activation):
+        allowed_uid = str(engine.state.flags.get("_allow_indestructible_uid", "")).strip()
+        if allowed_uid != uid:
+            return
+
+    # Optional script-driven shield: spend seal counters equal to source card crosses to negate destruction.
+    if script and script.altare_seal_shield_from_source_crosses:
+        source_uid = str(engine.state.flags.get("_runtime_effect_source", "")).strip()
+        if source_uid and source_uid in engine.state.instances and source_uid != uid:
+            source_inst = engine.state.instances[source_uid]
+            try:
+                source_crosses = int(float(source_inst.definition.crosses or 0))
+            except (TypeError, ValueError):
+                source_crosses = 0
+            if source_crosses > 0:
+                board_owner_idx = engine._find_board_owner_of_uid(uid)
+                shield_owner = int(board_owner_idx) if board_owner_idx in (0, 1) else int(inst.owner)
+                seals = int(engine._get_altare_sigilli(shield_owner))
+                if seals >= source_crosses:
+                    engine._set_altare_sigilli(shield_owner, seals - source_crosses)
+                    engine.state.log(
+                        f"{inst.definition.name} rimuove {source_crosses} Segnalini Sigillo e annulla la distruzione."
+                    )
+                    return
+
+    # Optional script-driven destroy tax: enemy must pay inspiration and sacrifice board cards.
+    tax_cfg = dict(script.destroy_requires_building_or_artifacts_and_inspiration or {}) if script else {}
+    if tax_cfg:
+        source_uid = str(engine.state.flags.get("_runtime_effect_source", "")).strip()
+        if source_uid and source_uid in engine.state.instances and source_uid != uid:
+            source_owner = int(engine.state.instances[source_uid].owner)
+            target_board_owner = engine._find_board_owner_of_uid(uid)
+            target_owner = int(target_board_owner) if target_board_owner in (0, 1) else int(inst.owner)
+            if source_owner != target_owner:
+                pay_insp = max(0, int(tax_cfg.get("inspiration", 0) or 0))
+                sacrifice_buildings = max(0, int(tax_cfg.get("sacrifice_buildings", 0) or 0))
+                sacrifice_artifacts = max(0, int(tax_cfg.get("sacrifice_artifacts", 0) or 0))
+                player = engine.state.players[source_owner]
+                total_insp = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
+                has_building_cost = sacrifice_buildings > 0 and player.building is not None
+                has_artifact_cost = sacrifice_artifacts > 0 and len([a for a in player.artifacts if a]) >= sacrifice_artifacts
+                can_pay_board_cost = has_building_cost or has_artifact_cost
+                if total_insp < pay_insp or not can_pay_board_cost:
+                    engine.state.log(
+                        f"{inst.definition.name} annulla la distruzione: costo non pagato da {engine.state.players[source_owner].name}."
+                    )
+                    return
+
+                if has_building_cost:
+                    building_uid = player.building
+                    if building_uid:
+                        engine.send_to_graveyard(source_owner, building_uid)
+                else:
+                    sacrificed = 0
+                    for art_uid in list(player.artifacts):
+                        if not art_uid:
+                            continue
+                        engine.send_to_graveyard(source_owner, art_uid)
+                        sacrificed += 1
+                        if sacrificed >= sacrifice_artifacts:
+                            break
+
+                cost = pay_insp
+                temp = max(0, int(getattr(player, "temporary_inspiration", 0)))
+                use_temp = min(temp, cost)
+                player.temporary_inspiration = temp - use_temp
+                player.inspiration = max(0, int(player.inspiration) - (cost - use_temp))
+
+    ctype = _norm(inst.definition.card_type)
     if ctype in {"santo", "token"}:
-        destroy_saint_by_uid(engine, engine.state.instances[uid].owner, uid, cause="effect")
+        destroy_saint_by_uid(engine, inst.owner, uid, cause="effect")
     else:
         engine.send_to_graveyard(owner_idx, uid)

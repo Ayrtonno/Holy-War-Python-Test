@@ -1335,6 +1335,30 @@ def test_terra_blocks_enemy_artifact_destruction() -> None:
     assert target_uid in engine.state.instances
 
 
+def test_acqua_prevents_enemy_curse_targeting_friendly_saints() -> None:
+    cards = [
+        CardDefinition("Acqua", "Artefatto", "1", 0, None, "", "ANI-1"),
+        CardDefinition("Voragine", "Maledizione", "1", None, None, "", "ANI-1"),
+        CardDefinition("Target", "Santo", "2", 2, 2, "", "ANI-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "ANI-1", "ANI-1", seed=101)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    i_acqua = _force_card_in_hand(engine, 0, "Acqua")
+    assert engine.play_card(0, i_acqua, None).ok
+    i_target = _force_card_in_hand(engine, 0, "Target")
+    assert engine.play_card(0, i_target, "a1").ok
+    assert engine.state.players[0].attack[0] is not None
+
+    i_curse = _force_card_in_hand(engine, 1, "Voragine")
+    engine.end_turn()
+    out = engine.play_card(1, i_curse, "a1")
+    assert not out.ok
+
+
 def test_papa_attack_restriction_comes_from_script_metadata() -> None:
     cards = [
         CardDefinition("Papa", "Santo", "3", 5, 2, "", "CRI-1"),

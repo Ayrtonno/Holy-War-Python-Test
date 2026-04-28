@@ -38,6 +38,8 @@ SUPPORTED_CONDITION_KEYS = {
     "opponent_saints_lte",
     "my_inspiration_gte",
     "my_inspiration_lte",
+    "my_spent_inspiration_turn_gte",
+    "my_attack_count_lte",
     "opponent_inspiration_gte",
     "my_sin_gte",
     "my_sin_lte",
@@ -53,6 +55,7 @@ SUPPORTED_CONDITION_KEYS = {
     "controller_has_card_in_hand_with_name",
     "controller_has_card_in_deck_with_name",
     "controller_has_building_with_name",
+    "controller_has_building_matching",
     "controller_altare_sigilli_gte",
     "controller_drawn_cards_this_turn_gte",
     "controller_has_distinct_saints_gte",
@@ -60,6 +63,7 @@ SUPPORTED_CONDITION_KEYS = {
     "selected_target_in",
     "selected_target_startswith",
     "event_card_name_is",
+    "event_card_name_contains",
     "target_is_damaged",
     "controller_hand_size_lte",
     "stored_card_matches",
@@ -109,6 +113,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "remove_sin",
     "add_inspiration",
     "pay_inspiration",
+    "pay_inspiration_per_target",
     "set_faith_to",
     "set_attack_shield_this_turn",
     "set_attack_shield_next_opponent_turn",
@@ -128,14 +133,17 @@ SUPPORTED_EFFECT_ACTIONS = {
     "set_next_turn_draw_override",
     "set_double_cost_next_turn",
     "set_no_attacks_until_card_draw",
+    "set_no_attacks_this_turn",
     "swap_attack_defense_rows",
     "transfer_target_control_until_turn_end",
     "negate_next_activation",
+    "grant_counter_spell",
     "shuffle_deck",
     "shuffle_target_owner_decks",
     "summon_generated_token",
     "return_to_hand_once_per_turn",
     "swap_attack_defense",
+    "swap_selected_attack_defense",
     "increase_faith_per_opponent_saints",
     "increase_faith_if_damaged",
     "add_temporary_inspiration",
@@ -147,21 +155,28 @@ SUPPORTED_EFFECT_ACTIONS = {
     "reveal_selected_target",
     "reveal_stored_card",
     "move_stored_card_to_zone",
+    "summon_stored_card_to_field",
     "move_source_to_zone",
     "optional_draw_from_top_n_then_shuffle",
     "optional_recover_from_graveyard_then_shuffle",
     "optional_recover_cards",
     "store_target_count",
+    "floor_divide_flag",
     "draw_cards_from_flag",
     "choose_targets",
     "choose_option",
     "inflict_sin_from_flag",
     "store_target_faith",
+    "increase_faith_from_flag",
     "excommunicate_card_no_sin",
     "store_target_faith_and_excommunicate_no_sin",
     "move_first_to_hand",
     "absorb_target_stats_and_link",
     "destroy_source_if_linked_to_event_card",
+    "destroy_source_if_equipped_target_is_event_card",
+    "move_source_to_zone_if_equipped_target_is_event_card",
+    "inflict_sin_to_event_owner_equal_base_faith_if_equipped_target",
+    "phdrna_activate_destroy_target_then_self",
     "choose_artifact_from_relicario_then_shuffle",
     "inflict_sin_from_source_paid_inspiration",
     "optional_recover_all_matching_then_shuffle",
@@ -169,7 +184,9 @@ SUPPORTED_EFFECT_ACTIONS = {
     "destroy_all_saints_except_selected",
     "retaliate_damage_to_event_source_if_enemy_saint",
     "grant_attack_barrier",
+    "grant_blessed_tag_from_source",
     "prevent_specific_card_from_attacking",
+    "halve_target_base_faith_rounded_down",
     "halve_strength_rounded_down",
     "equip_card",
     "unequip_card",
@@ -303,10 +320,12 @@ class CardScript:
     play_cost_reduction_if_controller_has_card_type_in_hand: list[str] = field(default_factory=list)
     play_cost_zero_if_controller_has_saint_with_name: str | None = None
     play_cost_zero_if_controller_has_no_saints: bool = False
+    auto_play_drawn_cards_with_faith_lte: int | None = None
     halves_friendly_saint_play_cost: bool = False
     halve_friendly_saint_play_cost_excludes_self: bool = True
     doubles_enemy_play_cost: bool = False
     activate_targeting: str = "auto"
+    can_activate_by_any_player: bool = False
     attack_targeting: str = "auto"
     can_attack: bool = True
     attack_requirements: dict[str, Any] = field(default_factory=dict)
@@ -336,6 +355,10 @@ class CardScript:
     pyramid_turn_draw_bonus_threshold: int | None = None
     pyramid_turn_draw_bonus_amount: int | None = None
     is_altare_sigilli: bool = False
+    altare_seal_shield_from_source_crosses: bool = False
+    inverts_saint_summon_controller: bool = False
+    destroy_requires_building_or_artifacts_and_inspiration: dict[str, Any] = field(default_factory=dict)
+    indestructible_except_own_activation: bool = False
     seals_level_size: int | None = None
     seals_faith_per_level: int | None = None
     seals_strength_per_level: int | None = None
@@ -346,7 +369,10 @@ class CardScript:
     grants_strength_to_friendly_saints: int = 0
     grants_strength_to_friendly_saints_except_names: list[str] = field(default_factory=list)
     modifies_enemy_saints_strength: int = 0
+    blocks_enemy_artifact_slots: int = 0
     prevent_effect_destruction_of_friendly_saints_from_source_card_types: list[str] = field(default_factory=list)
+    prevent_targeting_of_friendly_saints_from_enemy_card_types: list[str] = field(default_factory=list)
+    protection_rules: list[dict[str, Any]] = field(default_factory=list)
     retaliation_damage_to_enemy_attacker: int = 0
     retaliation_reduce_sin_on_kill: int = 0
     retaliation_multiplier_for_friendly_building_name: str | None = None

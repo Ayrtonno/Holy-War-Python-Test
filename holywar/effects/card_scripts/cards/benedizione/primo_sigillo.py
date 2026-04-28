@@ -10,17 +10,17 @@ SCRIPT = {
     "triggered_effects": [],
     "on_play_actions": [
         {
-            "condition": {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+            "condition": {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
             "target": {"type": "source_card"},
             "effect": {"action": "add_seal_counter", "amount": 2},
         },
         {
-            "condition": {"not": {"controller_has_building_with_name": "Altare dei Sette Sigilli"}},
+            "condition": {"not": {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}}},
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "deck",
                 "owner": "me",
-                "card_filter": {"name_equals": "Altare dei Sette Sigilli"},
+                "card_filter": {"script_is_altare_sigilli": True},
                 "max_targets": 1,
             },
             "effect": {"action": "move_to_hand"},

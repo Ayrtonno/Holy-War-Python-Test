@@ -13,7 +13,7 @@ SCRIPT = {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
-                "card_filter": {"name_contains": "Altare dei Sette Sigilli"},
+                "card_filter": {"script_is_altare_sigilli": True},
             },
             "effect": {"action": "add_seal_counter", "amount": 3},
         }

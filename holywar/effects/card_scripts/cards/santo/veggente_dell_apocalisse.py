@@ -40,14 +40,14 @@ SCRIPT = {
                     {
                         "value": "add",
                         "label": "Aggiungi 1 Segnalino Sigillo",
-                        "condition": {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+                        "condition": {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
                     },
                     {
                         "value": "draw",
                         "label": "Rimuovi 3 Segnalini e pesca 1 carta",
                         "condition": {
                             "all_of": [
-                                {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+                                {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
                                 {"controller_altare_sigilli_gte": 3},
                             ]
                         },
@@ -59,14 +59,14 @@ SCRIPT = {
             "condition": {
                 "all_of": [
                     {"selected_option_in": ["add"]},
-                    {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+                    {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
                 ]
             },
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
-                "card_filter": {"name_contains": "Altare dei Sette Sigilli"},
+                "card_filter": {"script_is_altare_sigilli": True},
                 "max_targets": 1,
             },
             "effect": {"action": "add_seal_counter", "amount": 1},
@@ -75,7 +75,7 @@ SCRIPT = {
             "condition": {
                 "all_of": [
                     {"selected_option_in": ["draw"]},
-                    {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+                    {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
                     {"controller_altare_sigilli_gte": 3},
                 ]
             },
@@ -83,7 +83,7 @@ SCRIPT = {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
-                "card_filter": {"name_contains": "Altare dei Sette Sigilli"},
+                "card_filter": {"script_is_altare_sigilli": True},
                 "max_targets": 1,
             },
             "effect": {"action": "remove_seal_counter", "amount": 3},
@@ -92,7 +92,7 @@ SCRIPT = {
             "condition": {
                 "all_of": [
                     {"selected_option_in": ["draw"]},
-                    {"controller_has_building_with_name": "Altare dei Sette Sigilli"},
+                    {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}},
                     {"controller_altare_sigilli_gte": 3},
                 ]
             },

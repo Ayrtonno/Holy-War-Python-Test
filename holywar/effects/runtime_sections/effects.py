@@ -59,6 +59,21 @@ class RuntimeEffectsMixin:
         def get_is_altare_sigilli(self, card_name: str) -> bool: ...
         def get_is_pyramid(self, card_name: str) -> bool: ...
 
+    def _has_invert_saint_summon_aura(self, engine: GameEngine) -> bool:
+        for p_idx in (0, 1):
+            player = engine.state.players[p_idx]
+            field_uids = [uid for uid in (player.attack + player.defense + player.artifacts) if uid]
+            if player.building:
+                field_uids.append(player.building)
+            for uid in field_uids:
+                inst = engine.state.instances.get(uid)
+                if inst is None:
+                    continue
+                script = self.get_script(inst.definition.name)
+                if script and bool(script.inverts_saint_summon_controller):
+                    return True
+        return False
+
     # This method resolves the targets specified by a `TargetSpec` based on the current game state and the owner of the effect. It handles various types of target specifications, such as cards controlled by the owner, event cards, source cards, equipped targets, and selected targets. The method collects potential targets into a pool and then filters them according to the criteria defined in the `TargetSpec`. Finally, it returns a list of resolved target UIDs, limited by the `max_targets` property if specified.
     def _resolve_targets(self, engine: GameEngine, owner_idx: int, target: TargetSpec) -> list[str]:
         pool: list[str] = []
@@ -607,6 +622,18 @@ class RuntimeEffectsMixin:
                 for _ in range(charges):
                     inst.blessed.append(f"barrier_once:attack:{source_uid}")
             return
+        if action == "grant_blessed_tag_from_source":
+            tag_base = str(effect.flag or "").strip()
+            if not tag_base:
+                return
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                marker = f"{tag_base}:{source_uid}"
+                if marker not in inst.blessed:
+                    inst.blessed.append(marker)
+            return
         if action == "prevent_specific_card_from_attacking":
             duration_turns = max(1, int(effect.amount or 1))
             until_turn = int(engine.state.turn_number) + duration_turns - 1
@@ -628,6 +655,13 @@ class RuntimeEffectsMixin:
                     continue
                 if tag not in inst.cursed:
                     inst.cursed.append(tag)
+            return
+        if action == "grant_counter_spell":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            amount = max(1, int(effect.amount or 1))
+            flags = engine.state.flags.setdefault("counter_spell_ready", {"0": 0, "1": 0})
+            key = str(target)
+            flags[key] = int(flags.get(key, 0)) + amount
             return
         if action == "grant_extra_attack_this_turn":
             current_turn = int(engine.state.turn_number)
@@ -738,6 +772,17 @@ class RuntimeEffectsMixin:
                 if delta > 0:
                     inst.blessed.append(f"buff_str:{-delta}")
             return
+        if action == "halve_target_base_faith_rounded_down":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                base_faith = int(inst.definition.faith or 0)
+                halved = max(0, base_faith // 2)
+                inst.definition.faith = halved
+                if inst.current_faith is not None and int(inst.current_faith) > halved:
+                    inst.current_faith = halved
+            return
         if action == "retaliate_damage_to_event_source_if_enemy_saint":
             dmg = max(0, int(effect.amount or 0))
             if dmg <= 0:
@@ -776,6 +821,46 @@ class RuntimeEffectsMixin:
             if link_tag not in source_inst.blessed:
                 return
             engine.destroy_saint_by_uid(source_inst.owner, source_uid, cause="effect")
+            return
+        if action == "destroy_source_if_equipped_target_is_event_card":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            event_uid = str(engine.state.flags.get("_runtime_event_card", "")).strip()
+            if not event_uid:
+                return
+            equipped_uid = self._equipment_target_uid(engine, source_uid)
+            if not equipped_uid or equipped_uid != event_uid:
+                return
+            engine.destroy_any_card(source_inst.owner, source_uid)
+            return
+        if action == "move_source_to_zone_if_equipped_target_is_event_card":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            event_uid = str(engine.state.flags.get("_runtime_event_card", "")).strip()
+            if not event_uid:
+                return
+            equipped_uid = self._equipment_target_uid(engine, source_uid)
+            if not equipped_uid or equipped_uid != event_uid:
+                return
+            to_zone = str(effect.to_zone or "").strip()
+            if not to_zone:
+                return
+            self._move_uid_to_zone(engine, source_uid, to_zone, source_inst.owner)
+            return
+        if action == "inflict_sin_to_event_owner_equal_base_faith_if_equipped_target":
+            event_uid = str(engine.state.flags.get("_runtime_event_card", "")).strip()
+            if not event_uid or event_uid not in engine.state.instances:
+                return
+            equipped_uid = self._equipment_target_uid(engine, source_uid)
+            if not equipped_uid or equipped_uid != event_uid:
+                return
+            event_inst = engine.state.instances[event_uid]
+            amount = max(0, int(event_inst.definition.faith or 0))
+            if amount <= 0:
+                return
+            engine.gain_sin(int(event_inst.owner), amount)
             return
         if action == "reveal_stored_card":
             store_name = str(effect.stored or "").strip()
@@ -898,6 +983,24 @@ class RuntimeEffectsMixin:
                 return
 
             self._move_uid_to_zone(engine, stored_uid, to_zone, owner_idx)
+            return
+        
+        if action == "summon_stored_card_to_field":
+            store_name = str(effect.stored or "").strip()
+            if not store_name:
+                return
+
+            stored_uid = str(engine.state.flags.get(f"_runtime_store_{store_name}", "")).strip()
+            if not stored_uid or stored_uid not in engine.state.instances:
+                return
+
+            self._apply_effect(
+                engine,
+                owner_idx,
+                source_uid,
+                EffectSpec(action="summon_target_to_field"),
+                [stored_uid],
+            )
             return
         
         if action == "move_source_to_zone":
@@ -1043,8 +1146,12 @@ class RuntimeEffectsMixin:
                     continue
 
                 owner = inst.owner
+                board_owner = owner
                 player = engine.state.players[owner]
                 ctype = _norm(inst.definition.card_type)
+                if ctype == _norm("santo") and self._has_invert_saint_summon_aura(engine):
+                    board_owner = 1 - board_owner
+                board_player = engine.state.players[board_owner]
 
                 if t_uid in player.hand:
                     player.hand.remove(t_uid)
@@ -1066,7 +1173,15 @@ class RuntimeEffectsMixin:
                 placed = False
 
                 if ctype == _norm("artefatto"):
-                    blocked = min(state.ARTIFACT_SLOTS - 1, engine._count_artifact(1 - owner, "Gggnag'ljep"))
+                    blocked = 0
+                    opponent = engine.state.players[1 - owner]
+                    enemy_field_uids = [cand for cand in (opponent.attack + opponent.defense + opponent.artifacts) if cand]
+                    if opponent.building:
+                        enemy_field_uids.append(opponent.building)
+                    for enemy_uid in enemy_field_uids:
+                        enemy_name = engine.state.instances[enemy_uid].definition.name
+                        blocked += int(self.get_blocks_enemy_artifact_slots(enemy_name))
+                    blocked = min(state.ARTIFACT_SLOTS - 1, blocked)
                     usable_slots = list(range(state.ARTIFACT_SLOTS - blocked))
                     if usable_slots:
                         slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
@@ -1084,12 +1199,12 @@ class RuntimeEffectsMixin:
                         placed = True
 
                 else:
-                    slot = engine._first_open(player.attack)
+                    slot = engine._first_open(board_player.attack)
                     zone = "attack"
                     if slot is None:
-                        slot = engine._first_open(player.defense)
+                        slot = engine._first_open(board_player.defense)
                         zone = "defense"
-                    if slot is not None and engine.place_card_from_uid(owner, t_uid, zone, slot):
+                    if slot is not None and engine.place_card_from_uid(board_owner, t_uid, zone, slot):
                         placed = True
 
                 if not placed:
@@ -1321,6 +1436,48 @@ class RuntimeEffectsMixin:
             if (inst.current_faith or 0) <= 0:
                 engine.send_to_graveyard(owner_idx, source_uid)
             return
+        if action == "phdrna_activate_destroy_target_then_self":
+            selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            target_uid = selected if selected in engine.state.instances else None
+            if not target_uid:
+                return
+
+            selected_option = _norm(str(engine.state.flags.get("_runtime_selected_option", "")))
+            player = engine.state.players[owner_idx]
+            cost_inspiration = 10
+
+            if selected_option == "building":
+                if player.building is None:
+                    return
+                engine.send_to_graveyard(owner_idx, player.building)
+            elif selected_option == "artifacts":
+                artifacts = [uid for uid in player.artifacts if uid]
+                if len(artifacts) < 4:
+                    return
+                for art_uid in artifacts[:4]:
+                    engine.send_to_graveyard(owner_idx, art_uid)
+            else:
+                return
+
+            total_inspiration = int(player.inspiration) + int(getattr(player, "temporary_inspiration", 0))
+            if total_inspiration < cost_inspiration:
+                return
+
+            temp = max(0, int(getattr(player, "temporary_inspiration", 0)))
+            use_temp = min(temp, cost_inspiration)
+            player.temporary_inspiration = temp - use_temp
+            player.inspiration = max(0, int(player.inspiration) - (cost_inspiration - use_temp))
+
+            target_inst = engine.state.instances.get(target_uid)
+            if target_inst is not None:
+                engine.destroy_any_card(target_inst.owner, target_uid)
+
+            engine.state.flags["_allow_indestructible_uid"] = source_uid
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is not None:
+                engine.destroy_any_card(source_inst.owner, source_uid)
+            engine.state.flags.pop("_allow_indestructible_uid", None)
+            return
         if action == "pay_sin_or_destroy_self":
             cost = max(0, int(effect.amount))
             player = engine.state.players[owner_idx]
@@ -1473,6 +1630,18 @@ class RuntimeEffectsMixin:
             if not flag_name:
                 return
             engine.state.flags[flag_name] = int(len(targets))
+            return
+        if action == "floor_divide_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            divisor = max(1, int(effect.amount or 1))
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                value = int(raw_value)
+            except (TypeError, ValueError):
+                value = 0
+            engine.state.flags[flag_name] = max(0, value // divisor)
             return
         if action == "draw_cards_from_flag":
             flag_name = str(effect.flag or "").strip()
@@ -1801,6 +1970,25 @@ class RuntimeEffectsMixin:
                 engine.reduce_sin(target, amount)
             engine.state.flags.pop(flag_name, None)
             return
+        if action == "increase_faith_from_flag":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = int(raw_value)
+            except (TypeError, ValueError):
+                amount = 0
+            if amount <= 0:
+                engine.state.flags.pop(flag_name, None)
+                return
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                inst.current_faith = int(inst.current_faith or 0) + amount
+            engine.state.flags.pop(flag_name, None)
+            return
         if action == "add_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
@@ -2064,15 +2252,22 @@ class RuntimeEffectsMixin:
                         break
             if chosen_uid is None:
                 return
-            slot = engine._first_open(player.attack)
+            chosen_inst = engine.state.instances.get(chosen_uid)
+            if chosen_inst is None:
+                return
+            board_owner = owner_idx
+            if _norm(chosen_inst.definition.card_type) == _norm("santo") and self._has_invert_saint_summon_aura(engine):
+                board_owner = 1 - board_owner
+            board_player = engine.state.players[board_owner]
+            slot = engine._first_open(board_player.attack)
             zone = "attack"
             if slot is None:
-                slot = engine._first_open(player.defense)
+                slot = engine._first_open(board_player.defense)
                 zone = "defense"
             if slot is None:
                 return
             player.hand.remove(chosen_uid)
-            if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
+            if not engine.place_card_from_uid(board_owner, chosen_uid, zone, slot):
                 player.hand.append(chosen_uid)
                 return
             engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
@@ -2122,13 +2317,18 @@ class RuntimeEffectsMixin:
                 return
             chosen_inst = engine.state.instances[chosen_uid]
             chosen_type = _norm(chosen_inst.definition.card_type)
+            board_owner = owner_idx
+            board_player = player
+            if chosen_type == "santo" and self._has_invert_saint_summon_aura(engine):
+                board_owner = 1 - board_owner
+                board_player = engine.state.players[board_owner]
             slot = None
             zone = ""
             if chosen_type in {"santo", "token"}:
-                slot = engine._first_open(player.attack)
+                slot = engine._first_open(board_player.attack)
                 zone = "attack"
                 if slot is None:
-                    slot = engine._first_open(player.defense)
+                    slot = engine._first_open(board_player.defense)
                     zone = "defense"
             elif chosen_type == "artefatto":
                 slot = engine._first_open(player.artifacts)
@@ -2145,7 +2345,7 @@ class RuntimeEffectsMixin:
                     zone = "defense"
             if slot is None or not zone:
                 return
-            if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
+            if not engine.place_card_from_uid(board_owner, chosen_uid, zone, slot):
                 return
             engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
             inst = engine.state.instances[chosen_uid]
@@ -2205,13 +2405,18 @@ class RuntimeEffectsMixin:
 
                 chosen_inst = engine.state.instances[chosen_uid]
                 chosen_type = _norm(chosen_inst.definition.card_type)
+                board_owner = owner_idx
+                board_player = player
+                if chosen_type == "santo" and self._has_invert_saint_summon_aura(engine):
+                    board_owner = 1 - board_owner
+                    board_player = engine.state.players[board_owner]
                 slot = None
                 zone = ""
                 if chosen_type in {"santo", "token"}:
-                    slot = engine._first_open(player.attack)
+                    slot = engine._first_open(board_player.attack)
                     zone = "attack"
                     if slot is None:
-                        slot = engine._first_open(player.defense)
+                        slot = engine._first_open(board_player.defense)
                         zone = "defense"
                 elif chosen_type == "artefatto":
                     slot = engine._first_open(player.artifacts)
@@ -2230,7 +2435,7 @@ class RuntimeEffectsMixin:
                     if chosen_from_zone:
                         getattr(player, chosen_from_zone).insert(0, chosen_uid)
                     break
-                if not engine.place_card_from_uid(owner_idx, chosen_uid, zone, slot):
+                if not engine.place_card_from_uid(board_owner, chosen_uid, zone, slot):
                     if chosen_from_zone:
                         getattr(player, chosen_from_zone).insert(0, chosen_uid)
                     break
@@ -2425,6 +2630,9 @@ class RuntimeEffectsMixin:
                 locked_sources.append(source_uid)
             runtime_state["no_attacks_until_draw_sources"] = locked_sources
             return
+        if action == "set_no_attacks_this_turn":
+            engine.state.flags["no_attacks_turn"] = int(engine.state.turn_number)
+            return
         if action == "swap_attack_defense_rows":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             player = engine.state.players[target]
@@ -2541,6 +2749,50 @@ class RuntimeEffectsMixin:
                 return
             player.attack[attack_slot], player.defense[defense_slot] = player.defense[defense_slot], player.attack[attack_slot]
             return
+        if action == "swap_selected_attack_defense":
+            selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+            selected_uids = [uid.strip() for uid in selected.split(",") if uid.strip()]
+            if len(selected_uids) < 2:
+                return
+
+            uid_a = selected_uids[0]
+            uid_b = selected_uids[1]
+            if uid_a not in engine.state.instances or uid_b not in engine.state.instances:
+                return
+
+            controller_a = int(engine.state.instances[uid_a].owner)
+            controller_b = int(engine.state.instances[uid_b].owner)
+            if controller_a != controller_b:
+                return
+
+            player = engine.state.players[controller_a]
+            attack_slot_a = next((i for i, uid in enumerate(player.attack) if uid == uid_a), None)
+            defense_slot_a = next((i for i, uid in enumerate(player.defense) if uid == uid_a), None)
+            attack_slot_b = next((i for i, uid in enumerate(player.attack) if uid == uid_b), None)
+            defense_slot_b = next((i for i, uid in enumerate(player.defense) if uid == uid_b), None)
+
+            uid_in_attack: str | None = None
+            uid_in_defense: str | None = None
+            attack_slot: int | None = None
+            defense_slot: int | None = None
+
+            if attack_slot_a is not None and defense_slot_b is not None:
+                uid_in_attack = uid_a
+                uid_in_defense = uid_b
+                attack_slot = attack_slot_a
+                defense_slot = defense_slot_b
+            elif attack_slot_b is not None and defense_slot_a is not None:
+                uid_in_attack = uid_b
+                uid_in_defense = uid_a
+                attack_slot = attack_slot_b
+                defense_slot = defense_slot_a
+
+            if uid_in_attack is None or uid_in_defense is None or attack_slot is None or defense_slot is None:
+                return
+
+            player.attack[attack_slot] = uid_in_defense
+            player.defense[defense_slot] = uid_in_attack
+            return
         if action == "increase_faith_per_opponent_saints":
             target_bonus = max(0, int(effect.amount))
             count = len(engine.all_saints_on_field(1 - owner_idx))
@@ -2562,6 +2814,24 @@ class RuntimeEffectsMixin:
             player = engine.state.players[target]
 
             cost = max(0, int(effect.amount))
+            temp = max(0, int(getattr(player, "temporary_inspiration", 0)))
+            normal = max(0, int(player.inspiration))
+
+            use_temp = min(temp, cost)
+            temp -= use_temp
+            cost -= use_temp
+
+            if cost > 0:
+                normal = max(0, normal - cost)
+
+            player.temporary_inspiration = temp
+            player.inspiration = normal
+            return
+        if action == "pay_inspiration_per_target":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+
+            cost = max(0, int(effect.amount)) * max(0, int(len(targets)))
             temp = max(0, int(getattr(player, "temporary_inspiration", 0)))
             normal = max(0, int(player.inspiration))
 
@@ -2854,6 +3124,19 @@ class RuntimeEffectsMixin:
             b_uid = ctx.engine.state.players[owner_idx].building
             if b_uid is None or not _card_matches_name(ctx.engine.state.instances[b_uid].definition, wanted):
                 return False
+        building_match = condition.get("controller_has_building_matching")
+        if isinstance(building_match, dict):
+            b_uid = ctx.engine.state.players[owner_idx].building
+            if b_uid is None:
+                return False
+            req: dict[str, Any] = {"owner": "me", "zone": "field"}
+            if "card_filter" in building_match and isinstance(building_match.get("card_filter"), dict):
+                req["card_filter"] = dict(building_match.get("card_filter") or {})
+            else:
+                req["card_filter"] = dict(building_match)
+            matches = self._collect_cards_for_requirement(ctx.engine, owner_idx, req)
+            if b_uid not in matches:
+                return False
         event_name_is = condition.get("event_card_name_is")
         if event_name_is:
             if not event_card_uid:
@@ -2861,6 +3144,16 @@ class RuntimeEffectsMixin:
             wanted = _norm(str(event_name_is))
             inst = ctx.engine.state.instances.get(event_card_uid)
             if inst is None or not _card_matches_name(inst.definition, wanted):
+                return False
+        event_name_contains = condition.get("event_card_name_contains")
+        if event_name_contains:
+            if not event_card_uid:
+                return False
+            wanted = _norm(str(event_name_contains))
+            inst = ctx.engine.state.instances.get(event_card_uid)
+            if inst is None:
+                return False
+            if wanted not in _card_name_haystack(inst.definition):
                 return False
         target_is_damaged = condition.get("target_is_damaged")
         if target_is_damaged:
@@ -2980,6 +3273,18 @@ class RuntimeEffectsMixin:
         my_insp_lte = condition.get("my_inspiration_lte")
         if my_insp_lte is not None and my_total_inspiration > int(my_insp_lte):
             return False
+
+        my_spent_insp_gte = condition.get("my_spent_inspiration_turn_gte")
+        if my_spent_insp_gte is not None:
+            spent = ctx.engine.state.flags.get("spent_inspiration_turn", {"0": 0, "1": 0})
+            if int(spent.get(str(owner_idx), 0)) < int(my_spent_insp_gte):
+                return False
+
+        my_attack_count_lte = condition.get("my_attack_count_lte")
+        if my_attack_count_lte is not None:
+            attack_count = ctx.engine.state.flags.get("attack_count", {"0": 0, "1": 0})
+            if int(attack_count.get(str(owner_idx), 0)) > int(my_attack_count_lte):
+                return False
 
         opp_insp_gte = condition.get("opponent_inspiration_gte")
         if opp_insp_gte is not None and opp_total_inspiration < int(opp_insp_gte):

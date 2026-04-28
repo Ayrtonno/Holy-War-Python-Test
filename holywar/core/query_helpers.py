@@ -327,11 +327,22 @@ def resolve_board_uid(engine: "GameEngine", player_idx: int, source: str | None)
     if not source:
         return None
     value = source.strip().lower()
+    target_player_idx = player_idx
+    if ":" in value:
+        side, token = value.split(":", 1)
+        side = side.strip().lower()
+        token = token.strip().lower()
+        if side in {"opp", "opponent", "enemy", "other", "o"}:
+            target_player_idx = 1 - player_idx
+            value = token
+        elif side in {"self", "me", "own", "controller", "s"}:
+            target_player_idx = player_idx
+            value = token
     zone, slot = parse_zone_target(value)
-    player = engine.state.players[player_idx]
+    player = engine.state.players[target_player_idx]
     if zone in {"attack", "defense"}:
         return getattr(player, zone)[slot]
-    return resolve_target_artifact_or_building(engine, player_idx, value)
+    return resolve_target_artifact_or_building(engine, target_player_idx, value)
 
 
 # Finds the first matching card name inside the player's deck and returns its uid.

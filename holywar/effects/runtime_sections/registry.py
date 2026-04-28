@@ -232,6 +232,7 @@ class RuntimeRegistryMixin:
                 play_targeting=str(spec.get("play_targeting", "auto")),
                 activate_targeting=str(spec.get("activate_targeting", "auto")),
                 attack_targeting=str(spec.get("attack_targeting", "auto")),
+                can_activate_by_any_player=bool(spec.get("can_activate_by_any_player", False)),
                 can_attack=bool(spec.get("can_attack", True)),
                 attack_requirements=dict(spec.get("attack_requirements", {}) or {}),
                 attack_blocked_message=(
@@ -295,11 +296,21 @@ class RuntimeRegistryMixin:
                     str(v) for v in list(spec.get("grants_strength_to_friendly_saints_except_names", []) or [])
                 ],
                 modifies_enemy_saints_strength=int(spec.get("modifies_enemy_saints_strength", 0) or 0),
+                blocks_enemy_artifact_slots=max(0, int(spec.get("blocks_enemy_artifact_slots", 0) or 0)),
                 prevent_effect_destruction_of_friendly_saints_from_source_card_types=[
                     str(v)
                     for v in list(
                         spec.get("prevent_effect_destruction_of_friendly_saints_from_source_card_types", []) or []
                     )
+                ],
+                prevent_targeting_of_friendly_saints_from_enemy_card_types=[
+                    str(v)
+                    for v in list(
+                        spec.get("prevent_targeting_of_friendly_saints_from_enemy_card_types", []) or []
+                    )
+                ],
+                protection_rules=[
+                    dict(v) for v in list(spec.get("protection_rules", []) or []) if isinstance(v, dict)
                 ],
                 retaliation_damage_to_enemy_attacker=int(spec.get("retaliation_damage_to_enemy_attacker", 0) or 0),
                 retaliation_reduce_sin_on_kill=int(spec.get("retaliation_reduce_sin_on_kill", 0) or 0),
@@ -320,6 +331,11 @@ class RuntimeRegistryMixin:
                 ),
                 play_cost_zero_if_controller_has_no_saints=bool(
                     spec.get("play_cost_zero_if_controller_has_no_saints", False)
+                ),
+                auto_play_drawn_cards_with_faith_lte=(
+                    int(spec["auto_play_drawn_cards_with_faith_lte"])
+                    if spec.get("auto_play_drawn_cards_with_faith_lte") is not None
+                    else None
                 ),
                 halves_friendly_saint_play_cost=bool(spec.get("halves_friendly_saint_play_cost", False)),
                 halve_friendly_saint_play_cost_excludes_self=bool(
@@ -358,6 +374,14 @@ class RuntimeRegistryMixin:
                     else None
                 ),
                 is_altare_sigilli=bool(spec.get("is_altare_sigilli", False)),
+                altare_seal_shield_from_source_crosses=bool(
+                    spec.get("altare_seal_shield_from_source_crosses", False)
+                ),
+                inverts_saint_summon_controller=bool(spec.get("inverts_saint_summon_controller", False)),
+                destroy_requires_building_or_artifacts_and_inspiration=dict(
+                    spec.get("destroy_requires_building_or_artifacts_and_inspiration", {}) or {}
+                ),
+                indestructible_except_own_activation=bool(spec.get("indestructible_except_own_activation", False)),
                 seals_level_size=(int(spec["seals_level_size"]) if spec.get("seals_level_size") is not None else None),
                 seals_faith_per_level=(
                     int(spec["seals_faith_per_level"]) if spec.get("seals_faith_per_level") is not None else None
@@ -448,6 +472,12 @@ class RuntimeRegistryMixin:
         if script is None:
             return False
         return bool(script.play_cost_zero_if_controller_has_no_saints)
+
+    def get_auto_play_drawn_cards_with_faith_lte(self, card_name: str) -> int | None:
+        script = self.get_script(card_name)
+        if script is None or script.auto_play_drawn_cards_with_faith_lte is None:
+            return None
+        return int(script.auto_play_drawn_cards_with_faith_lte)
 
     # This method checks if the play cost of a given card should be halved for friendly saints. It looks up the `CardScript` for the specified card name and returns the value of the `halves_friendly_saint_play_cost` property as a boolean. If the script is not found, it defaults to False. This information can be used to determine if a card's play cost is reduced for friendly saints, which can affect how players choose to play that card in relation to their existing saints on the field.
     def get_halves_friendly_saint_play_cost(self, card_name: str) -> bool:
@@ -897,6 +927,12 @@ class RuntimeRegistryMixin:
             return 0
         return int(script.modifies_enemy_saints_strength or 0)
 
+    def get_blocks_enemy_artifact_slots(self, card_name: str) -> int:
+        script = self.get_script(card_name)
+        if script is None:
+            return 0
+        return max(0, int(script.blocks_enemy_artifact_slots or 0))
+
     # This method retrieves a list of names of friendly saints that should be prevented from being destroyed by effects based on the card script. It looks up the `CardScript` for the specified card name and returns the value of the `prevent_effect_destruction_of_friendly_saints_from_source_card_types` property as a list of strings. If the script is not found or if the property is not set, it returns an empty list. This information can be used to determine if a card has specific mechanics that prevent certain friendly saints from being destroyed by effects during gameplay, which can influence how players strategize around that card.
     def get_prevent_effect_destruction_of_friendly_saints_from_source_card_types(self, card_name: str) -> list[str]:
         script = self.get_script(card_name)
@@ -907,6 +943,96 @@ class RuntimeRegistryMixin:
             for v in script.prevent_effect_destruction_of_friendly_saints_from_source_card_types
             if str(v).strip()
         ]
+
+    def get_prevent_targeting_of_friendly_saints_from_enemy_card_types(self, card_name: str) -> list[str]:
+        script = self.get_script(card_name)
+        if script is None:
+            return []
+        return [
+            str(v).strip().lower()
+            for v in script.prevent_targeting_of_friendly_saints_from_enemy_card_types
+            if str(v).strip()
+        ]
+
+    def get_protection_rules(self, card_name: str) -> list[dict[str, Any]]:
+        script = self.get_script(card_name)
+        if script is None:
+            return []
+        rules = [dict(v) for v in script.protection_rules if isinstance(v, dict)]
+        legacy_destroy_types = [
+            str(v).strip().lower()
+            for v in script.prevent_effect_destruction_of_friendly_saints_from_source_card_types
+            if str(v).strip()
+        ]
+        if legacy_destroy_types:
+            rules.append(
+                {
+                    "event": "destroy_by_effect",
+                    "source_owner": "enemy",
+                    "target_owner": "friendly",
+                    "source_card_types": legacy_destroy_types,
+                    "target_card_types": ["santo", "token"],
+                }
+            )
+        legacy_target_types = [
+            str(v).strip().lower()
+            for v in script.prevent_targeting_of_friendly_saints_from_enemy_card_types
+            if str(v).strip()
+        ]
+        if legacy_target_types:
+            rules.append(
+                {
+                    "event": "target_by_effect",
+                    "source_owner": "enemy",
+                    "target_owner": "friendly",
+                    "source_card_types": legacy_target_types,
+                    "target_card_types": ["santo", "token"],
+                }
+            )
+        return rules
+
+    def blocks_interaction(
+        self,
+        card_name: str,
+        *,
+        event: str,
+        source_owner: str,
+        target_owner: str,
+        source_card_type: str,
+        target_card_type: str,
+        target_equipped_by_card_types: list[str] | None = None,
+    ) -> bool:
+        event_key = _norm(event)
+        src_owner_key = _norm(source_owner)
+        tgt_owner_key = _norm(target_owner)
+        src_type_key = _norm(source_card_type)
+        tgt_type_key = _norm(target_card_type)
+        for rule in self.get_protection_rules(card_name):
+            if _norm(str(rule.get("event", ""))) != event_key:
+                continue
+            rule_src_owner = _norm(str(rule.get("source_owner", "any")))
+            if rule_src_owner not in {"", "any", src_owner_key}:
+                continue
+            rule_tgt_owner = _norm(str(rule.get("target_owner", "any")))
+            if rule_tgt_owner not in {"", "any", tgt_owner_key}:
+                continue
+            src_types = {_norm(str(v)) for v in list(rule.get("source_card_types", []) or []) if str(v).strip()}
+            if src_types and src_type_key not in src_types:
+                continue
+            tgt_types = {_norm(str(v)) for v in list(rule.get("target_card_types", []) or []) if str(v).strip()}
+            if tgt_types and tgt_type_key not in tgt_types:
+                continue
+            required_equips = {
+                _norm(str(v))
+                for v in list(rule.get("target_equipped_by_card_types", []) or [])
+                if str(v).strip()
+            }
+            if required_equips:
+                equipped_types = {_norm(v) for v in list(target_equipped_by_card_types or []) if str(v).strip()}
+                if required_equips.isdisjoint(equipped_types):
+                    continue
+            return True
+        return False
 
     # This method retrieves the amount of retaliation damage that should be dealt to an enemy attacker when a card is attacked based on the card script. It looks up the `CardScript` for the specified card name and returns the value of the `retaliation_damage_to_enemy_attacker` property as an integer. If the script is not found or if the property is not set, it returns 0. This information can be used to determine if a card has a specific mechanic that deals retaliation damage to an enemy attacker when it is attacked during gameplay, which can influence how players strategize around that card.
     def get_retaliation_damage_to_enemy_attacker(self, card_name: str) -> int:
