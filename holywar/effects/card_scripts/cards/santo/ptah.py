@@ -17,11 +17,51 @@ SCRIPT = {
                     {"controller_drawn_cards_this_turn_gte": 1},
                 ]
             },
+            "target": {"type": "source_card"},
+            "effect": {
+                "action": "choose_option",
+                "choice_title": "Ptah",
+                "choice_prompt": "Vuoi rimettere una carta pescata questo turno nel reliquiario per pescarne un'altra?",
+                "choice_options": [
+                    {"value": "yes", "label": "Si"},
+                    {"value": "no", "label": "No"},
+                ],
+            },
+        },
+        {
+            "trigger": {"event": "on_main_phase_start", "frequency": "each_turn"},
+            "condition": {
+                "all_of": [
+                    {"turn_scope": "my"},
+                    {"source_on_field": True},
+                    {"controller_drawn_cards_this_turn_gte": 1},
+                    {"selected_option_in": ["yes"]},
+                ]
+            },
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "hand",
                 "owner": "me",
                 "card_filter": {"drawn_this_turn_only": True},
+            },
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "trigger": {"event": "on_main_phase_start", "frequency": "each_turn"},
+            "condition": {
+                "all_of": [
+                    {"turn_scope": "my"},
+                    {"source_on_field": True},
+                    {"controller_drawn_cards_this_turn_gte": 1},
+                    {"selected_option_in": ["yes"]},
+                ]
+            },
+            "target": {
+                "type": "selected_target",
+                "zone": "hand",
+                "owner": "me",
+                "card_filter": {"drawn_this_turn_only": True},
+                "min_targets": 1,
                 "max_targets": 1,
             },
             "effect": {"action": "move_to_relicario"},
@@ -33,18 +73,7 @@ SCRIPT = {
                     {"turn_scope": "my"},
                     {"source_on_field": True},
                     {"controller_drawn_cards_this_turn_gte": 1},
-                ]
-            },
-            "target": {"type": "source_card"},
-            "effect": {"action": "shuffle_deck", "target_player": "me"},
-        },
-        {
-            "trigger": {"event": "on_main_phase_start", "frequency": "each_turn"},
-            "condition": {
-                "all_of": [
-                    {"turn_scope": "my"},
-                    {"source_on_field": True},
-                    {"controller_drawn_cards_this_turn_gte": 1},
+                    {"selected_option_in": ["yes"]},
                 ]
             },
             "target": {"type": "source_card"},

@@ -4,11 +4,11 @@ CARD_NAME = """Neith"""
 
 SCRIPT = {
     "on_play_mode": "noop",
-    "on_enter_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
-    "triggered_effects": [
+    "triggered_effects": [],
+    "on_enter_actions": [
         {
-            "trigger": {"event": "on_enter_field", "frequency": "each_turn"},
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",

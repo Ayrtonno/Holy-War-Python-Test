@@ -695,6 +695,24 @@ class RuntimeEffectsMixin:
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
             return
+        if action == "increase_source_stats_from_zone_count_div":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            zone_name = str(effect.zone or "graveyard").strip() or "graveyard"
+            cards_in_zone = self._get_zone_cards(engine, target, zone_name)
+            threshold = max(0, int(effect.threshold or 1))
+            if len(cards_in_zone) < threshold:
+                return
+            divisor = max(1, int(effect.divisor or 1))
+            per_amount = int(effect.amount or 0)
+            bonus = (len(cards_in_zone) // divisor) * per_amount
+            if bonus <= 0:
+                return
+            source_inst.current_faith = int(source_inst.current_faith or 0) + int(bonus)
+            source_inst.blessed.append(f"buff_str:{int(bonus)}")
+            return
         if action == "grant_attack_barrier":
             charges = max(1, int(effect.amount or 1))
             for t_uid in targets:
@@ -1767,6 +1785,66 @@ class RuntimeEffectsMixin:
             flags["_runtime_resume_same_action"] = True
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
+            return
+
+        if action == "choose_targets_and_summon_to_field":
+            flags = engine.state.flags
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            min_targets = max(0, int(effect.min_targets if effect.min_targets is not None else 0))
+            max_targets = int(effect.max_targets if effect.max_targets is not None else 1)
+            max_targets = max(min_targets, max_targets)
+
+            expected_choice_source = f"{source_uid}:choose_targets_and_summon_to_field"
+            if choice_ready and choice_source == expected_choice_source:
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                selected_uids = [uid for uid in selected_uids if uid in candidates]
+                if max_targets >= 0:
+                    selected_uids = selected_uids[:max_targets]
+                if len(selected_uids) < min_targets:
+                    selected_uids = []
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                if selected_uids:
+                    self._apply_effect(
+                        engine,
+                        owner_idx,
+                        source_uid,
+                        selected_uids,
+                        EffectSpec(action="summon_target_to_field"),
+                    )
+                return
+
+            candidates = list(targets)
+            if not candidates:
+                return
+            flags["_runtime_choice_source"] = expected_choice_source
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(owner_idx)
+            flags["_runtime_choice_title"] = "Evoca dal Cimitero"
+            flags["_runtime_choice_prompt"] = "Seleziona il Santo da evocare."
+            flags["_runtime_choice_min_targets"] = str(min_targets)
+            flags["_runtime_choice_max_targets"] = str(max_targets)
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            flags["_runtime_resume_source"] = source_uid
+            flags["_runtime_resume_owner"] = str(owner_idx)
+            flags["_runtime_pending_mode"] = "trigger_action"
+            flags["_runtime_trigger_action"] = "choose_targets_and_summon_to_field"
             return
         if action == "sacrifice_time_resolution":
             flags = engine.state.flags

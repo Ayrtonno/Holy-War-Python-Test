@@ -351,10 +351,22 @@ class GameEngine:
             if required_name and _norm(inst.definition.name) != _norm(required_name):
                 continue
             strength += int(rule.get("self_bonus", 0) or 0)
-        # Apply any context-specific bonuses from the card's own rules, such as having certain tags or being in certain zones, if the card is on the field as a saint or token. This checks for any defined context-specific strength bonuses for the card and applies them based on the current context, allowing for dynamic bonuses that can depend on various factors such as the card's current zone or its blessed/cursed tags.
-        strength += runtime_cards.get_context_bonus_amount(self, owner, context="strength", amount_mode="flat")
-        # Include counted bonuses that use per-count/div-floor logic (e.g., Hun-Came)
-        strength += runtime_cards.get_context_bonus_amount(self, owner, context="strength", amount_mode="per_count_div_floor")
+        # Context strength bonuses (e.g. Hun-Came counted bonuses) apply only to saints/tokens on the field.
+        if _norm(inst.definition.card_type) in {"santo", "token"} and zone in {"attack", "defense"}:
+            strength += runtime_cards.get_context_bonus_amount(
+                self,
+                owner,
+                context="strength",
+                amount_mode="flat",
+                target_uid=uid,
+            )
+            strength += runtime_cards.get_context_bonus_amount(
+                self,
+                owner,
+                context="strength",
+                amount_mode="per_count_div_floor",
+                target_uid=uid,
+            )
         sigilli_threshold = runtime_cards.get_sigilli_strength_bonus_threshold(inst.definition.name)
         sigilli_amount = runtime_cards.get_sigilli_strength_bonus_amount(inst.definition.name)
         if sigilli_threshold is not None and sigilli_amount is not None and self._get_altare_sigilli(owner) >= int(sigilli_threshold):

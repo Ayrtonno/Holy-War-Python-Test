@@ -2447,7 +2447,7 @@
     "crosses": "8",
     "faith": 6,
     "strength": 6,
-    "effect_text": "Per ogni 5 carte nel tuo cimitero, questa carta riceve +2 Fede e +2 Forza.",
+    "effect_text": "Quando questo Santo scende in campo, per ogni 5 carte nel tuo cimitero questa carta riceve +2 Fede e +2 Forza.",
     "expansion": "MAY-1",
     "is_token": false,
     "aliases": []

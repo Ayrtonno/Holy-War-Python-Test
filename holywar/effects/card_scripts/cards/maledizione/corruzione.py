@@ -12,7 +12,7 @@ SCRIPT = {
         {
             "effect": {
                 "action" : "inflict_sin",
-                "amount": 10,
+                "amount": 5,
                 "target_player": "opponent",
             },
         },

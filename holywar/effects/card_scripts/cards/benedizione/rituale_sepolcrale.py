@@ -25,6 +25,7 @@ SCRIPT = {
                 "type": "selected_target",
                 "zone": "hand",
                 "owner": "me",
+                "card_filter": {"exclude_event_card": True},
                 "min_targets": 1,
                 "max_targets": 1,
             },

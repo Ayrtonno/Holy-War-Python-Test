@@ -4,32 +4,20 @@ CARD_NAME = """Hun-Came"""
 
 SCRIPT = {
     "on_play_mode": "noop",
-    "on_enter_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
-    "counted_bonuses": [
+    "counted_bonuses": [],
+    "faith_bonus_rules": [],
+    "on_enter_actions": [
         {
-            "context": "strength",
-            "group": "hun_came_grave_scaling",
-            "stacking": "max",
-            "threshold": 5,
-            "amount_mode": "per_count_div_floor",
-            "divisor": 5,
-            "amount": 2,
-            "requirement": {
-                "owner": "me",
+            "target": {"type": "source_card"},
+            "effect": {
+                "action": "increase_source_stats_from_zone_count_div",
+                "target_player": "me",
                 "zone": "graveyard",
-            },
-        }
-    ],
-    "faith_bonus_rules": [
-        {
-            "amount_mode": "per_count_div_floor",
-            "threshold": 5,
-            "divisor": 5,
-            "amount": 2,
-            "requirement": {
-                "owner": "me",
-                "zone": "graveyard",
+                "threshold": 5,
+                "divisor": 5,
+                "amount": 2,
             },
         }
     ],

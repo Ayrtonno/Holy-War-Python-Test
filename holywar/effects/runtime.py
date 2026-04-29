@@ -288,6 +288,8 @@ class EffectSpec:
     store_as: str | None = None
     stored: str | None = None
     to_zone: str | None = None
+    threshold: int | None = None
+    divisor: int | None = None
     min_targets: int | None = None
     max_targets: int | None = None
     controller_has_saint_with_name: str | None = None

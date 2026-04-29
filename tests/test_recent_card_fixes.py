@@ -182,6 +182,53 @@ def test_ricerca_archeologica_is_scripted_with_shuffle() -> None:
     assert "A2" in hand_names
 
 
+def test_seth_is_scripted_with_optional_send_osiride_from_relicario_to_graveyard() -> None:
+    script = runtime_cards.get_script("Seth")
+    assert script is not None
+    assert len(script.triggered_effects) == 1
+    fx = script.triggered_effects[0]
+    assert fx.trigger.event == "on_enter_field"
+    assert fx.trigger.condition is not None
+    assert fx.trigger.condition.get("event_card_name_is") == "Seth"
+    assert fx.target.type == "cards_controlled_by_owner"
+    assert fx.target.zone == "deck"
+    assert fx.target.owner == "me"
+    assert fx.target.card_filter is not None
+    assert fx.target.card_filter.name_equals == "Osiride"
+    assert fx.effect.action == "optional_recover_cards"
+    assert fx.effect.from_zone == "deck"
+    assert fx.effect.to_zone == "graveyard"
+    assert fx.effect.min_targets == 0
+    assert fx.effect.max_targets == 1
+
+
+def test_nefti_is_scripted_with_single_choose_and_summon_trigger() -> None:
+    script = runtime_cards.get_script("Nefti")
+    assert script is not None
+    assert len(script.triggered_effects) == 1
+    fx = script.triggered_effects[0]
+    assert fx.trigger.event == "on_this_card_destroyed"
+    assert fx.target.type == "cards_controlled_by_owner"
+    assert fx.target.zone == "graveyard"
+    assert fx.target.owner == "me"
+    assert fx.target.card_filter is not None
+    assert fx.target.card_filter.name_equals == "Set"
+    assert fx.effect.action == "choose_targets_and_summon_to_field"
+    assert fx.effect.min_targets == 1
+    assert fx.effect.max_targets == 1
+
+
+def test_rituale_sepolcrale_discard_step_excludes_source_card() -> None:
+    script = runtime_cards.get_script("Rituale Sepolcrale")
+    assert script is not None
+    assert len(script.on_play_actions) >= 2
+    discard_target = script.on_play_actions[1].target
+    assert discard_target.type == "selected_target"
+    assert discard_target.zone == "hand"
+    assert discard_target.owner == "me"
+    assert discard_target.card_filter.exclude_event_card is True
+
+
 def test_risveglio_di_ph_dak_gaph_recovers_up_to_five_and_excommunicates_itself() -> None:
     script = runtime_cards.get_script("Risveglio di Ph-Dak'Gaph")
     assert script is not None
@@ -1733,7 +1780,7 @@ def test_missionario_returns_to_relicario_after_effect_death() -> None:
     assert uid not in engine.state.players[0].graveyard
 
 
-def test_ptah_can_return_a_drawn_card_to_relicario() -> None:
+def test_ptah_yes_flow_replaces_one_drawn_card() -> None:
     cards = [
         CardDefinition("Ptah", "Santo", "3", 3, 2, "", "EGI-1"),
         CardDefinition("Drawn", "Santo", "1", 1, 1, "", "EGI-1"),
@@ -1753,6 +1800,24 @@ def test_ptah_can_return_a_drawn_card_to_relicario() -> None:
     p0.hand = [drawn_uid]
     p0.deck = [replacement_uid]
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})["0"] = [drawn_uid]
+    ptah_script = runtime_cards.get_script("Ptah")
+    assert ptah_script is not None
+    assert [fx.effect.action for fx in ptah_script.triggered_effects] == [
+        "choose_option",
+        "choose_targets",
+        "move_to_relicario",
+        "draw_cards",
+    ]
+
+    # 1) prompt Si/No
+    runtime_cards._apply_effect(engine, 0, ptah_uid, [ptah_uid], ptah_script.triggered_effects[0].effect)  # noqa: SLF001
+    assert engine.state.flags.get("_runtime_choice_source") == ptah_uid
+    engine.state.flags["_runtime_choice_ready"] = True
+    engine.state.flags["_runtime_choice_selected"] = "yes"
+    runtime_cards._apply_effect(engine, 0, ptah_uid, [ptah_uid], ptah_script.triggered_effects[0].effect)  # noqa: SLF001
+    assert engine.state.flags.get("_runtime_selected_option") == "yes"
+
+    # 2) scelta della carta pescata questo turno
     targets = runtime_cards._resolve_targets(  # noqa: SLF001 - targeted regression for Ptah primitive
         engine,
         0,
@@ -1761,15 +1826,28 @@ def test_ptah_can_return_a_drawn_card_to_relicario() -> None:
             card_filter=CardFilterSpec(drawn_this_turn_only=True),
             zone="hand",
             owner="me",
-            max_targets=1,
         ),
     )
     assert targets == [drawn_uid]
-    ptah_script = runtime_cards.get_script("Ptah")
-    assert ptah_script is not None
-    runtime_cards._apply_effect(engine, 0, ptah_uid, targets, ptah_script.triggered_effects[0].effect)  # noqa: SLF001
+    runtime_cards._apply_effect(engine, 0, ptah_uid, targets, ptah_script.triggered_effects[1].effect)  # noqa: SLF001
+    assert engine.state.flags.get("_runtime_choice_source") == ptah_uid
+    engine.state.flags["_runtime_choice_ready"] = True
+    engine.state.flags["_runtime_choice_selected"] = drawn_uid
+    runtime_cards._apply_effect(engine, 0, ptah_uid, targets, ptah_script.triggered_effects[1].effect)  # noqa: SLF001
+    assert engine.state.flags.get("_runtime_selected_target") == drawn_uid
+
+    # 3) carta scelta nel reliquiario, 4) pesco una carta
+    selected_targets = runtime_cards._resolve_targets(  # noqa: SLF001 - targeted regression for Ptah primitive
+        engine,
+        0,
+        ptah_script.triggered_effects[2].target,
+    )
+    runtime_cards._apply_effect(engine, 0, ptah_uid, selected_targets, ptah_script.triggered_effects[2].effect)  # noqa: SLF001
+    runtime_cards._apply_effect(engine, 0, ptah_uid, [ptah_uid], ptah_script.triggered_effects[3].effect)  # noqa: SLF001
+
     assert drawn_uid in p0.deck
     assert drawn_uid not in p0.hand
+    assert replacement_uid in p0.hand
 
 
 def test_tikal_is_scripted_with_deck_bottom_and_moves_top_cards_correctly() -> None:
@@ -1967,3 +2045,48 @@ def test_veggente_searches_sigillo_and_uses_altar_script() -> None:
     assert out.ok
     assert engine._get_altare_sigilli(0) == 0
     assert len(p0.hand) == before_hand + 1
+
+
+def test_hun_came_bonus_is_snapshot_on_enter_and_does_not_update_after() -> None:
+    cards = [
+        CardDefinition("Hun-Came", "Santo", "5", 5, 5, "", "MAY-1"),
+        CardDefinition("FieldFriend", "Santo", "2", 2, 2, "", "MAY-1"),
+        CardDefinition("HandFriend", "Santo", "2", 2, 2, "", "MAY-1"),
+        CardDefinition("DeckFriend", "Santo", "2", 2, 2, "", "MAY-1"),
+        CardDefinition("G1", "Benedizione", "1", None, None, "", "MAY-1"),
+        CardDefinition("G2", "Benedizione", "1", None, None, "", "MAY-1"),
+        CardDefinition("G3", "Benedizione", "1", None, None, "", "MAY-1"),
+        CardDefinition("G4", "Benedizione", "1", None, None, "", "MAY-1"),
+        CardDefinition("G5", "Benedizione", "1", None, None, "", "MAY-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "MAY-1", "MAY-1", seed=131)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+    p0 = engine.state.players[0]
+
+    for name in ("G1", "G2", "G3", "G4", "G5"):
+        g_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == name)
+        p0.deck.remove(g_uid)
+        p0.graveyard.append(g_uid)
+
+    i_hun = _force_card_in_hand(engine, 0, "Hun-Came")
+    assert engine.play_card(0, i_hun, "a1").ok
+    hun_uid = p0.attack[0]
+    assert hun_uid is not None
+    assert engine.state.instances[hun_uid].current_faith == 7
+    assert engine.get_effective_strength(hun_uid) == 7
+
+    i_field = _force_card_in_hand(engine, 0, "FieldFriend")
+    assert engine.play_card(0, i_field, "a2").ok
+    field_uid = p0.attack[1]
+    assert field_uid is not None
+    assert engine.get_effective_strength(field_uid) == 2
+
+    extra_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "DeckFriend")
+    p0.deck.remove(extra_uid)
+    p0.graveyard.append(extra_uid)
+
+    assert engine.state.instances[hun_uid].current_faith == 7
+    assert engine.get_effective_strength(hun_uid) == 7

@@ -116,6 +116,8 @@ class RuntimeRegistryMixin:
                 store_as=str(raw.get("store_as")) if raw.get("store_as") is not None else None,
                 stored=str(raw.get("stored")) if raw.get("stored") is not None else None,
                 to_zone=str(raw.get("to_zone")) if raw.get("to_zone") is not None else None,
+                threshold=_to_int_or_none(raw.get("threshold")),
+                divisor=_to_int_or_none(raw.get("divisor")),
                 min_targets=_to_int_or_none(min_targets_raw),
                 max_targets=_to_int_or_none(max_targets_raw),
                 controller_has_saint_with_name=(
@@ -866,6 +868,7 @@ class RuntimeRegistryMixin:
         owner_idx: int,
         context: str,
         amount_mode: str = "flat",
+        target_uid: str | None = None,
     ) -> int:
         player = engine.state.players[owner_idx]
         field_uids = [uid for uid in player.attack + player.defense + player.artifacts if uid]
@@ -881,6 +884,9 @@ class RuntimeRegistryMixin:
             rules = self.get_counted_bonuses(source_inst.definition.name, context=context)
             for idx, rule in enumerate(rules):
                 if _norm(str(rule.get("amount_mode", "flat"))) != _norm(amount_mode):
+                    continue
+                applies_to = _norm(str(rule.get("applies_to", "all")))
+                if applies_to == "self" and target_uid and source_uid != target_uid:
                     continue
                 req = dict(rule.get("requirement", {}) or {})
                 candidates = self._collect_cards_for_requirement(engine, owner_idx, req)
