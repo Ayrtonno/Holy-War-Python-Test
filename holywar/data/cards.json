@@ -1749,6 +1749,17 @@
     "aliases": []
   },
   {
+    "name": "Mummificazione Prematura",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Manda un Santo bersaglio dal tuo reliquiario al cimitero. Rimuovi Peccato pari alla Fede e Forza di quel Santo.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Nefti",
     "card_type": "Santo",
     "crosses": "1",

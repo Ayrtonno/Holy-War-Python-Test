@@ -229,6 +229,42 @@ def test_rituale_sepolcrale_discard_step_excludes_source_card() -> None:
     assert discard_target.card_filter.exclude_event_card is True
 
 
+def test_rituale_dei_guardiani_sacrifices_selected_saint_and_summons_drawn_saint() -> None:
+    cards = [
+        CardDefinition("Rituale dei Guardiani", "Benedizione", "1", None, None, "", "NEU-1"),
+        CardDefinition("Bersaglio Rituale Dummy", "Santo", "1", 3, 1, "", "NEU-1"),
+        CardDefinition("Santo Pescato", "Santo", "1", 4, 2, "", "NEU-1"),
+        CardDefinition("Fill1", "Benedizione", "1", None, None, "", "NEU-1"),
+        CardDefinition("Fill2", "Artefatto", "1", 1, None, "", "NEU-1"),
+        CardDefinition("Fill3", "Maledizione", "1", None, None, "", "NEU-1"),
+        CardDefinition("Fill4", "Benedizione", "1", None, None, "", "NEU-1"),
+        CardDefinition("Fill5", "Artefatto", "1", 1, None, "", "NEU-1"),
+    ]
+    engine = GameEngine.create_new(cards, "P1", "P2", "NEU-1", "NEU-1", seed=333)
+    _advance_to_active_phase(engine)
+    while engine.state.active_player != 0:
+        engine.end_turn()
+        engine.start_turn()
+
+    p0 = engine.state.players[0]
+    ritual_idx = _force_card_in_hand(engine, 0, "Rituale dei Guardiani")
+    sacrificio_idx = _force_card_in_hand(engine, 0, "Bersaglio Rituale Dummy")
+    assert engine.play_card(0, sacrificio_idx, "a1").ok
+    sacrificio_uid = p0.attack[0]
+    assert sacrificio_uid is not None
+
+    drawn_uid = next(uid for uid in p0.deck if engine.state.instances[uid].definition.name == "Santo Pescato")
+    p0.deck.remove(drawn_uid)
+    p0.deck.append(drawn_uid)
+
+    ritual_idx = _force_card_in_hand(engine, 0, "Rituale dei Guardiani")
+    out = engine.play_card(0, ritual_idx, "a1")
+    assert out.ok
+    assert sacrificio_uid in p0.graveyard
+    assert drawn_uid not in p0.hand
+    assert drawn_uid in [uid for uid in (p0.attack + p0.defense) if uid]
+
+
 def test_risveglio_di_ph_dak_gaph_recovers_up_to_five_and_excommunicates_itself() -> None:
     script = runtime_cards.get_script("Risveglio di Ph-Dak'Gaph")
     assert script is not None

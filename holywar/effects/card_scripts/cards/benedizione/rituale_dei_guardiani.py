@@ -35,10 +35,6 @@ SCRIPT = {
             },
         },
         {
-            "target": {"type": "source_card"},
-            "effect": {"action": "reveal_stored_card", "stored": "rituale_guardiani_drawn"},
-        },
-        {
             "condition": {
                 "stored_card_matches": {
                     "stored": "rituale_guardiani_drawn",

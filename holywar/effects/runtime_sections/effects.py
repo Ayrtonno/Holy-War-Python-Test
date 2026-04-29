@@ -1098,8 +1098,8 @@ class RuntimeEffectsMixin:
                 engine,
                 owner_idx,
                 source_uid,
-                EffectSpec(action="summon_target_to_field"),
                 [stored_uid],
+                EffectSpec(action="summon_target_to_field"),
             )
             return
         
@@ -1202,6 +1202,32 @@ class RuntimeEffectsMixin:
                             pass
 
                 amount = max(0, base + bonus)
+                break
+
+            player.sin = max(0, int(player.sin) - amount)
+            return
+        if action == "remove_sin_equal_to_target_faith_and_strength":
+            target_player = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target_player]
+
+            amount = 0
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+
+                strength_base = int(inst.definition.strength or 0)
+                strength_bonus = 0
+                for tag in list(inst.blessed) + list(inst.cursed):
+                    if isinstance(tag, str) and tag.startswith("buff_str:"):
+                        try:
+                            strength_bonus += int(tag.split(":", 1)[1])
+                        except ValueError:
+                            pass
+
+                total_strength = max(0, strength_base + strength_bonus)
+                total_faith = max(0, int(inst.current_faith or 0))
+                amount = total_strength + total_faith
                 break
 
             player.sin = max(0, int(player.sin) - amount)

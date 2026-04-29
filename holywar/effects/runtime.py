@@ -88,6 +88,7 @@ EFFECT_ACTION_ALIASES = {
     "reduce_sin": "remove_sin",
     "gain_inspiration": "add_inspiration",
     "pay_inspiration": "pay_inspiration",
+    "move_to_graveyard": "send_to_graveyard",
 }
 
 # This set defines the supported effect actions that the runtime can process. It includes a wide range of actions that can be performed as part of card effects, such as increasing or decreasing faith and strength, adding or removing counters, inflicting sin, drawing cards, moving cards between zones, and many more. This set is used to validate that any effect action specified in card scripts or effect definitions is recognized and can be handled by the runtime.
@@ -152,6 +153,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "add_temporary_inspiration_from_flag",
     "summon_target_to_field",
     "remove_sin_equal_to_target_strength",
+    "remove_sin_equal_to_target_faith_and_strength",
     "store_top_card_of_zone",
     "reveal_selected_target",
     "reveal_stored_card",
