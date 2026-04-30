@@ -12,7 +12,6 @@ from holywar.core.state import GameState
 from holywar.data.deck_builder import (
     available_premade_decks,
     available_religions,
-    export_test_decks,
     export_premades_json,
     get_premade_label,
     register_premades_from_json,
@@ -28,7 +27,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--deck-xlsx", type=str, default=None, help="Percorso a Holy War.xlsx")
     parser.add_argument("--cards-json", type=str, default=str(DEFAULT_JSON), help="Cache JSON carte")
     parser.add_argument("--load", type=str, default=None, help="Carica partita da file JSON")
-    parser.add_argument("--export-test-decks", type=str, default=None, help="Esporta deck test JSON per religione")
     parser.add_argument("--premades-json", type=str, default=None, help="Importa deck premade custom da JSON")
     parser.add_argument("--export-premades-json", type=str, default=None, help="Esporta deck premade in JSON")
     parser.add_argument("--seed", type=int, default=None, help="Seed RNG (se omesso: casuale ad ogni partita)")
@@ -282,12 +280,6 @@ def main() -> None:
         return
 
     cards = ensure_cards(args)
-    if args.export_test_decks:
-        paths = export_test_decks(cards, args.export_test_decks)
-        print("Deck test esportati:")
-        for p in paths:
-            print(f" - {p}")
-        return
     print("Seleziona modalita: [0] 1v1 locale, [1] vs AI")
     mode_pick = input("> ").strip()
     mode = "ai" if mode_pick == "1" else "local"

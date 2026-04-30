@@ -450,23 +450,4 @@ def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuil
     )
 
 
-def export_test_decks(cards: list[CardDefinition], output_dir: str | Path) -> list[Path]:
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    paths: list[Path] = []
-    for religion in available_religions(cards):
-        built = build_test_deck(cards, religion)
-        payload = {
-            "religion": religion,
-            "main_deck_count": len(built.main_deck),
-            "white_deck_count": len(built.white_deck),
-            "main_deck": [c.name for c in built.main_deck],
-            "white_deck": [c.name for c in built.white_deck],
-        }
-        path = out / f"{religion.replace(' ', '_')}.json"
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        paths.append(path)
-    return paths
-
-
 reset_runtime_premades()
