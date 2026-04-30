@@ -3,12 +3,17 @@ from __future__ import annotations
 
 import json
 import random
+import copy
+from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
 from holywar.ai.simple_ai import choose_action
+from holywar.app_paths import appdata_dir
 from holywar.core.engine import GameEngine
+from holywar.core.state import GameState
 from holywar.data.deck_builder import available_premade_decks, get_premade_label
 
 # This mixin class provides methods for managing the game flow in the GUI, including showing different screens (main menu, game screen, deck manager), handling the start of a new game, managing turn flow and AI actions, handling chain priority during card interactions, and providing options to save the game state and export logs. It interacts with the game engine to execute game actions based on user input and AI decisions, while also updating the GUI accordingly.
@@ -20,23 +25,36 @@ class GUIGameFlowMixin:
 
     # Methods to switch between different GUI sections (main menu, game screen, deck manager) by packing and unpacking the respective frames, allowing the user to navigate through the different parts of the application seamlessly.
     def show_main_menu(self) -> None:
+        self.stop_replay_playback()
         self.game_screen.pack_forget()
         self.deck_manager_frame.pack_forget()
+        self.replay_manager_frame.pack_forget()
         self.main_menu_frame.pack(fill="both", expand=True)
 
     # Methods to display the game screen and deck manager by hiding the other sections and showing the relevant frame, as well as syncing the deck filter expansions and reloading user decks when showing the deck manager to ensure that the displayed information is up to date.
     def show_game_screen(self) -> None:
         self.main_menu_frame.pack_forget()
         self.deck_manager_frame.pack_forget()
+        self.replay_manager_frame.pack_forget()
         self.game_screen.pack(fill="both", expand=True)
+        if not self._replay_playback:
+            self._set_replay_ui_mode(False)
 
     # Methods to display the deck manager screen, hiding the main menu and game screen, and ensuring that the deck filter expansions are synced and user decks are reloaded to reflect any changes or updates made to the decks, providing an up-to-date view of the available decks for the user to manage.
     def show_deck_manager(self) -> None:
         self.main_menu_frame.pack_forget()
         self.game_screen.pack_forget()
+        self.replay_manager_frame.pack_forget()
         self.deck_manager_frame.pack(fill="both", expand=True)
         self._sync_deck_filter_expansions()
         self._deck_manager_reload_user_decks()
+
+    def show_replay_manager(self) -> None:
+        self.main_menu_frame.pack_forget()
+        self.game_screen.pack_forget()
+        self.deck_manager_frame.pack_forget()
+        self.replay_manager_frame.pack(fill="both", expand=True)
+        self._replay_manager_reload()
 
     # This method updates the options for premade decks in the game setup screen based on the selected religions for player 1 and player 2. It builds a mapping of available premade decks for each religion, updates the dropdown options for selecting premade decks, and ensures that the currently selected premade deck is valid for the chosen religion, defaulting to "AUTO (test)" if the previously selected deck is no longer available.
     def update_premade_options(self) -> None:
@@ -91,6 +109,12 @@ class GUIGameFlowMixin:
         self._reveal_prompt_open = False
         self._reveal_prompt_last_uid = ""
         self._post_reveal_chain_actor = None
+        self._replay_playback = False
+        self._replay_loaded_snapshots = []
+        self._replay_loaded_name = ""
+        self._replay_index = 0
+        self._replay_snapshots = []
+        self._replay_last_signature = ""
         self.status_var.set("Partita avviata")
         self.refresh()
         self.begin_turn_if_needed()
@@ -107,6 +131,8 @@ class GUIGameFlowMixin:
 
     # This method determines whether the human player can currently take actions based on the game state, mode, and whether a chain is active. It checks if the game engine is initialized and if there is a winner, then evaluates the conditions for chain interactions and AI turns to determine if the human player has the opportunity to act at the current moment in the game.
     def can_human_act(self) -> bool:
+        if self._replay_playback:
+            return False
         if self.engine is None or self.engine.state.winner is not None:
             return False
         if self.chain_active:
@@ -121,6 +147,8 @@ class GUIGameFlowMixin:
 
     # This method manages the flow of turns in the game, starting a new turn if necessary when the previous turn has ended and there is no winner. It also checks if the game mode is AI and if it's the AI's turn to act, in which case it initiates the AI turn by calling the appropriate method to start the AI's decision-making process.
     def begin_turn_if_needed(self) -> None:
+        if self._replay_playback:
+            return
         if self.engine is None or self.ai_running:
             return
         if not self.turn_started and self.engine.state.winner is None:
@@ -446,6 +474,279 @@ class GUIGameFlowMixin:
             return
         self.engine.state.save(path)
         self.status_var.set(f"Partita salvata: {path}")
+
+    def _replay_dir(self) -> Path:
+        out = appdata_dir() / "replays"
+        out.mkdir(parents=True, exist_ok=True)
+        return out
+
+    def _capture_replay_snapshot_if_changed(self, label: str = "") -> None:
+        if self.engine is None or self._replay_playback:
+            return
+        payload = copy.deepcopy(self.engine.state.to_dict())
+        signature = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        if signature == self._replay_last_signature:
+            return
+        self._replay_last_signature = signature
+        if not label:
+            active = self.engine.state.players[self.engine.state.active_player].name
+            label = f"Turno {self.engine.state.turn_number} | {self.engine.state.phase} | Attivo: {active}"
+        self._replay_snapshots.append({"label": str(label), "state": copy.deepcopy(payload)})
+
+    def save_replay(self) -> None:
+        if self.engine is None:
+            return
+        self._capture_replay_snapshot_if_changed()
+        if not self._replay_snapshots:
+            messagebox.showwarning("Replay", "Nessun replay disponibile da salvare.")
+            return
+        default_name = f"replay_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        replay_dir = self._replay_dir()
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")],
+            initialdir=str(replay_dir),
+            initialfile=default_name,
+            title="Salva replay",
+        )
+        if not path:
+            return
+        winner = self.engine.state.winner
+        winner_name = self.engine.state.players[winner].name if winner is not None else None
+        data = {
+            "version": 1,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "meta": {
+                "p1": self.engine.state.players[0].name,
+                "p2": self.engine.state.players[1].name,
+                "winner": winner_name,
+                "turn": int(self.engine.state.turn_number),
+                "snapshots": len(self._replay_snapshots),
+            },
+            "snapshots": self._replay_snapshots,
+        }
+        Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.status_var.set(f"Replay salvato: {path}")
+
+    def _replay_manager_reload(self) -> None:
+        if not hasattr(self, "replay_list"):
+            return
+        self.replay_list.delete(0, tk.END)
+        replay_dir = self._replay_dir()
+        files = sorted(replay_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in files:
+            self.replay_list.insert(tk.END, p.name)
+        self._replay_set_detail("Seleziona un replay per vedere i dettagli.")
+
+    def _replay_set_detail(self, text: str) -> None:
+        if not hasattr(self, "replay_detail_text"):
+            return
+        self.replay_detail_text.configure(state="normal")
+        self.replay_detail_text.delete("1.0", tk.END)
+        self.replay_detail_text.insert(tk.END, text)
+        self.replay_detail_text.configure(state="disabled")
+
+    def _selected_replay_path(self) -> Path | None:
+        if not hasattr(self, "replay_list"):
+            return None
+        sel = self.replay_list.curselection()
+        if not sel:
+            return None
+        name = str(self.replay_list.get(sel[0])).strip()
+        if not name:
+            return None
+        return self._replay_dir() / name
+
+    def _replay_on_select(self, _event=None) -> None:
+        path = self._selected_replay_path()
+        if path is None or not path.exists():
+            self._replay_set_detail("Seleziona un replay per vedere i dettagli.")
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            self._replay_set_detail(f"Impossibile leggere replay:\n{exc}")
+            return
+        meta = dict(data.get("meta", {}) or {})
+        snapshots = list(data.get("snapshots", []) or [])
+        msg = (
+            f"File: {path.name}\n"
+            f"Creato: {data.get('created_at', '-')}\n"
+            f"P1: {meta.get('p1', '-')}\n"
+            f"P2: {meta.get('p2', '-')}\n"
+            f"Vincitore: {meta.get('winner', '-')}\n"
+            f"Turno finale: {meta.get('turn', '-')}\n"
+            f"Snapshot: {len(snapshots)}"
+        )
+        self._replay_set_detail(msg)
+
+    def replay_delete_selected(self) -> None:
+        path = self._selected_replay_path()
+        if path is None or not path.exists():
+            messagebox.showwarning("Replay", "Seleziona un replay da eliminare.")
+            return
+        if not messagebox.askyesno("Replay", f"Eliminare il replay '{path.name}'?"):
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except Exception as exc:
+            messagebox.showerror("Replay", f"Errore durante eliminazione:\n{exc}")
+            return
+        self._replay_manager_reload()
+
+    def replay_play_selected(self) -> None:
+        path = self._selected_replay_path()
+        if path is None or not path.exists():
+            messagebox.showwarning("Replay", "Seleziona un replay da riprodurre.")
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            messagebox.showerror("Replay", f"Impossibile leggere replay:\n{exc}")
+            return
+        snapshots = list(data.get("snapshots", []) or [])
+        if not snapshots:
+            messagebox.showwarning("Replay", "Replay vuoto.")
+            return
+        self.stop_replay_playback()
+        self._replay_playback = True
+        self._replay_paused = False
+        self._replay_loaded_name = path.name
+        self._replay_loaded_snapshots = snapshots
+        self._replay_index = 0
+        self._replay_step_ms = max(300, int(self._replay_step_ms or 1000))
+        self.turn_started = True
+        self.ai_running = False
+        self.chain_active = False
+        self.show_game_screen()
+        self._set_replay_ui_mode(True)
+        self._replay_apply_current_snapshot()
+        self._replay_schedule_next_step()
+
+    def _replay_apply_current_snapshot(self) -> None:
+        if not self._replay_loaded_snapshots:
+            return
+        snap = self._replay_loaded_snapshots[self._replay_index]
+        state_payload = dict(snap.get("state", {}) or {})
+        flags = dict(state_payload.get("flags", {}) or {})
+        flags["_runtime_waiting_for_reveal"] = False
+        flags.pop("_runtime_reveal_card", None)
+        state_payload["flags"] = flags
+        self.engine = GameEngine(GameState.from_dict(state_payload), seed=self.seed)
+        self.last_log_idx = 0
+        if hasattr(self, "log_text"):
+            self.log_text.configure(state="normal")
+            self.log_text.delete("1.0", tk.END)
+            self.log_text.configure(state="disabled")
+        self.refresh()
+        total = len(self._replay_loaded_snapshots)
+        label = str(snap.get("label", "")).strip()
+        self.status_var.set(
+            f"Replay {self._replay_loaded_name}: step {self._replay_index + 1}/{total}"
+            + (f" | {label}" if label else "")
+        )
+
+    def _replay_schedule_next_step(self) -> None:
+        if not self._replay_playback:
+            return
+        if self._replay_paused:
+            self._replay_after_id = None
+            return
+        if self._replay_index >= len(self._replay_loaded_snapshots) - 1:
+            self.status_var.set(f"Replay completato: {self._replay_loaded_name}")
+            self._replay_after_id = None
+            return
+        self._replay_after_id = self.after(max(120, int(self._replay_step_ms)), self._replay_step)
+
+    def _replay_step(self) -> None:
+        if not self._replay_playback:
+            return
+        self._replay_index += 1
+        if self._replay_index >= len(self._replay_loaded_snapshots):
+            self.status_var.set(f"Replay completato: {self._replay_loaded_name}")
+            self._replay_after_id = None
+            return
+        self._replay_apply_current_snapshot()
+        self._replay_schedule_next_step()
+
+    def stop_replay_playback(self) -> None:
+        if self._replay_after_id:
+            try:
+                self.after_cancel(self._replay_after_id)
+            except Exception:
+                pass
+        self._replay_after_id = None
+        self._replay_playback = False
+        self._replay_paused = False
+        self._replay_loaded_snapshots = []
+        self._replay_loaded_name = ""
+        self._replay_index = 0
+        self._set_replay_ui_mode(False)
+
+    def _set_replay_ui_mode(self, enabled: bool) -> None:
+        if enabled:
+            if hasattr(self, "game_top_frame"):
+                self.game_top_frame.pack_forget()
+            if hasattr(self, "replay_controls_frame"):
+                self.replay_controls_frame.pack(fill="x", padx=8, pady=(4, 0))
+            if hasattr(self, "replay_playpause_btn"):
+                self.replay_playpause_btn.configure(text="Pausa" if not self._replay_paused else "Riprendi")
+            if hasattr(self, "replay_speed_label"):
+                self.replay_speed_label.configure(text=f"{int(self._replay_step_ms)} ms/step")
+        else:
+            if hasattr(self, "replay_controls_frame"):
+                self.replay_controls_frame.pack_forget()
+            if hasattr(self, "game_top_frame"):
+                self.game_top_frame.pack(fill="x", padx=8, pady=8)
+
+    def replay_toggle_pause(self) -> None:
+        if not self._replay_playback:
+            return
+        self._replay_paused = not self._replay_paused
+        if hasattr(self, "replay_playpause_btn"):
+            self.replay_playpause_btn.configure(text="Riprendi" if self._replay_paused else "Pausa")
+        if not self._replay_paused:
+            self._replay_schedule_next_step()
+
+    def replay_change_speed(self, factor: float) -> None:
+        if factor <= 0:
+            return
+        self._replay_step_ms = max(120, min(10000, int(self._replay_step_ms * factor)))
+        if hasattr(self, "replay_speed_label"):
+            self.replay_speed_label.configure(text=f"{int(self._replay_step_ms)} ms/step")
+        if self._replay_playback and not self._replay_paused:
+            if self._replay_after_id:
+                try:
+                    self.after_cancel(self._replay_after_id)
+                except Exception:
+                    pass
+                self._replay_after_id = None
+            self._replay_schedule_next_step()
+
+    def replay_jump_to_turn(self) -> None:
+        if not self._replay_playback or not self._replay_loaded_snapshots:
+            return
+        raw = str(getattr(self, "replay_jump_turn_var", None).get() if hasattr(self, "replay_jump_turn_var") else "").strip()
+        if not raw:
+            return
+        try:
+            wanted_turn = int(raw)
+        except ValueError:
+            messagebox.showwarning("Replay", "Turno non valido.")
+            return
+        idx = None
+        for i, snap in enumerate(self._replay_loaded_snapshots):
+            state_payload = dict(snap.get("state", {}) or {})
+            turn_number = int(state_payload.get("turn_number", 0) or 0)
+            if turn_number >= wanted_turn:
+                idx = i
+                break
+        if idx is None:
+            idx = len(self._replay_loaded_snapshots) - 1
+        self._replay_index = idx
+        self._replay_apply_current_snapshot()
+        if not self._replay_paused:
+            self._replay_schedule_next_step()
 
     # This method exports the game logs to a text file. It checks if the game engine is initialized, then prompts the user to choose a file location for exporting the logs. If a valid path is selected, it calls the game engine's method to export the logs to the specified file and updates the status message to indicate that the log has been exported successfully.
     def export_log(self) -> None:

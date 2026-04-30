@@ -224,7 +224,22 @@ class GameEngine:
 
     # Plays a card from hand through the main gameplay entry point.
     def play_card(self, player_idx: int, hand_index: int, target: str | None = None) -> ActionResult:
-        return card_play_ops.play_card(self, player_idx, hand_index, target)
+        player = self.state.players[player_idx]
+        card_name = "Carta sconosciuta"
+        if 0 <= hand_index < len(player.hand):
+            uid = player.hand[hand_index]
+            inst = self.state.instances.get(uid)
+            if inst is not None:
+                card_name = inst.definition.name
+        self.state.log(f"{player.name} gioca {card_name}.")
+        result = card_play_ops.play_card(self, player_idx, hand_index, target)
+        if result.ok:
+            outcome = str(result.message or "").strip() or "Risoluzione completata."
+            self.state.log(f"{card_name}: effetto risolto. {outcome}")
+        else:
+            reason = str(result.message or "").strip() or "Azione non valida."
+            self.state.log(f"{card_name}: giocata fallita. {reason}")
+        return result
 
     # Returns every saint or token the player currently controls on the field.
     def all_saints_on_field(self, player_idx: int) -> list[str]:
@@ -490,6 +505,8 @@ class GameEngine:
 
     # Activates the ability of a card already present on the board.
     def activate_ability(self, player_idx: int, source: str, target: str | None = None) -> ActionResult:
+        player = self.state.players[player_idx]
+        src_name = str(source)
         if player_idx != self.state.active_player:
             return ActionResult(False, "Puoi attivare abilita solo nel tuo turno.")
         uid = self.resolve_board_uid(player_idx, source)
@@ -503,6 +520,8 @@ class GameEngine:
         if uid is None:
             return ActionResult(False, "Sorgente non valida. Usa a1..a3, d1..d3, r1..r4 o b.")
         inst = self.state.instances[uid]
+        src_name = inst.definition.name
+        self.state.log(f"{player.name} attiva l'effetto di {src_name}.")
         if "silenced" in inst.cursed:
             return ActionResult(False, "Questa carta ha i suoi effetti annullati.")
         keep_curses: list[str] = []
@@ -527,10 +546,12 @@ class GameEngine:
             return ActionResult(True, f"{inst.definition.name}: abilita gia usata in questo turno.")
         can_activate, reason = runtime_cards.can_activate(self, player_idx, uid, target=target)
         if not can_activate:
+            self.state.log(f"{src_name}: attivazione fallita. {reason or 'Nessun bersaglio valido disponibile per questa abilita.'}")
             return ActionResult(False, reason or "Nessun bersaglio valido disponibile per questa abilita.")
         msg = resolve_activated_effect(self, player_idx, uid, target)
         self._cleanup_zero_faith_saints()
         self.check_win_conditions()
+        self.state.log(f"{src_name}: effetto risolto. {msg}")
         return ActionResult(True, msg)
 
     # Checks whether a card has already used its once-per-turn activation.
@@ -607,7 +628,23 @@ class GameEngine:
 
     # Declares and resolves an attack through the combat module.
     def attack(self, player_idx: int, from_slot: int, target_slot: int | None) -> ActionResult:
-        return combat_ops.attack(self, player_idx, from_slot, target_slot)
+        attacker_name = "Carta sconosciuta"
+        player = self.state.players[player_idx]
+        if 0 <= from_slot < len(player.attack):
+            uid = player.attack[from_slot]
+            if uid in self.state.instances:
+                attacker_name = self.state.instances[uid].definition.name
+        if target_slot is None:
+            target_desc = "attacco diretto"
+        else:
+            target_desc = f"bersaglio {target_slot + 1}"
+        self.state.log(f"{player.name} dichiara attacco con {attacker_name} ({target_desc}).")
+        result = combat_ops.attack(self, player_idx, from_slot, target_slot)
+        if result.ok:
+            self.state.log(f"Attacco di {attacker_name}: {result.message}")
+        else:
+            self.state.log(f"Attacco di {attacker_name} fallito: {result.message}")
+        return result
 
     # Destroys the saint occupying a specific attack slot.
     def _kill_saint(self, owner_idx: int, attack_slot: int) -> None:

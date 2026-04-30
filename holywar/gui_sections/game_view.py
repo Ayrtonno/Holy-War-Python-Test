@@ -143,6 +143,8 @@ class GUIGameViewMixin:
     def refresh(self) -> None:
         if self.engine is None:
             return
+        if hasattr(self, "_capture_replay_snapshot_if_changed"):
+            self._capture_replay_snapshot_if_changed()
         # Any real state refresh invalidates the cached preview snapshot.
         self._sim_state_snapshot = None
         self._clear_slot_highlights()

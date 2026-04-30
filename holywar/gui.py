@@ -77,6 +77,15 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.resource_deck_labels: list[ttk.Label] = []
         self.resource_sin_bars: list[ttk.Progressbar] = []
         self._slot_highlights: list[tuple[tk.Widget, dict[str, str]]] = []
+        self._replay_snapshots: list[dict[str, object]] = []
+        self._replay_last_signature: str = ""
+        self._replay_playback: bool = False
+        self._replay_after_id: str | None = None
+        self._replay_loaded_name: str = ""
+        self._replay_loaded_snapshots: list[dict[str, object]] = []
+        self._replay_index: int = 0
+        self._replay_paused: bool = False
+        self._replay_step_ms: int = 1000
         self._setup_deck_builder_styles()
         self._setup_game_styles()
         self._setup_target_picker_styles()
@@ -89,6 +98,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.main_menu_frame = ttk.Frame(self)
         self.game_screen = ttk.Frame(self)
         self.deck_manager_frame = ttk.Frame(self)
+        self.replay_manager_frame = ttk.Frame(self)
 
         title = ttk.Label(self.main_menu_frame, text="Holy War", font=("Segoe UI", 26, "bold"))
         title.pack(pady=(90, 24))
@@ -99,9 +109,16 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
             command=self.show_deck_manager,
             width=28,
         ).pack(pady=10)
+        ttk.Button(
+            self.main_menu_frame,
+            text="Replay",
+            command=self.show_replay_manager,
+            width=28,
+        ).pack(pady=10)
 
         top = ttk.Frame(self.game_screen)
         top.pack(fill="x", padx=8, pady=8)
+        self.game_top_frame = top
 
         ttk.Label(top, text="Modalita").grid(row=0, column=0, sticky="w")
         ttk.Combobox(top, textvariable=self.mode_var, values=["ai", "local"], width=8, state="readonly").grid(row=0, column=1, padx=4, sticky="ew")
@@ -124,10 +141,13 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
 
         actions = ttk.Frame(top)
         actions.grid(row=1, column=0, columnspan=14, sticky="w", pady=(6, 0))
+        self.game_actions_frame = actions
         ttk.Button(actions, text="Menu", command=self.show_main_menu).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Nuova Partita", command=self.new_game).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Fine Turno", command=self.end_turn).pack(side="left", padx=4)
         ttk.Button(actions, text="Salva", command=self.save_game).pack(side="left", padx=4)
+        ttk.Button(actions, text="Salva Replay", command=self.save_replay).pack(side="left", padx=4)
+        ttk.Button(actions, text="Stop Replay", command=self.stop_replay_playback).pack(side="left", padx=4)
         ttk.Button(actions, text="Esporta Log", command=self.export_log).pack(side="left", padx=4)
         ttk.Button(actions, text="Catena SI", command=lambda: self.set_chain_enabled(True)).pack(side="left", padx=(12, 4))
         ttk.Button(actions, text="Catena NO", command=lambda: self.set_chain_enabled(False)).pack(side="left", padx=4)
@@ -144,6 +164,21 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.update_premade_options()
 
         ttk.Label(self.game_screen, textvariable=self.status_var).pack(fill="x", padx=8)
+        self.replay_controls_frame = ttk.Frame(self.game_screen)
+        self.replay_controls_frame.pack(fill="x", padx=8, pady=(4, 0))
+        self.replay_controls_frame.pack_forget()
+        ttk.Button(self.replay_controls_frame, text="Esci Replay", command=self.stop_replay_playback).pack(side="left", padx=(0, 8))
+        self.replay_playpause_btn = ttk.Button(self.replay_controls_frame, text="Pausa", command=self.replay_toggle_pause)
+        self.replay_playpause_btn.pack(side="left", padx=4)
+        ttk.Button(self.replay_controls_frame, text="Velocita -", command=lambda: self.replay_change_speed(1.25)).pack(side="left", padx=4)
+        ttk.Button(self.replay_controls_frame, text="Velocita +", command=lambda: self.replay_change_speed(0.8)).pack(side="left", padx=4)
+        ttk.Label(self.replay_controls_frame, text="Salta a turno").pack(side="left", padx=(12, 4))
+        self.replay_jump_turn_var = tk.StringVar(value="")
+        self.replay_jump_turn_entry = ttk.Entry(self.replay_controls_frame, textvariable=self.replay_jump_turn_var, width=8)
+        self.replay_jump_turn_entry.pack(side="left", padx=4)
+        ttk.Button(self.replay_controls_frame, text="Vai", command=self.replay_jump_to_turn).pack(side="left", padx=4)
+        self.replay_speed_label = ttk.Label(self.replay_controls_frame, text="1000 ms/step")
+        self.replay_speed_label.pack(side="left", padx=(12, 0))
 
         center = ttk.Frame(self.game_screen)
         center.pack(fill="both", expand=True, padx=8, pady=8)
@@ -224,6 +259,31 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self._apply_game_theme(self.game_screen)
 
         self._build_deck_manager_ui()
+        self._build_replay_manager_ui()
+
+    def _build_replay_manager_ui(self) -> None:
+        top = ttk.Frame(self.replay_manager_frame)
+        top.pack(fill="x", padx=10, pady=10)
+        ttk.Button(top, text="Menu", command=self.show_main_menu, width=18).pack(side="left")
+        ttk.Button(top, text="Ricarica", command=self._replay_manager_reload, width=18).pack(side="left", padx=6)
+        ttk.Button(top, text="Riproduci", command=self.replay_play_selected, width=18).pack(side="left", padx=6)
+        ttk.Button(top, text="Elimina Replay", command=self.replay_delete_selected, width=18).pack(side="left", padx=6)
+
+        list_frame = ttk.LabelFrame(self.replay_manager_frame, text="Replay salvati")
+        list_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.replay_list = tk.Listbox(list_frame, height=18)
+        self.replay_list.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(list_frame, command=self.replay_list.yview)
+        self.replay_list.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self.replay_list.bind("<Double-Button-1>", lambda _e: self.replay_play_selected())
+
+        detail = ttk.LabelFrame(self.replay_manager_frame, text="Dettaglio")
+        detail.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.replay_detail_text = tk.Text(detail, wrap="word", height=10)
+        self.replay_detail_text.pack(fill="both", expand=True)
+        self.replay_detail_text.configure(state="disabled")
+        self.replay_list.bind("<<ListboxSelect>>", self._replay_on_select)
 
 # This function builds the command-line argument parser for the application. It defines various arguments that can be passed when launching the application, such as the path to the deck Excel file, the path to the cards JSON cache, the path to custom premade decks JSON, a random seed for game initialization, and a delay for AI actions. This allows users to customize their experience when starting the application from the command line.
 def build_parser() -> argparse.ArgumentParser:

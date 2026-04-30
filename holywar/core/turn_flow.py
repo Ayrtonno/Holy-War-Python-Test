@@ -245,14 +245,6 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
             except (TypeError, ValueError):
                 drawn_faith_int = None
 
-        # Debug logging for cards with draw-triggered effects, such as "Albero Sacro", to help track the state of the game when these cards are drawn. This can be useful for understanding how the auto-play and end-turn effects are being applied during the draw phase.
-        if _norm(card_name) == _norm("Albero Sacro"):
-            engine.state.log(
-                f"auto_play={runtime_cards.get_auto_play_on_draw(card_name)} "
-                f"end_turn_on_draw={runtime_cards.get_end_turn_on_draw(card_name)} "
-                f"mano_size={len(player.hand)} deck_size={len(player.deck)}"
-            )
-
         auto_play_succeeded = False
 
         # Generic aura-driven free auto-play for freshly drawn cards with low Faith (e.g. Nun).
@@ -467,12 +459,6 @@ def start_turn(engine: "GameEngine") -> None:
     drawn = _run_draw_phase(engine, current)
     engine._emit_event("on_draw_phase_end", current, player=current, drawn=drawn)
 
-    debug_request_end_turn_player = runtime_state.get("request_end_turn_player", None)
-    engine.state.log(
-        f"request_end_turn_player={debug_request_end_turn_player} "
-        f"active_player={engine.state.active_player} phase={engine.state.phase}"
-    )
-
     if runtime_state.get("request_end_turn_player", None) == current:
         runtime_state.pop("request_end_turn_player", None)
         engine.state.log(f"{player.name} termina immediatamente il turno.")
@@ -490,11 +476,6 @@ def end_turn(engine: "GameEngine") -> None:
     current = engine.state.active_player
     runtime_state = ensure_runtime_state(engine)
     was_preparation = str(engine.state.phase).strip().lower() == "preparation"
-
-    engine.state.log(
-        f"player={engine.state.players[current].name} "
-        f"phase_before={engine.state.phase} turn={engine.state.turn_number}"
-    )
 
     if bool(runtime_state.get("battle_phase_started", False)):
         set_phase(engine, "battle")

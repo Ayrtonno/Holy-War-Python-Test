@@ -515,13 +515,7 @@ class RuntimeResolutionMixin:
                     return
                 source_inst = ctx.engine.state.instances.get(_source)
                 source_name = source_inst.definition.name if source_inst is not None else _source
-                event_card_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))
-                event_card_name = (
-                    ctx.engine.state.instances[event_card_uid].definition.name
-                    if event_card_uid in ctx.engine.state.instances
-                    else event_card_uid
-                )
-                ctx.engine.state.log(f"{source_name}: trigger {ctx.event} su {event_card_name} (turno {ctx.engine.state.turn_number}).")
+                ctx.engine.state.log(f"{source_name} attiva il suo effetto.")
                 ctx.engine.state.flags["_runtime_event_card"] = str(
                     ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", "")))
                 )
