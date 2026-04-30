@@ -25,6 +25,17 @@ def _card_name_haystack(definition) -> str:
     parts = [definition.name, *_card_aliases(definition)]
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
+
+def _crosses_to_int(value) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    try:
+        return int(float(str(value)))
+    except (TypeError, ValueError):
+        return None
+
 # This mixin class provides methods for handling gameplay actions that require target selection, including determining if a card allows multiple targets, if it requires a target, counting cards based on specific rules, and generating candidate targets for guided selection based on the card's script and targeting specifications.
 class GUIGameActionsMixin:
     """Gameplay actions and advanced target orchestration handlers."""
@@ -119,7 +130,7 @@ class GUIGameActionsMixin:
             name_variants = _card_name_variants(inst.definition)
             name_haystack = _card_name_haystack(inst.definition)
             ctype = inst.definition.card_type.lower().strip()
-            crosses = getattr(inst.definition, "crosses", None)
+            crosses = _crosses_to_int(getattr(inst.definition, "crosses", None))
 
             if card_type_in and ctype not in card_type_in:
                 continue
@@ -429,10 +440,10 @@ class GUIGameActionsMixin:
             ):
                 return False
 
-            crosses = getattr(inst.definition, "crosses", None)
-            if crosses_gte is not None and (crosses is None or crosses < crosses_gte):
+            crosses = _crosses_to_int(getattr(inst.definition, "crosses", None))
+            if crosses_gte is not None and (crosses is None or crosses < int(crosses_gte)):
                 return False
-            if crosses_lte is not None and (crosses is None or crosses > crosses_lte):
+            if crosses_lte is not None and (crosses is None or crosses > int(crosses_lte)):
                 return False
             eff_strength = engine.get_effective_strength(inst_uid)
             if strength_gte is not None and eff_strength < int(strength_gte):

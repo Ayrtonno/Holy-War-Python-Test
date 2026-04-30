@@ -4,12 +4,11 @@ CARD_NAME = """Iside"""
 
 SCRIPT = {
     "on_play_mode": "noop",
-    "on_enter_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
-    "triggered_effects": [
+    "triggered_effects": [],
+    "on_enter_actions": [
         {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {"event_card_name_is": "Iside"},
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "graveyard",
@@ -19,8 +18,6 @@ SCRIPT = {
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {"event_card_name_is": "Iside"},
             "target": {
                 "type": "selected_target",
                 "zone": "graveyard",

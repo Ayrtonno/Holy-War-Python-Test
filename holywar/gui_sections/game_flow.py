@@ -79,6 +79,7 @@ class GUIGameFlowMixin:
             seed=self.seed,
         )
         self.engine.choose_battle_survival_from_graveyard = self._choose_battle_survival_from_graveyard
+        self.engine.choose_auto_play_drawn_card = self._choose_auto_play_drawn_card
         self.engine.choose_auto_play_slot_from_draw = self._choose_auto_play_slot_from_draw
         self.rng = random.Random(self.seed)
         self.last_log_idx = 0
@@ -314,6 +315,26 @@ class GUIGameFlowMixin:
         if canceled or not selected:
             return slot_tokens[0]
         return str(selected).strip().lower()
+
+    def _choose_auto_play_drawn_card(
+        self,
+        player_idx: int,
+        source_uid: str,
+    ) -> bool:
+        if self.engine is None:
+            return True
+
+        if self._is_ai_player(player_idx):
+            return True
+
+        inst = self.engine.state.instances.get(source_uid)
+        card_name = inst.definition.name if inst is not None else "questa carta"
+        player_name = self.engine.state.players[player_idx].name
+        return messagebox.askyesno(
+            "Effetto di Nun",
+            f"{player_name} ha pescato {card_name}.\n\n"
+            "Vuoi evocarla subito grazie a Nun?",
+        )
 
     # This method prompts the human player to decide whether they want to activate cards in response to an action during a chain interaction. It displays a yes/no dialog asking the player if they want to activate cards in the chain at that moment, and returns True if the player chooses to activate, or False if they choose to pass. This allows the player to make strategic decisions about when to respond with quick plays during chain interactions.
     def _prompt_human_chain_decision(self, player_idx: int) -> bool:

@@ -965,7 +965,10 @@
     "effect_text": "Se questo Santo viene sconfitto da un Santo avversario, puoi prendere ogni carta \"Pietra\" dal tuo cimitero e metterla nel tuo reliquiario. Poi mischia il reliquiario. Se attivi questo effetto, scomunica questa carta.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero", "Pietra"]
+    "aliases": [
+      "Albero",
+      "Pietra"
+    ]
   },
   {
     "name": "Albero Fortunato",
@@ -976,7 +979,9 @@
     "effect_text": "Quando questo Santo viene sconfitto o mandato al cimitero, pesca 2 carte.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Albero Sacro",
@@ -987,7 +992,9 @@
     "effect_text": "Quando peschi questa carta, mettila immediatamente in campo e termina il tuo turno. Alla fine del turno, evoca un Token Albero sul tuo campo. Ogni volta che un Token Albero viene sconfitto, questo Santo riceve +2 Fede (anziché generare Peccato per il controllore).",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Albero Sconsacrato",
@@ -998,7 +1005,9 @@
     "effect_text": "Ogni Santo sconfitto da questo Santo viene scomunicato.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Albero Secolare",
@@ -1009,7 +1018,9 @@
     "effect_text": "Ogni volta che questo Santo subisce danno non mortale, riceve +7 Fede.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Anfibio Tossico",
@@ -1163,7 +1174,9 @@
     "effect_text": "Se questo Santo distrugge un Santo avversario, aumenta la sua Fede di 4.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Incendio",
@@ -1240,7 +1253,9 @@
     "effect_text": "Evoca una carta \"Pietra\" dal tuo cimitero sul tuo campo. Poi scomunica questa carta.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Monsone",
@@ -1284,7 +1299,9 @@
     "effect_text": "Questa carta è considerata una carta Albero. Se controlli \"Insetto della Palude\", questa carta riceve +2 Fede e +2 Forza.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Pietra Bianca",
@@ -1295,7 +1312,9 @@
     "effect_text": "Scegli un Santo bersaglio sul tuo campo. Rimuovi Peccato pari alla Forza di quel Santo.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Pietra Focaia",
@@ -1306,7 +1325,9 @@
     "effect_text": "Ogni volta che questo Santo attacca un Santo avversario, cerca nel tuo reliquiario una carta Artefatto, rivelala e aggiungila alla tua mano. Poi mischia il reliquiario.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Pietra Levigata",
@@ -1317,7 +1338,9 @@
     "effect_text": "Una volta per turno, scegli un Santo avversario bersaglio. Aggiungi la Fede e la Forza di quel Santo a questa carta (cumulabile). Puoi scegliere lo stesso Santo più volte. Quando uno dei Santi bersagliati da questo effetto viene distrutto, distruggi anche questa carta.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Pietra Nera",
@@ -1328,7 +1351,9 @@
     "effect_text": "Equipaggia questa carta a un Santo bersaglio. Puoi distruggere questa carta equipaggiata per negare il primo attacco che quel Santo riceve.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Pietre Aguzze",
@@ -1339,7 +1364,9 @@
     "effect_text": "Ogni volta che un Santo avversario entra in campo, quel giocatore riceve 2 Peccato.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Pietre Pesanti",
@@ -1350,7 +1377,9 @@
     "effect_text": "Durante il prossimo turno l'avversario paga il doppio dell'Ispirazione per giocare le proprie carte.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Pioggia",
@@ -1460,7 +1489,9 @@
     "effect_text": "Questa carta è considerata come carta \"Albero\". Ogni volta che questo Santo infligge un attacco mortale, raddoppia la sua Forza.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Spore",
@@ -1482,7 +1513,9 @@
     "effect_text": "Ogni volta che questo Santo subisce danno da un Santo avversario, quel Santo subisce 3 danni.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Stalattiti",
@@ -1493,7 +1526,9 @@
     "effect_text": "Ogni volta che questo Santo subisce danno da un Santo avversario, quel Santo subisce 2 danni.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Tempesta",
@@ -1548,7 +1583,9 @@
     "effect_text": "(nessun effetto)",
     "expansion": "ANI-1",
     "is_token": true,
-    "aliases": ["Albero"]
+    "aliases": [
+      "Albero"
+    ]
   },
   {
     "name": "Token Sacrificale",
@@ -1581,7 +1618,9 @@
     "effect_text": "Puoi giocare questa carta consumando tutta la tua Ispirazione rimanente. La Fede di questa carta è pari al costo di Ispirazione pagato × 3. Questo Santo non può attaccare.",
     "expansion": "ANI-1",
     "is_token": false,
-    "aliases": ["Pietra"]
+    "aliases": [
+      "Pietra"
+    ]
   },
   {
     "name": "Uragano",
@@ -1842,7 +1881,7 @@
     "crosses": "7",
     "faith": 8,
     "strength": null,
-    "effect_text": "Con 1 Piramide: ogni tuo Santo riceve +5 Forza. Con 2 Piramidi: i tuoi Santi raddoppiano la loro Fede iniziale. Con 3 Piramidi: durante la tua fase di pescata, peschi 2 carte aggiuntive. Gli effetti sono cumulativi.",
+    "effect_text": "Con 1 Piramide: ogni tuo Santo riceve +5 Forza. Con 2 Piramidi: ogni tuo Santo guadagna Fede pari alla sua Fede iniziale. Con 3 Piramidi: durante la tua fase di pescata, peschi 2 carte aggiuntive. Gli effetti sono cumulativi.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -1853,7 +1892,7 @@
     "crosses": "7",
     "faith": 8,
     "strength": null,
-    "effect_text": "Con 1 Piramide: ogni tuo Santo riceve +5 Forza. Con 2 Piramidi: i tuoi Santi raddoppiano la loro Fede iniziale. Con 3 Piramidi: durante la tua fase di pescata, peschi 2 carte aggiuntive. Gli effetti sono cumulativi.",
+    "effect_text": "Con 1 Piramide: ogni tuo Santo riceve +5 Forza. Con 2 Piramidi: ogni tuo Santo guadagna Fede pari alla sua Fede iniziale. Con 3 Piramidi: durante la tua fase di pescata, peschi 2 carte aggiuntive. Gli effetti sono cumulativi.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -1864,7 +1903,7 @@
     "crosses": "7",
     "faith": 8,
     "strength": null,
-    "effect_text": "Con 1 Piramide: ogni tuo Santo riceve +5 Forza. Con 2 Piramidi: i tuoi Santi raddoppiano la loro Fede iniziale. Con 3 Piramidi: durante la tua fase di pescata, peschi 2 carte aggiuntive. Gli effetti sono cumulativi.",
+    "effect_text": "Con 1 Piramide: ogni tuo Santo riceve +5 Forza. Con 2 Piramidi: ogni tuo Santo guadagna Fede pari alla sua Fede iniziale. Con 3 Piramidi: durante la tua fase di pescata, peschi 2 carte aggiuntive. Gli effetti sono cumulativi.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -2847,5 +2886,23 @@
     "expansion": "NEU-1",
     "is_token": false,
     "aliases": []
+  },
+  {
+    "name": "Grandi Costruzioni",
+    "card_type": "Benedizione",
+    "crosses": "9",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Cerca un artefatto nel tuo reliquiario o cimitero e posizionalo sul terreno senza pagare ispirazione.",
+    "expansion": "EGI-1"
+  },
+  {
+    "name": "Il Grande Sacrificio",
+    "card_type": "Maledizione",
+    "crosses": "9",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Cerca e manda 3 carte dal tuo reliquiario al cimitero. Rimuovi 5 peccato.",
+    "expansion": "EGI-1"
   }
 ]

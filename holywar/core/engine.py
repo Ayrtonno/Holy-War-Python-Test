@@ -39,6 +39,9 @@ class GameEngine:
         self.choose_auto_play_slot_from_draw: Optional[
             Callable[[int, str, list[str]], Optional[str]]
         ] = None
+        self.choose_auto_play_drawn_card: Optional[
+            Callable[[int, str], bool]
+        ] = None
         self._bootstrap_runtime_bindings()
         ensure_runtime_state(self)
         refresh_player_flags(self)

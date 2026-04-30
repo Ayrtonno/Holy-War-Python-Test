@@ -100,7 +100,16 @@ class RuntimeEffectsMixin:
             return
         if not bool(script.play_requirements.get("auto_activate_when_discarded_from_hand_by_effect", False)):
             return
-        self.resolve_play(engine, discarded_owner_idx, discarded_uid, None)
+        flags = engine.state.flags
+        previous_trigger_source = flags.get("_runtime_discard_trigger_source")
+        flags["_runtime_discard_trigger_source"] = str(source_uid or "")
+        try:
+            self.resolve_play(engine, discarded_owner_idx, discarded_uid, None)
+        finally:
+            if previous_trigger_source is None:
+                flags.pop("_runtime_discard_trigger_source", None)
+            else:
+                flags["_runtime_discard_trigger_source"] = previous_trigger_source
 
     # This method resolves the targets specified by a `TargetSpec` based on the current game state and the owner of the effect. It handles various types of target specifications, such as cards controlled by the owner, event cards, source cards, equipped targets, and selected targets. The method collects potential targets into a pool and then filters them according to the criteria defined in the `TargetSpec`. Finally, it returns a list of resolved target UIDs, limited by the `max_targets` property if specified.
     def _resolve_targets(self, engine: GameEngine, owner_idx: int, target: TargetSpec) -> list[str]:
@@ -1000,18 +1009,7 @@ class RuntimeEffectsMixin:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
                     continue
-
-                base = int(inst.definition.strength or 0)
-                bonus = 0
-
-                for tag in list(inst.blessed) + list(inst.cursed):
-                    if isinstance(tag, str) and tag.startswith("buff_str:"):
-                        try:
-                            bonus += int(tag.split(":", 1)[1])
-                        except ValueError:
-                            pass
-
-                value = max(0, base + bonus)
+                value = max(0, int(engine.get_effective_strength(t_uid) or 0))
                 break
 
             engine.state.flags[flag_name] = value
@@ -1164,18 +1162,7 @@ class RuntimeEffectsMixin:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
                     continue
-
-                base = inst.definition.strength or 0
-                bonus = 0
-
-                for tag in list(inst.blessed) + list(inst.cursed):
-                    if isinstance(tag, str) and tag.startswith("buff_str:"):
-                        try:
-                            bonus += int(tag.split(":", 1)[1])
-                        except ValueError:
-                            pass
-
-                value = base + bonus
+                value = max(0, int(engine.get_effective_strength(t_uid) or 0))
                 break
 
             engine.state.flags[flag_name] = value
@@ -1281,20 +1268,30 @@ class RuntimeEffectsMixin:
 
                 if t_uid in player.hand:
                     player.hand.remove(t_uid)
+                    actual_from_zone = "hand"
                 elif t_uid in player.deck:
                     player.deck.remove(t_uid)
+                    actual_from_zone = "deck"
                 elif t_uid in player.graveyard:
                     player.graveyard.remove(t_uid)
+                    actual_from_zone = "graveyard"
                 elif t_uid in player.excommunicated:
                     player.excommunicated.remove(t_uid)
+                    actual_from_zone = "excommunicated"
                 elif t_uid in player.attack:
                     player.attack[player.attack.index(t_uid)] = None
+                    actual_from_zone = "attack"
                 elif t_uid in player.defense:
                     player.defense[player.defense.index(t_uid)] = None
+                    actual_from_zone = "defense"
                 elif t_uid in player.artifacts:
                     player.artifacts[player.artifacts.index(t_uid)] = None
+                    actual_from_zone = "artifacts"
                 elif player.building == t_uid:
                     player.building = None
+                    actual_from_zone = "building"
+                else:
+                    actual_from_zone = "summon"
 
                 placed = False
 
@@ -1325,20 +1322,111 @@ class RuntimeEffectsMixin:
                         placed = True
 
                 else:
-                    slot = engine._first_open(board_player.attack)
+                    attack_slots = [f"a{i + 1}" for i, u in enumerate(board_player.attack) if u is None]
+                    defense_slots = [f"d{i + 1}" for i, u in enumerate(board_player.defense) if u is None]
+                    open_slots = attack_slots + defense_slots
+                    slot = None
                     zone = "attack"
-                    if slot is None:
-                        slot = engine._first_open(board_player.defense)
-                        zone = "defense"
+                    if open_slots:
+                        chosen_token = ""
+                        chooser = getattr(engine, "choose_auto_play_slot_from_draw", None)
+                        if callable(chooser):
+                            try:
+                                chosen_token = str(chooser(board_owner, t_uid, open_slots) or "").strip().lower()
+                            except Exception:
+                                chosen_token = ""
+                        if chosen_token in {s.lower() for s in open_slots}:
+                            if chosen_token.startswith("a"):
+                                zone = "attack"
+                                slot = int(chosen_token[1:]) - 1
+                            elif chosen_token.startswith("d"):
+                                zone = "defense"
+                                slot = int(chosen_token[1:]) - 1
+                        if slot is None:
+                            slot = engine._first_open(board_player.attack)
+                            zone = "attack"
+                            if slot is None:
+                                slot = engine._first_open(board_player.defense)
+                                zone = "defense"
                     if slot is not None and engine.place_card_from_uid(board_owner, t_uid, zone, slot):
                         placed = True
 
                 if not placed:
-                    self._move_uid_to_zone(engine, t_uid, "deck_bottom", owner)
+                    card_name = inst.definition.name
+                    owner_name = engine.state.players[owner].name
+                    engine.state.log(
+                        f"{owner_name}: impossibile evocare {card_name} ora (nessuno slot valido disponibile)."
+                    )
+                    if actual_from_zone == "hand":
+                        if t_uid not in player.hand:
+                            player.hand.append(t_uid)
+                    elif actual_from_zone == "graveyard":
+                        if t_uid not in player.graveyard:
+                            player.graveyard.append(t_uid)
+                    elif actual_from_zone in {"deck", "relicario"}:
+                        if t_uid not in player.deck:
+                            player.deck.append(t_uid)
+                    elif actual_from_zone == "excommunicated":
+                        if t_uid not in player.excommunicated:
+                            player.excommunicated.append(t_uid)
+                    elif actual_from_zone == "attack":
+                        restore = engine._first_open(player.attack)
+                        if restore is not None:
+                            player.attack[restore] = t_uid
+                        else:
+                            player.graveyard.append(t_uid)
+                    elif actual_from_zone == "defense":
+                        restore = engine._first_open(player.defense)
+                        if restore is not None:
+                            player.defense[restore] = t_uid
+                        else:
+                            player.graveyard.append(t_uid)
+                    elif actual_from_zone == "artifacts":
+                        restore = engine._first_open(player.artifacts)
+                        if restore is not None:
+                            player.artifacts[restore] = t_uid
+                        else:
+                            player.graveyard.append(t_uid)
+                    elif actual_from_zone == "building":
+                        if player.building is None:
+                            player.building = t_uid
+                        else:
+                            player.graveyard.append(t_uid)
+                    else:
+                        player.graveyard.append(t_uid)
                     continue
 
                 inst.exhausted = False
-                engine._emit_event("on_enter_field", owner, card=t_uid, from_zone="deck")
+                if ctype in {_norm("santo"), _norm("token")}:
+                    bonus_multiplier = self.get_context_bonus_amount(
+                        engine,
+                        owner,
+                        context="summon_faith",
+                        amount_mode="base_faith_multiplier",
+                    )
+                    if bonus_multiplier > 0:
+                        inst.current_faith = (inst.current_faith or 0) + max(0, int(inst.definition.faith or 0)) * bonus_multiplier
+                    bonus_flat = self.get_context_bonus_amount(
+                        engine,
+                        owner,
+                        context="summon_faith",
+                        amount_mode="flat",
+                    )
+                    if bonus_flat > 0:
+                        inst.current_faith = (inst.current_faith or 0) + int(bonus_flat)
+
+                engine._emit_event("on_enter_field", owner, card=t_uid, from_zone=actual_from_zone)
+                if actual_from_zone == "graveyard":
+                    engine._emit_event("on_summoned_from_graveyard", owner, card=t_uid)
+                elif actual_from_zone == "hand":
+                    engine._emit_event("on_summoned_from_hand", owner, card=t_uid)
+                if ctype == _norm("token"):
+                    engine._emit_event("on_token_summoned", owner, token=t_uid, summoner=owner)
+                elif ctype == _norm("santo"):
+                    engine._emit_event("on_opponent_saint_enters_field", 1 - owner, saint=t_uid)
+                enter_msg = self.resolve_enter(engine, owner, t_uid)
+                if enter_msg:
+                    engine.state.log(str(enter_msg))
             return
 
         if action == "return_to_hand":
@@ -2034,6 +2122,7 @@ class RuntimeEffectsMixin:
             target_idx = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             target_player = engine.state.players[target_idx]
             per_card_amount = max(1, int(effect.amount or 1))
+            discard_trigger_source = str(flags.get("_runtime_discard_trigger_source", "")).strip()
 
             state_key = f"_runtime_pressure_state_{source_uid}"
             local_state = dict(flags.get(state_key, {}) or {})
@@ -2045,6 +2134,9 @@ class RuntimeEffectsMixin:
             if not local_state:
                 discarded_count = 0
                 for hand_uid in list(owner_player.hand):
+                    # Do not count/discard the card that triggered this discard chain.
+                    if discard_trigger_source and hand_uid == discard_trigger_source:
+                        continue
                     owner_player.hand.remove(hand_uid)
                     if hand_uid not in owner_player.graveyard:
                         owner_player.graveyard.append(hand_uid)
@@ -2070,7 +2162,7 @@ class RuntimeEffectsMixin:
                 flags.pop(state_key, None)
                 return
 
-            if choice_ready and choice_source == source_uid:
+            if choice_ready and (not choice_source or choice_source == source_uid):
                 mode = str(local_state.get("mode", "")).strip()
                 selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
                 candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
@@ -2934,6 +3026,23 @@ class RuntimeEffectsMixin:
             engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
             inst = engine.state.instances[chosen_uid]
             inst.exhausted = False
+            if ctype in {_norm("santo"), _norm("token")}:
+                bonus_multiplier = self.get_context_bonus_amount(
+                    engine,
+                    owner_idx,
+                    context="summon_faith",
+                    amount_mode="base_faith_multiplier",
+                )
+                if bonus_multiplier > 0:
+                    inst.current_faith = (inst.current_faith or 0) + max(0, int(inst.definition.faith or 0)) * bonus_multiplier
+                bonus_flat = self.get_context_bonus_amount(
+                    engine,
+                    owner_idx,
+                    context="summon_faith",
+                    amount_mode="flat",
+                )
+                if bonus_flat > 0:
+                    inst.current_faith = (inst.current_faith or 0) + int(bonus_flat)
             engine.state.log(f"{player.name} evoca {inst.definition.name} dalla mano.")
             engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone="hand")
             engine._emit_event("on_summoned_from_hand", owner_idx, card=chosen_uid)
@@ -3011,6 +3120,23 @@ class RuntimeEffectsMixin:
             engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
             inst = engine.state.instances[chosen_uid]
             inst.exhausted = False
+            if chosen_type in {"santo", "token"}:
+                bonus_multiplier = self.get_context_bonus_amount(
+                    engine,
+                    owner_idx,
+                    context="summon_faith",
+                    amount_mode="base_faith_multiplier",
+                )
+                if bonus_multiplier > 0:
+                    inst.current_faith = (inst.current_faith or 0) + max(0, int(inst.definition.faith or 0)) * bonus_multiplier
+                bonus_flat = self.get_context_bonus_amount(
+                    engine,
+                    owner_idx,
+                    context="summon_faith",
+                    amount_mode="flat",
+                )
+                if bonus_flat > 0:
+                    inst.current_faith = (inst.current_faith or 0) + int(bonus_flat)
             engine.state.log(f"{player.name} evoca {inst.definition.name}.")
             actual_from_zone = chosen_from_zone or "summon"
             engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone=actual_from_zone)
@@ -3104,6 +3230,23 @@ class RuntimeEffectsMixin:
                 engine.state.flags.setdefault("activated_turn", {}).pop(chosen_uid, None)
                 inst = engine.state.instances[chosen_uid]
                 inst.exhausted = False
+                if chosen_type in {"santo", "token"}:
+                    bonus_multiplier = self.get_context_bonus_amount(
+                        engine,
+                        owner_idx,
+                        context="summon_faith",
+                        amount_mode="base_faith_multiplier",
+                    )
+                    if bonus_multiplier > 0:
+                        inst.current_faith = (inst.current_faith or 0) + max(0, int(inst.definition.faith or 0)) * bonus_multiplier
+                    bonus_flat = self.get_context_bonus_amount(
+                        engine,
+                        owner_idx,
+                        context="summon_faith",
+                        amount_mode="flat",
+                    )
+                    if bonus_flat > 0:
+                        inst.current_faith = (inst.current_faith or 0) + int(bonus_flat)
                 engine.state.log(f"{player.name} evoca {inst.definition.name}.")
                 actual_from_zone = chosen_from_zone or "summon"
                 engine._emit_event("on_enter_field", owner_idx, card=chosen_uid, from_zone=actual_from_zone)

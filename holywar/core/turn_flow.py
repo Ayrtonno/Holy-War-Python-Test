@@ -150,6 +150,16 @@ def _try_auto_play_drawn_card_free(engine: "GameEngine", player_idx: int, uid: s
     inst = engine.state.instances.get(uid)
     if inst is None:
         return False
+
+    chooser_confirm = getattr(engine, "choose_auto_play_drawn_card", None)
+    if callable(chooser_confirm):
+        try:
+            wants_to_play = bool(chooser_confirm(player_idx, uid))
+        except Exception:
+            wants_to_play = True
+        if not wants_to_play:
+            return False
+
     ctype = _norm(inst.definition.card_type)
     target: str | None = None
     if ctype in {"santo", "token"}:
