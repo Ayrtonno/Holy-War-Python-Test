@@ -29,11 +29,6 @@ SCRIPT = {
             },
             "target": {
                 "type": "selected_target",
-                "zone": "deck",
-                "owner": "me",
-                "card_filter": {"card_type_in": ["benedizione"]},
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {"action": "move_to_hand"},
         },

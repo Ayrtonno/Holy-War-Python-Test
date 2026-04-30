@@ -6,7 +6,7 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "play_targeting": "guided",
+    "play_targeting": "auto",
     "triggered_effects": [],
     "on_play_actions": [
         {
@@ -27,13 +27,6 @@ SCRIPT = {
         {
             "target": {
                 "type": "selected_target",
-                "zone": "deck",
-                "owner": "me",
-                "card_filter": {
-                    "card_type_in": ["santo"],
-                },
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {
                 "action": "remove_sin_equal_to_target_faith_and_strength",
@@ -43,13 +36,6 @@ SCRIPT = {
         {
             "target": {
                 "type": "selected_target",
-                "zone": "deck",
-                "owner": "me",
-                "card_filter": {
-                    "card_type_in": ["santo"],
-                },
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {
                 "action": "send_to_graveyard",

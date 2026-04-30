@@ -58,11 +58,6 @@ SCRIPT = {
             },
             "target": {
                 "type": "selected_target",
-                "zone": "hand",
-                "owner": "me",
-                "card_filter": {"drawn_this_turn_only": True},
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {"action": "move_to_relicario"},
         },

@@ -44,11 +44,6 @@ SCRIPT = {
             },
             "target": {
                 "type": "selected_target",
-                "zone": "graveyard",
-                "owner": "me",
-                "card_filter": {"card_type_in": ["santo"], "strength_lte": 6},
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {"action": "summon_target_to_field"},
         },
