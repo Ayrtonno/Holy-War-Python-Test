@@ -213,6 +213,13 @@ class GUITargetingMixin:
     # This method retrieves a list of valid attack target tokens for a given player index and source slot. It checks each potential target slot (including None for direct attacks) to see if an attack action can be performed from the source slot to that target slot using the `_can_attack_target` method. If an attack is valid for a target slot, it adds the corresponding token (e.g., "a1", "d2", "r3", "b") or None to the output list. The method returns a list of valid attack target tokens that the player can choose from when performing an attack action.
     def _valid_attack_targets(self, player_idx: int, from_slot: int) -> list[int | None]:
         out: list[int | None] = []
+        if self.engine is not None:
+            opponent = self.engine.state.players[1 - player_idx]
+            has_enemy_saints_on_field = any(uid is not None for uid in (opponent.attack + opponent.defense))
+            if not has_enemy_saints_on_field:
+                if self._can_attack_target(player_idx, from_slot, None):
+                    out.append(None)
+                return out
         if self._can_attack_target(player_idx, from_slot, None):
             out.append(None)
         for slot in range(3):

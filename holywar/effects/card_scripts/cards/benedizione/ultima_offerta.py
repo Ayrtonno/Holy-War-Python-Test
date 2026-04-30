@@ -11,23 +11,22 @@ SCRIPT = {
     "on_play_actions": [
         {
             "target": {
-                "type": "selected_target",
+                "type": "cards_controlled_by_owner",
                 "zone": "hand",
                 "owner": "me",
                 "card_filter": {"card_type_in": ["santo"]},
-                "min_targets": 1,
-                "max_targets": 1,
+            },
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "target": {
+                "type": "selected_target",
             },
             "effect": {"action": "store_target_strength", "flag": "ultima_offerta_discarded_strength"},
         },
         {
             "target": {
                 "type": "selected_target",
-                "zone": "hand",
-                "owner": "me",
-                "card_filter": {"card_type_in": ["santo"]},
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {"action": "send_to_graveyard"},
         },

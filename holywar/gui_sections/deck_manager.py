@@ -305,15 +305,25 @@ class GUIDeckManagerMixin:
         rules_box = ttk.LabelFrame(right, text="Regole e Validazione", style="DeckCard.TLabelframe", padding=(8, 6))
         rules_box.grid(row=3, column=0, sticky="ew")
         rules_box.columnconfigure(0, weight=1)
+        rules_box.columnconfigure(1, weight=1)
         self.deck_rules_label = ttk.Label(
             rules_box,
             text="",
             justify="left",
             anchor="w",
-            wraplength=900,
+            wraplength=460,
             style="DeckMuted.TLabel",
         )
-        self.deck_rules_label.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        self.deck_rules_label.grid(row=0, column=0, sticky="nsew", padx=(8, 4), pady=8)
+        self.deck_rules_meta_label = ttk.Label(
+            rules_box,
+            text="",
+            justify="left",
+            anchor="w",
+            wraplength=460,
+            style="DeckMuted.TLabel",
+        )
+        self.deck_rules_meta_label.grid(row=0, column=1, sticky="nsew", padx=(4, 8), pady=8)
 
         bottom = ttk.Frame(right, style="DeckRoot.TFrame")
         bottom.grid(row=4, column=0, sticky="ew", pady=(8, 0))
@@ -467,6 +477,37 @@ class GUIDeckManagerMixin:
     # Renders the deck rules report in the UI, showing total card count, limits based on rarity bands, and any errors or notes related to the current deck composition.
     def _render_deck_rules(self) -> None:
         hard, soft, total, stats = self._deck_rules_report()
+        by_name = self._deck_name_to_def()
+        type_counts = {
+            "santo": 0,
+            "artefatto": 0,
+            "edificio": 0,
+            "benedizione": 0,
+            "maledizione": 0,
+            "innata": 0,
+            "token": 0,
+            "other": 0,
+        }
+        unique_cards = 0
+        crosses_sum = 0
+        for key, qty_raw in self._deck_editor_cards.items():
+            qty = int(qty_raw or 0)
+            if qty <= 0:
+                continue
+            unique_cards += 1
+            card = by_name.get(key)
+            if card is None:
+                type_counts["other"] += qty
+                continue
+            ctype = self._norm(str(getattr(card, "card_type", "")))
+            if ctype in type_counts:
+                type_counts[ctype] += qty
+            else:
+                type_counts["other"] += qty
+            cval = self._cross_value(str(getattr(card, "crosses", "")))
+            if cval is not None:
+                crosses_sum += cval * qty
+
         lines = [
             f"Totale carte reliquiario: {total}",
             "",
@@ -487,7 +528,25 @@ class GUIDeckManagerMixin:
         if soft:
             lines.append("Note:")
             lines.extend(f"- {m}" for m in soft)
+        avg_crosses = (crosses_sum / total) if total > 0 else 0.0
+        meta_lines = [
+            "Composizione attuale:",
+            f"Santi: {type_counts['santo']}",
+            f"Artefatti: {type_counts['artefatto']}",
+            f"Edifici: {type_counts['edificio']}",
+            f"Benedizioni: {type_counts['benedizione']}",
+            f"Maledizioni: {type_counts['maledizione']}",
+            f"Innata: {type_counts['innata']}",
+            "",
+            "Metriche deck:",
+            f"Carte uniche: {unique_cards}",
+            f"Media Croci: {avg_crosses:.2f}",
+        ]
+        if type_counts["other"] > 0:
+            meta_lines.append(f"Altre tipologie: {type_counts['other']}")
+
         self.deck_rules_label.configure(text="\n".join(lines))
+        self.deck_rules_meta_label.configure(text="\n".join(meta_lines))
 
     # Reloads the user decks from the runtime, updates the listbox with the current decks, and refreshes the deck rules and card candidates based on the loaded decks.
     def _deck_manager_reload_user_decks(self) -> None:

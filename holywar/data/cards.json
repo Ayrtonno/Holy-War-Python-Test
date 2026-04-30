@@ -1661,7 +1661,7 @@
     "crosses": "10",
     "faith": 1,
     "strength": 1,
-    "effect_text": "Puoi mandare questa carta dal campo al cimitero: evoca un qualsiasi Santo bersaglio dal tuo cimitero in zona d'attacco.",
+    "effect_text": "Puoi mandare questa carta dal campo al cimitero: evoca un qualsiasi Santo bersaglio dal tuo cimitero.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []

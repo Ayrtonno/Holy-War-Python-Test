@@ -790,9 +790,12 @@ class GUIGameActionsMixin:
         hand_idx = hand.index(uid)
         is_quick = self.chain_active
         candidates = self._guided_target_candidates(uid)
-        candidates = [c for c in candidates if self._can_play_target(own_idx, hand_idx, c, quick=is_quick)]
         multi = self._card_allows_multi_target(uid)
         min_targets, max_targets = self._target_selection_limits(uid)
+        # For multi-target cards (selected_targets), validating one candidate at a time
+        # can incorrectly fail because the simulation expects the full payload.
+        if not multi:
+            candidates = [c for c in candidates if self._can_play_target(own_idx, hand_idx, c, quick=is_quick)]
         allow_none = self._can_play_target(own_idx, hand_idx, None, quick=is_quick)
         mode = self._play_targeting_mode(uid)
         choices = [(self._format_guided_candidate(c, own_idx), c) for c in candidates]

@@ -11,6 +11,21 @@ SCRIPT = {
     "on_play_actions": [
         {
             "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "deck",
+                "owner": "me",
+                "card_filter": {
+                    "card_type_in": ["santo"],
+                },
+            },
+            "effect": {
+                "action": "choose_targets",
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+        },
+        {
+            "target": {
                 "type": "selected_target",
                 "zone": "deck",
                 "owner": "me",
