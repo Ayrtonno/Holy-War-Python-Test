@@ -79,6 +79,10 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self._slot_highlights: list[tuple[tk.Widget, dict[str, str]]] = []
         self._replay_snapshots: list[dict[str, object]] = []
         self._replay_last_signature: str = ""
+        self._replay_events: list[dict[str, object]] = []
+        self._replay_keyframes: dict[int, dict[str, object]] = {}
+        self._replay_keyframe_every: int = 25
+        self._replay_recording: bool = False
         self._replay_playback: bool = False
         self._replay_after_id: str | None = None
         self._replay_loaded_name: str = ""
