@@ -232,7 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cards-json", type=str, default=str(DEFAULT_JSON), help="Cache JSON carte")
     parser.add_argument("--premades-json", type=str, default=None, help="Importa deck premade custom da JSON")
     parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--ai-delay", type=float, default=1.0)
+    parser.add_argument("--ai-delay", type=float, default=2.0)
     return parser
 
 # CLI entrypoint for launching the desktop GUI app.

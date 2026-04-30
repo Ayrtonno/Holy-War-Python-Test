@@ -145,6 +145,11 @@ class GUIGameFlowMixin:
             self.ai_running = False
             self.refresh()
             return
+        if bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+            self._maybe_show_runtime_reveal()
+            if bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                self.after(max(50, self.ai_delay_ms), self.ai_step)
+                return
         self._ai_steps += 1
         result = choose_action(self.engine, 1, self.rng)
         if result.ok and result.message != "AI passa.":
@@ -154,7 +159,7 @@ class GUIGameFlowMixin:
                 # Pause AI turn until chain resolves.
                 return
         self.refresh()
-        if result.message == "AI passa." or self._ai_steps >= 12:
+        if result.message == "AI passa." or self._ai_steps >= 24:
             self.engine.end_turn()
             self.turn_started = False
             self.ai_running = False

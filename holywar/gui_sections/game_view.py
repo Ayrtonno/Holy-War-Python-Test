@@ -15,6 +15,90 @@ class GUIGameViewMixin:
     if TYPE_CHECKING:
         def __getattr__(self, _name: str) -> Any: ...
 
+    def _ai_runtime_card_value(self, uid: str) -> int:
+        if self.engine is None:
+            return 0
+        inst = self.engine.state.instances.get(uid)
+        if inst is None:
+            return 0
+        ctype = str(inst.definition.card_type or "").strip().lower()
+        faith = int(inst.current_faith if inst.current_faith is not None else (inst.definition.faith or 0) or 0)
+        strength = 0
+        try:
+            strength = int(self.engine.get_effective_strength(uid))
+        except Exception:
+            strength = int(inst.definition.strength or 0 or 0)
+
+        if ctype in {"santo", "token"}:
+            return faith * 5 + strength * 8 + 20
+        if ctype == "edificio":
+            return faith * 3 + 35
+        if ctype == "artefatto":
+            return faith * 3 + 25
+        if ctype in {"benedizione", "maledizione"}:
+            return 16
+        return 10
+
+    def _ai_pick_runtime_candidates(
+        self,
+        choice_owner: int,
+        candidates: list[str],
+        min_targets: int,
+        max_targets: int,
+        prompt: str,
+        title: str,
+    ) -> str:
+        if self.engine is None or not candidates:
+            return ""
+        prompt_key = f"{title} {prompt}".lower()
+        harmful = any(k in prompt_key for k in ("cimitero", "distrugg", "scarta", "scomunic", "annulla"))
+        beneficial = any(k in prompt_key for k in ("evoca", "aggiung", "cura", "ripristina", "potenz", "guadagn"))
+        sacrificial = "sacrific" in prompt_key
+
+        scored: list[tuple[int, str]] = []
+        for uid in candidates:
+            inst = self.engine.state.instances.get(uid)
+            if inst is None:
+                continue
+            same_owner = int(inst.owner) == int(choice_owner)
+            base = self._ai_runtime_card_value(uid)
+            if sacrificial:
+                score = (-base + 200) if same_owner else (base + 50)
+            elif harmful:
+                score = (base + 500) if not same_owner else (-base + 100)
+            elif beneficial:
+                score = (base + 500) if same_owner else (-base + 100)
+            else:
+                score = (base + 120) if not same_owner else (base + 80)
+            scored.append((score, uid))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        ordered = [uid for _, uid in scored] or list(candidates)
+
+        pick_count = max(0, int(min_targets))
+        if pick_count == 0:
+            pick_count = 1 if ordered else 0
+        if max_targets >= 0:
+            pick_count = min(pick_count, max_targets)
+        pick_count = min(pick_count, len(ordered))
+        if pick_count <= 0:
+            return ""
+        if pick_count == 1:
+            return ordered[0]
+        return ",".join(ordered[:pick_count])
+
+    def _ai_pick_runtime_value(self, values: list[str], prompt: str, title: str) -> str:
+        if not values:
+            return ""
+        prompt_key = f"{title} {prompt}".lower()
+        lowered = [str(v).strip().lower() for v in values]
+        if "si" in lowered and "no" in lowered:
+            # Default aggressivo: usa l'effetto se disponibile.
+            return values[lowered.index("si")]
+        if "yes" in lowered and "no" in lowered:
+            return values[lowered.index("yes")]
+        return values[0]
+
     # This method arranges the widgets for the attack, defense, artifacts, and building slots in a grid layout within the specified parent frame. It organizes the widgets into rows and columns, with labels indicating the type of slot (attack, defense, artifacts, building) and the corresponding widgets for each slot type. The method uses padding to ensure proper spacing between the widgets and labels for a clean and organized display of the game board elements.
     def _grid_slots(self, parent, attack, defense, artifacts, building) -> None:
         ttk.Label(parent, text="Attacco").grid(row=0, column=0, sticky="w")
@@ -119,6 +203,47 @@ class GUIGameViewMixin:
 
         if reveal_uid == self._reveal_prompt_last_uid:
             return
+
+        # AI-owned runtime choices should never open human dialogs.
+        choice_owner_raw = str(flags.get("_runtime_choice_owner", "")).strip()
+        if choice_owner_raw:
+            try:
+                choice_owner = int(choice_owner_raw)
+            except ValueError:
+                choice_owner = None
+            if choice_owner is not None and self._is_ai_player(choice_owner):
+                choice_candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                choice_values_raw = str(flags.get("_runtime_choice_values", "")).strip()
+                title = str(flags.get("_runtime_choice_title", "")).strip()
+                prompt = str(flags.get("_runtime_choice_prompt", "")).strip()
+                min_targets = int(str(flags.get("_runtime_choice_min_targets", "0")) or "0")
+                max_targets_raw = str(flags.get("_runtime_choice_max_targets", "1")).strip()
+                max_targets = int(max_targets_raw) if max_targets_raw else 1
+
+                selected = ""
+                if choice_candidates_raw:
+                    candidates = [v for v in choice_candidates_raw.split(";;") if v]
+                    selected = self._ai_pick_runtime_candidates(
+                        choice_owner,
+                        candidates,
+                        min_targets,
+                        max_targets,
+                        prompt,
+                        title,
+                    )
+                    flags["_runtime_choice_selected"] = selected
+                    flags["_runtime_choice_ready"] = True
+                elif choice_values_raw:
+                    values = [v for v in choice_values_raw.split(";;") if v]
+                    flags["_runtime_choice_selected"] = self._ai_pick_runtime_value(values, prompt, title)
+                    flags["_runtime_choice_ready"] = True
+
+                flags["_runtime_waiting_for_reveal"] = False
+                flags.pop("_runtime_reveal_card", None)
+                runtime_cards.resume_pending_effect(self.engine)
+                self._reveal_prompt_last_uid = ""
+                self.refresh()
+                return
 
         inst = self.engine.state.instances.get(reveal_uid)
         if inst is None:

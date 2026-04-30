@@ -273,7 +273,10 @@ class GameEngine:
     # Computes the final combat strength of a card after all bonuses and penalties.
     def get_effective_strength(self, uid: str) -> int:
         inst = self.state.instances[uid]
-        owner = inst.owner
+        owner = int(inst.owner)
+        board_owner = self._find_board_owner_of_uid(uid)
+        if board_owner is not None:
+            owner = int(board_owner)
         opponent = 1 - owner
         strength = max(0, inst.definition.strength or 0)
         for tag in inst.blessed:

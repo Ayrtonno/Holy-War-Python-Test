@@ -286,11 +286,13 @@ def _candidate_play_moves(engine: GameEngine, player_idx: int) -> list[Move]:
             target = _best_own_target(engine, player_idx)
             if target is not None:
                 moves.append(Move("play", hand_index=hand_index, target=target))
+            moves.append(Move("play", hand_index=hand_index, target=None))
 
         elif ctype == "maledizione":
             target = _best_enemy_target(engine, player_idx)
             if target is not None:
                 moves.append(Move("play", hand_index=hand_index, target=target))
+            moves.append(Move("play", hand_index=hand_index, target=None))
 
         elif ctype == "innata":
             moves.append(Move("play", hand_index=hand_index, target=None))
@@ -504,6 +506,31 @@ def _choose_best_move(engine: GameEngine, player_idx: int, rng: random.Random) -
     return best
 
 
+def _ranked_moves(engine: GameEngine, player_idx: int, rng: random.Random) -> list[Move]:
+    base_score = _board_value(engine, player_idx)
+    candidates = _candidate_attack_moves(engine, player_idx) + _candidate_play_moves(engine, player_idx)
+    scored: list[Move] = []
+    for move in candidates:
+        simulated_score = _simulate(engine, player_idx, move)
+        if simulated_score is None:
+            continue
+        final_score = simulated_score - base_score
+        final_score += _tactical_bonus(engine, player_idx, move)
+        final_score += rng.randint(0, 4)
+        scored.append(
+            Move(
+                kind=move.kind,
+                hand_index=move.hand_index,
+                target=move.target,
+                from_slot=move.from_slot,
+                target_slot=move.target_slot,
+                score=final_score,
+            )
+        )
+    scored.sort(key=lambda m: m.score, reverse=True)
+    return scored
+
+
 def choose_action(engine: GameEngine, player_idx: int, rng: random.Random) -> ActionResult:
     if engine.state.winner is not None:
         return ActionResult(True, "AI passa.")
@@ -511,19 +538,18 @@ def choose_action(engine: GameEngine, player_idx: int, rng: random.Random) -> Ac
     if player_idx != engine.state.active_player:
         return ActionResult(True, "AI passa.")
 
-    move = _choose_best_move(engine, player_idx, rng)
-
-    if move is None:
+    ranked = _ranked_moves(engine, player_idx, rng)
+    if not ranked:
         return ActionResult(True, "AI passa.")
 
-    if move.kind == "play" and move.hand_index is not None:
-        result = engine.play_card(player_idx, move.hand_index, move.target)
-        if result.ok:
-            return result
-
-    if move.kind == "attack" and move.from_slot is not None:
-        result = engine.attack(player_idx, move.from_slot, move.target_slot)
-        if result.ok:
-            return result
+    for move in ranked:
+        if move.kind == "play" and move.hand_index is not None:
+            result = engine.play_card(player_idx, move.hand_index, move.target)
+            if result.ok:
+                return result
+        elif move.kind == "attack" and move.from_slot is not None:
+            result = engine.attack(player_idx, move.from_slot, move.target_slot)
+            if result.ok:
+                return result
 
     return ActionResult(True, "AI passa.")

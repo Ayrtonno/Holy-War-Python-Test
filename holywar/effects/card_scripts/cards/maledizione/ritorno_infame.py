@@ -25,13 +25,6 @@ SCRIPT = {
         {
             "target": {
                 "type": "selected_target",
-                "zone": "field",
-                "owner": "me",
-                "card_filter": {
-                    "card_type_in": ["santo", "token"],
-                },
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {"action": "prevent_specific_card_from_attacking", "amount": 1},
         },
