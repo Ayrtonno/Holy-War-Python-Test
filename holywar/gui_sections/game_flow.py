@@ -594,6 +594,39 @@ class GUIGameFlowMixin:
             return
         self._replay_manager_reload()
 
+    def replay_rename_selected(self) -> None:
+        path = self._selected_replay_path()
+        if path is None or not path.exists():
+            messagebox.showwarning("Replay", "Seleziona un replay da rinominare.")
+            return
+        new_name = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")],
+            initialdir=str(path.parent),
+            initialfile=path.name,
+            title="Rinomina replay",
+        )
+        if not new_name:
+            return
+        new_path = Path(new_name)
+        if new_path.suffix.lower() != ".json":
+            new_path = new_path.with_suffix(".json")
+        if new_path == path:
+            return
+        if new_path.exists():
+            messagebox.showwarning("Replay", "Esiste già un replay con questo nome.")
+            return
+        try:
+            path.rename(new_path)
+        except Exception as exc:
+            messagebox.showerror("Replay", f"Errore durante rinomina:\n{exc}")
+            return
+        self._replay_manager_reload()
+
+    def exit_replay_to_manager(self) -> None:
+        self.stop_replay_playback()
+        self.show_replay_manager()
+
     def replay_play_selected(self) -> None:
         path = self._selected_replay_path()
         if path is None or not path.exists():

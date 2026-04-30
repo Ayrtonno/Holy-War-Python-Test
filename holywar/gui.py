@@ -167,7 +167,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.replay_controls_frame = ttk.Frame(self.game_screen)
         self.replay_controls_frame.pack(fill="x", padx=8, pady=(4, 0))
         self.replay_controls_frame.pack_forget()
-        ttk.Button(self.replay_controls_frame, text="Esci Replay", command=self.stop_replay_playback).pack(side="left", padx=(0, 8))
+        ttk.Button(self.replay_controls_frame, text="Esci Replay", command=self.exit_replay_to_manager).pack(side="left", padx=(0, 8))
         self.replay_playpause_btn = ttk.Button(self.replay_controls_frame, text="Pausa", command=self.replay_toggle_pause)
         self.replay_playpause_btn.pack(side="left", padx=4)
         ttk.Button(self.replay_controls_frame, text="Velocita -", command=lambda: self.replay_change_speed(1.25)).pack(side="left", padx=4)
@@ -267,6 +267,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         ttk.Button(top, text="Menu", command=self.show_main_menu, width=18).pack(side="left")
         ttk.Button(top, text="Ricarica", command=self._replay_manager_reload, width=18).pack(side="left", padx=6)
         ttk.Button(top, text="Riproduci", command=self.replay_play_selected, width=18).pack(side="left", padx=6)
+        ttk.Button(top, text="Rinomina Replay", command=self.replay_rename_selected, width=18).pack(side="left", padx=6)
         ttk.Button(top, text="Elimina Replay", command=self.replay_delete_selected, width=18).pack(side="left", padx=6)
 
         list_frame = ttk.LabelFrame(self.replay_manager_frame, text="Replay salvati")
