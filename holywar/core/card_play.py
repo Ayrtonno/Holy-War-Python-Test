@@ -41,6 +41,14 @@ def _name_haystack(inst: "CardInstance") -> str:
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
 
+def _all_field_uids_for_player(engine: "GameEngine", player_idx: int) -> list[str]:
+    player = engine.state.players[player_idx]
+    out = [uid for uid in (player.attack + player.defense + player.artifacts) if uid]
+    if player.building:
+        out.append(player.building)
+    return out
+
+
 def _has_invert_saint_summon_aura(engine: "GameEngine") -> bool:
     for p_idx in (0, 1):
         player = engine.state.players[p_idx]
@@ -293,9 +301,10 @@ def calculate_play_cost(engine: "GameEngine", player_idx: int, hand_index: int, 
             cost = max(0, int(fixed))
         required_saint = runtime_cards.get_play_cost_zero_if_controller_has_saint_with_name(card.definition.name)
         if required_saint:
+            wanted = _norm(required_saint)
             has_required = any(
-                _norm(engine.state.instances[s_uid].definition.name) == _norm(required_saint)
-                for s_uid in engine.all_saints_on_field(player_idx)
+                wanted in _name_variants(engine.state.instances[f_uid])
+                for f_uid in _all_field_uids_for_player(engine, player_idx)
             )
             if has_required:
                 cost = 0

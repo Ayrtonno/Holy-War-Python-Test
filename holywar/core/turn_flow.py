@@ -156,7 +156,7 @@ def _try_auto_play_drawn_card_free(engine: "GameEngine", player_idx: int, uid: s
         try:
             wants_to_play = bool(chooser_confirm(player_idx, uid))
         except Exception:
-            wants_to_play = True
+            wants_to_play = False
         if not wants_to_play:
             return False
 
@@ -238,6 +238,12 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
         engine._emit_event("on_card_drawn", player_idx, card=drawn_uid, from_zone=("graveyard" if promise_active else "relicario"))
         card_name = engine.state.instances[drawn_uid].definition.name
         drawn_faith = engine.state.instances[drawn_uid].definition.faith
+        drawn_faith_int: int | None = None
+        if drawn_faith is not None:
+            try:
+                drawn_faith_int = int(float(str(drawn_faith)))
+            except (TypeError, ValueError):
+                drawn_faith_int = None
 
         # Debug logging for cards with draw-triggered effects, such as "Albero Sacro", to help track the state of the game when these cards are drawn. This can be useful for understanding how the auto-play and end-turn effects are being applied during the draw phase.
         if _norm(card_name) == _norm("Albero Sacro"):
@@ -252,7 +258,12 @@ def draw_cards(engine: "GameEngine", player_idx: int, amount: int) -> int:
         # Generic aura-driven free auto-play for freshly drawn cards with low Faith (e.g. Nun).
         if int(player_idx) == int(engine.state.active_player):
             threshold = _max_auto_play_drawn_faith_threshold(engine, player_idx)
-            if threshold is not None and drawn_faith is not None and int(drawn_faith) <= int(threshold):
+            if (
+                threshold is not None
+                and drawn_faith_int is not None
+                and drawn_faith_int <= int(threshold)
+                and drawn_uid in player.hand
+            ):
                 auto_play_succeeded = _try_auto_play_drawn_card_free(engine, player_idx, drawn_uid)
 
         # If the drawn card has the "auto_play_on_draw" effect, attempt to auto-play it from the hand. If the card was drawn during the opponent's turn, defer the auto-play attempt until the start of the player's next turn. If the card also has the "end_turn_on_draw" effect and was successfully auto-played, mark that the turn should end immediately after drawing.

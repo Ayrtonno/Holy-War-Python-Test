@@ -615,15 +615,30 @@ class RuntimeResolutionMixin:
         action_idx = str(engine.state.flags.get("_runtime_action_index", "")).strip()
         if not action_idx:
             return ""
+        try:
+            current_idx = int(action_idx)
+        except (TypeError, ValueError):
+            return ""
 
         # If the raw selected target is a sequence, it is expected to be in the format "seq:0=target1;;1=target2;;...". The method splits the sequence into chunks and looks for the chunk that corresponds to the current action index. If it finds a matching index, it returns the associated target value. If it does not find a match, it returns an empty string.
         body = raw[len("seq:"):]
+        selected_by_idx: dict[int, str] = {}
         for chunk in body.split(";;"):
             if "=" not in chunk:
                 continue
             idx, value = chunk.split("=", 1)
-            if idx.strip() == action_idx:
-                return value.strip()
+            try:
+                parsed_idx = int(idx.strip())
+            except (TypeError, ValueError):
+                continue
+            selected_by_idx[parsed_idx] = value.strip()
+        if current_idx in selected_by_idx:
+            return selected_by_idx[current_idx]
+        # Fallback: reuse the latest previous selected target in the same
+        # scripted sequence (useful for "select once, apply in next action").
+        prev_indices = [i for i in selected_by_idx.keys() if i < current_idx]
+        if prev_indices:
+            return selected_by_idx[max(prev_indices)]
         return ""
 
     # This method processes the raw selected target for the current action and attempts to resolve it to a valid target UID that exists in the game state. It handles various formats for the selected target, such as direct UIDs, references to buffs, and indexed targets from specific zones. The method checks if the resolved target exists in the game state and returns the corresponding UID if it does. If it cannot resolve a valid target UID, it returns None.
