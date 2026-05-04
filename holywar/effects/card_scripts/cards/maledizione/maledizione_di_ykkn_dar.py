@@ -10,30 +10,20 @@ SCRIPT = {
     "triggered_effects": [],
     "on_play_actions": [
         {
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "field",
-                "owner": "opponent",
-                "card_filter": {"card_type_in": ["santo", "token"]},
-            },
-            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+            "effect": {
+                "action": "process_deck_edges_by_type",
+                "top_count": 5,
+                "bottom_count": 5,
+                "unique_edges_only": True,
+                "saint_token_to_zone": "excommunicated",
+                "blessing_curse_to_zone": "graveyard",
+                "artifact_to_zone": "artifacts",
+                "building_to_zone": "building",
+                "fallback_to_zone": "graveyard",
+                "replace_occupied_artifact": True,
+                "replace_occupied_building": True,
+            }
         },
-        {
-            "target": {"type": "selected_targets"},
-            "effect": {"action": "destroy_card"},
-        },
-        {
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "field",
-                "owner": "opponent",
-                "card_filter": {"card_type_in": ["artefatto"]},
-            },
-            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
-        },
-        {
-            "target": {"type": "selected_targets"},
-            "effect": {"action": "destroy_card"},
-        },
+        {"effect": {"action": "move_source_to_zone", "to_zone": "excommunicated"}},
     ],
 }

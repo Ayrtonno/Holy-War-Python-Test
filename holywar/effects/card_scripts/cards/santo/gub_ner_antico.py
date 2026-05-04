@@ -15,7 +15,7 @@ SCRIPT = {
                 "action": "choose_option",
                 "choice_title": "Gub-ner Antico",
                 "choice_prompt": "Vuoi evocare un Token Gub-ner?",
-                "options": [
+                "choice_options": [
                     {"value": "yes", "label": "Si"},
                     {"value": "no", "label": "No"},
                 ],

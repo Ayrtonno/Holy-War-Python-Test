@@ -284,6 +284,9 @@ class GUITargetingMixin:
             except tk.TclError:
                 pass
         self._slot_highlights.clear()
+        apply_blocked = getattr(self, "_apply_blocked_artifact_slot_highlights", None)
+        if callable(apply_blocked):
+            apply_blocked()
 
     # This method checks if a given token corresponds to a valid board token that can be targeted for actions such as attacks or activations. It uses the `_split_board_token` method to parse the token and then checks if the base component of the token matches known patterns for attack slots (a1, a2, a3), defense slots (d1, d2, d3), artifact slots (r1, r2, r3, r4), or the building slot (b). The method returns True if the token is recognized as a valid board token, and False otherwise.
     def _is_board_token(self, token: str) -> bool:

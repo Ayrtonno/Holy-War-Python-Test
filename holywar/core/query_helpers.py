@@ -355,6 +355,40 @@ def find_card_uid_in_deck(engine: "GameEngine", player_idx: int, name: str) -> s
     return None
 
 
+def get_blocked_artifact_slots_for_player(engine: "GameEngine", player_idx: int) -> set[int]:
+    """Return artifact slot indexes blocked for player_idx by enemy continuous effects."""
+    opponent = engine.state.players[1 - player_idx]
+    enemy_field_uids = [cand for cand in (opponent.attack + opponent.defense + opponent.artifacts) if cand]
+    if opponent.building:
+        enemy_field_uids.append(opponent.building)
+
+    blocked_slots: set[int] = set()
+    generic_block_count = 0
+    for enemy_uid in enemy_field_uids:
+        inst = engine.state.instances.get(enemy_uid)
+        if inst is None:
+            continue
+        generic_block_count += int(runtime_cards.get_blocks_enemy_artifact_slots(inst.definition.name))
+        for tag in list(inst.blessed):
+            if not isinstance(tag, str) or not tag.startswith("block_enemy_artifact_slot:"):
+                continue
+            raw_idx = tag.split(":", 1)[1].strip()
+            try:
+                idx = int(raw_idx)
+            except ValueError:
+                continue
+            if 0 <= idx < ARTIFACT_SLOTS:
+                blocked_slots.add(idx)
+
+    # Backward-compatible generic blocking: reserve rightmost slots.
+    generic_block_count = max(0, min(ARTIFACT_SLOTS - 1, generic_block_count))
+    for idx in range(ARTIFACT_SLOTS - 1, -1, -1):
+        if len(blocked_slots) >= generic_block_count:
+            break
+        blocked_slots.add(idx)
+    return blocked_slots
+
+
 # Finds the first matching card name inside the player's graveyard and returns its uid.
 def find_card_uid_in_graveyard(engine: "GameEngine", player_idx: int, name: str) -> str | None:
     player = engine.state.players[player_idx]

@@ -300,6 +300,26 @@ def destroy_any_card(engine: "GameEngine", owner_idx: int, uid: str) -> None:
         if allowed_uid != uid:
             return
 
+    # Building protection granted by equipped blessings (e.g. Protezione dall'Oscurita):
+    # when this card would be destroyed by a card effect, set its Faith to 10 and excommunicate the equipment.
+    source_uid = str(engine.state.flags.get("_runtime_effect_source", "")).strip()
+    if source_uid and source_uid in engine.state.instances:
+        for tag in list(inst.blessed):
+            if not isinstance(tag, str) or not tag.startswith("equipped_by:"):
+                continue
+            equip_uid = tag.split(":", 1)[1].strip()
+            equip_inst = engine.state.instances.get(equip_uid)
+            if equip_inst is None:
+                continue
+            if _norm(equip_inst.definition.name) != _norm("Protezione dall'Oscurita"):
+                continue
+            inst.current_faith = 10
+            engine.excommunicate_card(equip_inst.owner, equip_uid)
+            engine.state.log(
+                f"{equip_inst.definition.name} protegge {inst.definition.name}: Fede impostata a 10 e carta scomunicata."
+            )
+            return
+
     # Optional script-driven shield: spend seal counters equal to source card crosses to negate destruction.
     if script and script.altare_seal_shield_from_source_crosses:
         source_uid = str(engine.state.flags.get("_runtime_effect_source", "")).strip()

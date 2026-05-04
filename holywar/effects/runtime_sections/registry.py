@@ -142,6 +142,32 @@ class RuntimeRegistryMixin:
                 choice_options=[
                     dict(v) for v in list(raw.get("choice_options", []) or []) if isinstance(v, dict)
                 ],
+                compare_zone=str(raw.get("compare_zone")) if raw.get("compare_zone") is not None else None,
+                compare_target_player=(
+                    str(raw.get("compare_target_player")) if raw.get("compare_target_player") is not None else None
+                ),
+                tie_policy=str(raw.get("tie_policy")) if raw.get("tie_policy") is not None else None,
+                tie_amount=_to_int_or_none(raw.get("tie_amount")),
+                top_count=_to_int_or_none(raw.get("top_count")),
+                bottom_count=_to_int_or_none(raw.get("bottom_count")),
+                unique_edges_only=bool(raw.get("unique_edges_only", True)),
+                saint_token_to_zone=(
+                    str(raw.get("saint_token_to_zone")) if raw.get("saint_token_to_zone") is not None else None
+                ),
+                blessing_curse_to_zone=(
+                    str(raw.get("blessing_curse_to_zone")) if raw.get("blessing_curse_to_zone") is not None else None
+                ),
+                artifact_to_zone=(
+                    str(raw.get("artifact_to_zone")) if raw.get("artifact_to_zone") is not None else None
+                ),
+                building_to_zone=(
+                    str(raw.get("building_to_zone")) if raw.get("building_to_zone") is not None else None
+                ),
+                fallback_to_zone=(
+                    str(raw.get("fallback_to_zone")) if raw.get("fallback_to_zone") is not None else None
+                ),
+                replace_occupied_artifact=bool(raw.get("replace_occupied_artifact", False)),
+                replace_occupied_building=bool(raw.get("replace_occupied_building", False)),
             )
 
         # This function parses a raw target specification from a dictionary and converts it into a `TargetSpec` data class instance. It handles various fields that may be present in the raw target specification, such as card filters, zone specifications, owner specifications, and target limits. The function also processes nested structures for card filters and ensures that all relevant fields are properly converted to the expected types. The resulting `TargetSpec` instance can then be used in the construction of card scripts to define the targeting behavior of effects and actions.

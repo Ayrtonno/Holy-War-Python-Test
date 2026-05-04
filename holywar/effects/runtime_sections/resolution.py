@@ -520,6 +520,7 @@ class RuntimeResolutionMixin:
                     ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", "")))
                 )
                 ctx.engine.state.flags["_runtime_event_source"] = str(ctx.payload.get("source", ""))
+                ctx.engine.state.flags["_runtime_event_amount"] = str(ctx.payload.get("amount", ""))
                 ctx.engine.state.flags["_runtime_event_name"] = str(ctx.event)
                 ctx.engine.state.flags["_runtime_source_card"] = _source
                 try:
@@ -531,6 +532,7 @@ class RuntimeResolutionMixin:
                 finally:
                     ctx.engine.state.flags.pop("_runtime_event_card", None)
                     ctx.engine.state.flags.pop("_runtime_event_source", None)
+                    ctx.engine.state.flags.pop("_runtime_event_amount", None)
                     ctx.engine.state.flags.pop("_runtime_event_name", None)
                     ctx.engine.state.flags.pop("_runtime_source_card", None)
 

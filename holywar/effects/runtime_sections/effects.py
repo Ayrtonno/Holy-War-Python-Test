@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from holywar.core import state
+from holywar.core import query_helpers as query_ops
 from holywar.core.state import MAX_HAND, CardInstance
 from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.scripting_api import RuleEventContext
@@ -919,6 +920,39 @@ class RuntimeEffectsMixin:
             if (attacker_inst.current_faith or 0) <= 0:
                 engine.destroy_saint_by_uid(attacker_inst.owner, attacker_uid, cause="effect")
             return
+        if action == "retaliate_event_damage_to_event_source_if_enemy_saint":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            attacker_uid = str(engine.state.flags.get("_runtime_event_source", "")).strip()
+            if not attacker_uid or attacker_uid not in engine.state.instances:
+                return
+            attacker_inst = engine.state.instances[attacker_uid]
+            if int(attacker_inst.owner) == int(owner_idx):
+                return
+            if _norm(attacker_inst.definition.card_type) not in {"santo", "token"}:
+                return
+            try:
+                dmg = max(0, int(engine.state.flags.get("_runtime_event_amount", "0") or 0))
+            except (TypeError, ValueError):
+                dmg = 0
+            if dmg <= 0:
+                return
+            dmg = engine._apply_damage_mitigation(attacker_inst.owner, dmg, target_uid=attacker_uid)
+            if dmg <= 0:
+                return
+            before = attacker_inst.current_faith or 0
+            attacker_inst.current_faith = max(0, (attacker_inst.current_faith or 0) - dmg)
+            after = attacker_inst.current_faith or 0
+            engine.state.log(
+                f"{attacker_inst.definition.name} subisce {dmg} danni di ritorsione (Fede {before}->{after})."
+            )
+            if (attacker_inst.current_faith or 0) <= 0:
+                base_faith = max(0, int(attacker_inst.definition.faith or 0))
+                engine.destroy_saint_by_uid(attacker_inst.owner, attacker_uid, cause="effect", by_whom=source_uid)
+                if base_faith > 0:
+                    engine.remove_sin(owner_idx, base_faith)
+            return
         if action == "destroy_source_if_linked_to_event_card":
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
@@ -1296,16 +1330,8 @@ class RuntimeEffectsMixin:
                 placed = False
 
                 if ctype == _norm("artefatto"):
-                    blocked = 0
-                    opponent = engine.state.players[1 - owner]
-                    enemy_field_uids = [cand for cand in (opponent.attack + opponent.defense + opponent.artifacts) if cand]
-                    if opponent.building:
-                        enemy_field_uids.append(opponent.building)
-                    for enemy_uid in enemy_field_uids:
-                        enemy_name = engine.state.instances[enemy_uid].definition.name
-                        blocked += int(self.get_blocks_enemy_artifact_slots(enemy_name))
-                    blocked = min(state.ARTIFACT_SLOTS - 1, blocked)
-                    usable_slots = list(range(state.ARTIFACT_SLOTS - blocked))
+                    blocked_slots = query_ops.get_blocked_artifact_slots_for_player(engine, owner)
+                    usable_slots = [idx for idx in range(state.ARTIFACT_SLOTS) if idx not in blocked_slots]
                     if usable_slots:
                         slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
                         if slot is None:
@@ -1724,6 +1750,93 @@ class RuntimeEffectsMixin:
         if action == "draw_cards":
             target = self._resolve_player_scope(owner_idx, effect.target_player)
             engine.draw_cards(target, max(0, int(effect.amount or 1)))
+            return
+        if action == "process_deck_edges_by_type":
+            player = engine.state.players[owner_idx]
+            deck_now = list(player.deck)
+            if not deck_now:
+                return
+
+            top_count = max(0, int(effect.top_count if effect.top_count is not None else 0))
+            bottom_count = max(0, int(effect.bottom_count if effect.bottom_count is not None else 0))
+            unique_only = bool(effect.unique_edges_only)
+
+            picked: list[str] = []
+            for uid in reversed(deck_now[-top_count:]) if top_count > 0 else []:
+                if (not unique_only) or uid not in picked:
+                    picked.append(uid)
+            for uid in (deck_now[:bottom_count] if bottom_count > 0 else []):
+                if (not unique_only) or uid not in picked:
+                    picked.append(uid)
+
+            saint_token_to = _norm(effect.saint_token_to_zone or "excommunicated")
+            blessing_curse_to = _norm(effect.blessing_curse_to_zone or "graveyard")
+            artifact_to = _norm(effect.artifact_to_zone or "artifacts")
+            building_to = _norm(effect.building_to_zone or "building")
+            fallback_to = _norm(effect.fallback_to_zone or "graveyard")
+
+            for uid in picked:
+                inst = engine.state.instances.get(uid)
+                if inst is None:
+                    continue
+                if uid in player.deck:
+                    player.deck.remove(uid)
+
+                ctype = _norm(inst.definition.card_type)
+                if ctype in {"santo", "token"}:
+                    if saint_token_to == "excommunicated":
+                        engine.excommunicate_card(owner_idx, uid)
+                    else:
+                        self._move_uid_to_zone(engine, uid, saint_token_to, owner_idx)
+                    continue
+                if ctype in {"benedizione", "maledizione"}:
+                    self._move_uid_to_zone(engine, uid, blessing_curse_to, owner_idx)
+                    continue
+                if ctype == "artefatto":
+                    if artifact_to in {"artifact", "artifacts", "field"}:
+                        slot = engine._first_open(player.artifacts)
+                        if slot is None and bool(effect.replace_occupied_artifact):
+                            slot = len(player.artifacts) - 1
+                            replaced_uid = player.artifacts[slot]
+                            if replaced_uid:
+                                engine.send_to_graveyard(engine.state.instances[replaced_uid].owner, replaced_uid)
+                        if slot is not None:
+                            player.artifacts[slot] = uid
+                        else:
+                            self._move_uid_to_zone(engine, uid, fallback_to, owner_idx)
+                    else:
+                        self._move_uid_to_zone(engine, uid, artifact_to, owner_idx)
+                    continue
+                if ctype == "edificio":
+                    if building_to in {"building", "field"}:
+                        if player.building and bool(effect.replace_occupied_building):
+                            engine.send_to_graveyard(engine.state.instances[player.building].owner, player.building)
+                            player.building = uid
+                        elif player.building is None:
+                            player.building = uid
+                        else:
+                            self._move_uid_to_zone(engine, uid, fallback_to, owner_idx)
+                    else:
+                        self._move_uid_to_zone(engine, uid, building_to, owner_idx)
+                    continue
+
+                self._move_uid_to_zone(engine, uid, fallback_to, owner_idx)
+            return
+        if action == "set_blocked_enemy_artifact_slot_from_selected_option":
+            selected = str(engine.state.flags.get("_runtime_selected_option", "")).strip().lower()
+            if len(selected) != 2 or not selected.startswith("r") or not selected[1].isdigit():
+                return
+            slot = int(selected[1]) - 1
+            if slot < 0 or slot >= state.ARTIFACT_SLOTS:
+                return
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            source_inst.blessed = [
+                tag for tag in list(source_inst.blessed)
+                if not (isinstance(tag, str) and tag.startswith("block_enemy_artifact_slot:"))
+            ]
+            source_inst.blessed.append(f"block_enemy_artifact_slot:{slot}")
             return
 
         if action == "choose_option":
@@ -2816,6 +2929,48 @@ class RuntimeEffectsMixin:
                 top_uid = player.deck[-1]
                 engine.excommunicate_card(target, top_uid, from_zone_override="relicario")
             return
+        if action in {"draw_by_excommunicated_count_comparison", "draw_by_zone_count_comparison"}:
+            first_idx = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            second_idx = self._resolve_player_scope(owner_idx, effect.compare_target_player or "opponent")
+
+            zone_name = effect.compare_zone or "excommunicated"
+            if action == "draw_by_excommunicated_count_comparison" and not effect.compare_zone:
+                zone_name = "excommunicated"
+
+            first_count = len(self._get_zone_cards(engine, first_idx, zone_name))
+            second_count = len(self._get_zone_cards(engine, second_idx, zone_name))
+
+            draw_amount = max(0, int(effect.amount or 0))
+            tie_amount = draw_amount if effect.tie_amount is None else max(0, int(effect.tie_amount))
+            tie_policy = _norm(effect.tie_policy or "both")
+            if draw_amount <= 0 and tie_amount <= 0:
+                return
+
+            if first_count > second_count:
+                if draw_amount > 0:
+                    engine.draw_cards(first_idx, draw_amount)
+                return
+            if second_count > first_count:
+                if draw_amount > 0:
+                    engine.draw_cards(second_idx, draw_amount)
+                return
+
+            if tie_policy == "none":
+                return
+            if tie_policy in {"first", "me", "owner"}:
+                if tie_amount > 0:
+                    engine.draw_cards(first_idx, tie_amount)
+                return
+            if tie_policy in {"second", "opponent", "other"}:
+                if tie_amount > 0:
+                    engine.draw_cards(second_idx, tie_amount)
+                return
+
+            if tie_amount > 0:
+                engine.draw_cards(first_idx, tie_amount)
+                if second_idx != first_idx:
+                    engine.draw_cards(second_idx, tie_amount)
+            return
         if action == "remove_from_board_no_sin":
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)
@@ -3101,8 +3256,15 @@ class RuntimeEffectsMixin:
                     slot = engine._first_open(board_player.defense)
                     zone = "defense"
             elif chosen_type == "artefatto":
-                slot = engine._first_open(player.artifacts)
-                zone = "artifact"
+                blocked_slots = query_ops.get_blocked_artifact_slots_for_player(engine, owner_idx)
+                usable_slots = [idx for idx in range(state.ARTIFACT_SLOTS) if idx not in blocked_slots]
+                slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
+                if slot is None and usable_slots:
+                    slot = usable_slots[-1]
+                    replaced = player.artifacts[slot]
+                    if replaced:
+                        engine.send_to_graveyard(owner_idx, replaced)
+                zone = "artifact" if slot is not None else ""
             elif chosen_type == "edificio":
                 if player.building is None:
                     slot = 0
@@ -3206,8 +3368,15 @@ class RuntimeEffectsMixin:
                         slot = engine._first_open(board_player.defense)
                         zone = "defense"
                 elif chosen_type == "artefatto":
-                    slot = engine._first_open(player.artifacts)
-                    zone = "artifact"
+                    blocked_slots = query_ops.get_blocked_artifact_slots_for_player(engine, owner_idx)
+                    usable_slots = [idx for idx in range(state.ARTIFACT_SLOTS) if idx not in blocked_slots]
+                    slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
+                    if slot is None and usable_slots:
+                        slot = usable_slots[-1]
+                        replaced = player.artifacts[slot]
+                        if replaced:
+                            engine.send_to_graveyard(owner_idx, replaced)
+                    zone = "artifact" if slot is not None else ""
                 elif chosen_type == "edificio":
                     if player.building is None:
                         slot = 0

@@ -109,6 +109,10 @@ SUPPORTED_EFFECT_ACTIONS = {
     "pay_sin_or_destroy_self",
     "mill_cards",
     "draw_cards",
+    "draw_by_zone_count_comparison",
+    "draw_by_excommunicated_count_comparison",
+    "set_blocked_enemy_artifact_slot_from_selected_option",
+    "process_deck_edges_by_type",
     "inflict_sin",
     "inflict_sin_to_target_owners",
     "remove_sin",
@@ -187,6 +191,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "optional_recover_matching_then_shuffle",
     "destroy_all_saints_except_selected",
     "retaliate_damage_to_event_source_if_enemy_saint",
+    "retaliate_event_damage_to_event_source_if_enemy_saint",
     "grant_attack_barrier",
     "grant_blessed_tag_from_source",
     "prevent_specific_card_from_attacking",
@@ -302,6 +307,20 @@ class EffectSpec:
     choice_title: str | None = None
     choice_prompt: str | None = None
     choice_options: list[dict[str, Any]] = field(default_factory=list)
+    compare_zone: str | None = None
+    compare_target_player: str | None = None
+    tie_policy: str | None = None
+    tie_amount: int | None = None
+    top_count: int | None = None
+    bottom_count: int | None = None
+    unique_edges_only: bool = True
+    saint_token_to_zone: str | None = None
+    blessing_curse_to_zone: str | None = None
+    artifact_to_zone: str | None = None
+    building_to_zone: str | None = None
+    fallback_to_zone: str | None = None
+    replace_occupied_artifact: bool = False
+    replace_occupied_building: bool = False
 
 # The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from holywar.core.results import ActionResult
 from holywar.core.state import ARTIFACT_SLOTS
+from holywar.core import query_helpers as query_ops
 from holywar.effects.library import resolve_card_effect, resolve_enter_effect
 from holywar.effects.runtime import runtime_cards
 
@@ -439,16 +440,10 @@ def handle_saint_play(
 def handle_artifact_play(engine: "GameEngine", player_idx: int, uid: str) -> ActionResult:
     player = engine.state.players[player_idx]
     card = engine.state.instances[uid]
-    blocked = 0
-    opponent = engine.state.players[1 - player_idx]
-    enemy_field_uids = [cand for cand in (opponent.attack + opponent.defense + opponent.artifacts) if cand]
-    if opponent.building:
-        enemy_field_uids.append(opponent.building)
-    for enemy_uid in enemy_field_uids:
-        enemy_name = engine.state.instances[enemy_uid].definition.name
-        blocked += int(runtime_cards.get_blocks_enemy_artifact_slots(enemy_name))
-    blocked = min(ARTIFACT_SLOTS - 1, blocked)
-    usable_slots = list(range(ARTIFACT_SLOTS - blocked))
+    blocked_slots = query_ops.get_blocked_artifact_slots_for_player(engine, player_idx)
+    usable_slots = [idx for idx in range(ARTIFACT_SLOTS) if idx not in blocked_slots]
+    if not usable_slots:
+        return ActionResult(False, "Tutte le zone Artefatto sono bloccate da effetti avversari.")
     slot = next((i for i in usable_slots if player.artifacts[i] is None), None)
     if slot is None:
         slot = usable_slots[-1]

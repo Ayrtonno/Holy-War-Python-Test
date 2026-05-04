@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from holywar.core import query_helpers as query_ops
 from holywar.effects.runtime import runtime_cards
 
 # This mixin class provides methods for rendering the game board and hand, as well as handling user interactions related to these elements. It includes methods for updating the display of player resources, showing card details, and managing interactions with cards in the player's hand and on the board. The methods in this class are designed to work with the game engine's state to ensure that the GUI accurately reflects the current game situation and allows players to interact with their cards effectively.
@@ -170,6 +171,7 @@ class GUIGameViewMixin:
         self._set_slot_widgets(self.enemy_defense, enemy.defense)
         self._set_slot_widgets(self.enemy_artifacts, enemy.artifacts, hide_equipped=True)
         self.enemy_building.configure(text=self.card_label(enemy.building))
+        self._apply_blocked_artifact_slot_highlights()
 
         self.hand_list.delete(0, tk.END)
         for i, uid in enumerate(own.hand):
@@ -425,6 +427,32 @@ class GUIGameViewMixin:
         except tk.TclError:
             try:
                 widget.configure(foreground=color)
+            except tk.TclError:
+                pass
+
+    def _apply_blocked_artifact_slot_highlights(self) -> None:
+        if self.engine is None:
+            return
+        own_idx = self.current_human_idx() or 0
+        enemy_idx = 1 - own_idx
+        own_blocked = query_ops.get_blocked_artifact_slots_for_player(self.engine, own_idx)
+        enemy_blocked = query_ops.get_blocked_artifact_slots_for_player(self.engine, enemy_idx)
+
+        for i, btn in enumerate(self.own_artifacts):
+            try:
+                if i in own_blocked:
+                    btn.configure(highlightthickness=2, highlightbackground="#1f6feb", highlightcolor="#1f6feb")
+                else:
+                    btn.configure(highlightthickness=0)
+            except tk.TclError:
+                pass
+
+        for i, lbl in enumerate(self.enemy_artifacts):
+            try:
+                if i in enemy_blocked:
+                    lbl.configure(relief="solid", borderwidth=2, foreground="#1f6feb")
+                else:
+                    lbl.configure(relief="flat", borderwidth=0, foreground="black")
             except tk.TclError:
                 pass
 

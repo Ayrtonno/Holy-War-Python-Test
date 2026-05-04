@@ -363,6 +363,17 @@
     "aliases": []
   },
   {
+    "name": "Protezione dall'Oscurità",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Equipaggia questa carta a un tuo Edificio. Quando quell'Edificio verrebbe distrutto per effetto di una carta, imposta la sua Fede a 10 e scomunica questa carta.",
+    "expansion": "PHD-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Missionario",
     "card_type": "Santo",
     "crosses": "5",
@@ -506,6 +517,17 @@
     "aliases": []
   },
   {
+    "name": "Prigioniero Sacrificale",
+    "card_type": "Santo",
+    "crosses": "3",
+    "faith": 3,
+    "strength": 6,
+    "effect_text": "Quando questo Santo viene sconfitto o distrutto, scomunicalo. Quando questa carta viene scomunicata, puoi prendere fino a 3 carte dalla tua mano e rimetterle nel reliquiario. Poi, pescane altrettante.",
+    "expansion": "PHD-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Proibizione Cristiana",
     "card_type": "Maledizione",
     "crosses": "1",
@@ -557,6 +579,28 @@
     "strength": null,
     "effect_text": "Puoi avere fino a 4 copie di \"Sacrificio\" nel tuo reliquiario. Scarta una carta dalla tua mano, poi pesca due carte.",
     "expansion": "CRI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Sacrificio: Esistenza",
+    "card_type": "Artefatto",
+    "crosses": "8",
+    "faith": 8,
+    "strength": null,
+    "effect_text": "Ogni volta che un Token Gub-ner viene evocato sul tuo terreno, distruggilo immediatamente. Per ogni Token Gub-ner distrutto tramite questo effetto, scomunica la prima carta del tuo reliquiario e rimuovi 3 Peccato.",
+    "expansion": "PHD-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Sacrificio: Dolore",
+    "card_type": "Artefatto",
+    "crosses": "8",
+    "faith": 6,
+    "strength": null,
+    "effect_text": "Ogni volta che una tua carta viene scomunicata, il tuo avversario riceve 3 Peccato.",
+    "expansion": "PHD-1",
     "is_token": false,
     "aliases": []
   },
@@ -2217,6 +2261,17 @@
     "aliases": []
   },
   {
+    "name": "Assalto Gub-ner",
+    "card_type": "Artefatto",
+    "crosses": "5",
+    "faith": 5,
+    "strength": null,
+    "effect_text": "Una volta per turno, finche questa carta e sul terreno, puoi evocare un Token Gub-ner sul tuo lato del terreno.",
+    "expansion": "PHD-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Llakhnal",
     "card_type": "Santo",
     "crosses": "2",
@@ -2598,6 +2653,17 @@
     "strength": 6,
     "effect_text": "Quando questa carta lascia il campo, ogni altro Santo sul campo riceve +1 Fede e +2 Forza.",
     "expansion": "MAY-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Spiriti dell'Eternità",
+    "card_type": "Santo",
+    "crosses": "4",
+    "faith": 7,
+    "strength": 3,
+    "effect_text": "Dopo il calcolo dei danni, infliggi al Santo avversario attaccante danni pari a quelli ricevuti da questa carta. Se quel Santo viene distrutto da questo effetto, rimuovi Peccato pari alla sua Fede iniziale.",
+    "expansion": "PHD-1",
     "is_token": false,
     "aliases": []
   },

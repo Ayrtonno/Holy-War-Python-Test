@@ -358,6 +358,14 @@ def _summon_turn_start_tokens(engine: "GameEngine", current: int) -> None:
                 break
             if token_uid:
                 break
+        if token_uid is None and player.defense[i] is None:
+            token_uid = runtime_cards._summon_generated_token(  # noqa: SLF001 - intentional runtime integration
+                engine,
+                current,
+                token_name,
+                preferred_zone="defense",
+            )
+
         if token_uid is not None and player.defense[i] is None:
             if engine.place_card_from_uid(current, token_uid, "defense", i):
                 final_zone = engine._locate_uid_zone(current, token_uid)
