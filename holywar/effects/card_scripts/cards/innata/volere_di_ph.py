@@ -18,6 +18,15 @@ SCRIPT = {
         },
         {
             "trigger": {
+                "event": "on_card_drawn",
+                "frequency": "each_time",
+                "condition": {"event_card_owner": "opponent"},
+            },
+            "target": {"type": "source_card"},
+            "effect": {"action": "inflict_sin", "amount": 1, "target_player": "opponent"},
+        },
+        {
+            "trigger": {
                 "event": "on_card_excommunicated",
                 "frequency": "each_time",
             },

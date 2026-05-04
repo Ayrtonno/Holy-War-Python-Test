@@ -53,7 +53,7 @@ SCRIPT = {
             "effect": {"action": "shuffle_deck", "target_player": "opponent"},
         },
     ],
-    "on_play_actions": [
+    "on_enter_actions": [
         {
             "target": {
                 "type": "cards_controlled_by_owner",
@@ -75,4 +75,5 @@ SCRIPT = {
             "effect": {"action": "summon_target_to_field"},
         },
     ],
+    "on_play_actions": [],
 }

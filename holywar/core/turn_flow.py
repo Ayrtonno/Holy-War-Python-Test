@@ -497,6 +497,8 @@ def end_turn(engine: "GameEngine") -> None:
     runtime_cards.resolve_end_turn_runtime_hooks(engine, current)
 
     engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})[str(current)] = []
+    cost_override = engine.state.flags.setdefault("drawn_play_cost_override_until_turn_end", {"0": {}, "1": {}})
+    cost_override[str(current)] = {}
     engine._cleanup_zero_faith_saints()
     engine.check_win_conditions()
     if engine.state.winner is not None:

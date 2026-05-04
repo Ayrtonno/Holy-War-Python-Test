@@ -12,8 +12,32 @@ SCRIPT = {
     "on_play_actions": [],
     "on_activate_actions": [
         {
-            "target": {"type": "source_card"},
-            "effect": {"action": "summon_generated_token", "card_name": "Token Gub-ner", "owner": "me"},
-        }
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"card_type_in": ["token"], "name_contains": "Gub-ner"},
+            },
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "target": {
+                "type": "selected_target",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"card_type_in": ["token"], "name_contains": "Gub-ner"},
+                "min_targets": 0,
+                "max_targets": 1,
+            },
+            "effect": {"action": "destroy_card"},
+        },
+        {
+            "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "opponent"},
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "target": {"type": "selected_target", "zone": "field", "owner": "opponent", "min_targets": 0, "max_targets": 1},
+            "effect": {"action": "destroy_card"},
+        },
     ],
 }

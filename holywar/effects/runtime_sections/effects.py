@@ -350,6 +350,18 @@ class RuntimeEffectsMixin:
         elif ttype == "all_saints_on_field":
             pool.extend(engine.all_saints_on_field(0))
             pool.extend(engine.all_saints_on_field(1))
+        elif ttype == "empty_saint_slots_controlled_by_owner":
+            for scoped_owner in self._target_owner_indices(owner_idx, target.owner):
+                player = engine.state.players[scoped_owner]
+                for i, slot_uid in enumerate(player.attack):
+                    if slot_uid is None:
+                        pool.append(f"a{i + 1}")
+                for i, slot_uid in enumerate(player.defense):
+                    if slot_uid is None:
+                        pool.append(f"d{i + 1}")
+            if target.max_targets is not None and target.max_targets >= 0:
+                return pool[: int(target.max_targets)]
+            return pool
         else:
             return []
 
@@ -594,6 +606,7 @@ class RuntimeEffectsMixin:
         owner_idx: int,
         token_name: str,
         preferred_zone: str | None = None,
+        preferred_slot_token: str | None = None,
     ) -> str | None:
         token_key = _norm(token_name)
         # runtime_sections/* lives under holywar/effects/runtime_sections;
@@ -611,21 +624,28 @@ class RuntimeEffectsMixin:
         preferred = _norm(preferred_zone or "")
         slot = None
         zone = ""
+        requested_slot = str(preferred_slot_token or "").strip().lower()
+        parsed_zone, parsed_slot = engine._parse_zone_target(requested_slot)
+        if parsed_zone in {"attack", "defense"}:
+            requested_slots = player.attack if parsed_zone == "attack" else player.defense
+            if 0 <= parsed_slot < len(requested_slots) and requested_slots[parsed_slot] is None:
+                zone = parsed_zone
+                slot = parsed_slot
 
         # The following block determines where to place the summoned token based on the preferred zone and available space. If the preferred zone is defense, it first tries to find an open slot in the defense zone, and if none are available, it tries the attack zone. If the preferred zone is attack, it first tries the attack zone, and if none are available, it tries the defense zone. If no preferred zone is specified, it defaults to trying the attack zone first and then the defense zone. If there is no space in either zone, it logs a message indicating that there is no space to summon the token and returns None.
-        if preferred == "defense":
+        if slot is None and preferred == "defense":
             slot = engine._first_open(player.defense)
             zone = "defense"
             if slot is None:
                 slot = engine._first_open(player.attack)
                 zone = "attack"
-        elif preferred == "attack":
+        elif slot is None and preferred == "attack":
             slot = engine._first_open(player.attack)
             zone = "attack"
             if slot is None:
                 slot = engine._first_open(player.defense)
                 zone = "defense"
-        else:
+        elif slot is None:
             slot = engine._first_open(player.attack)
             zone = "attack"
             if slot is None:
@@ -1751,6 +1771,25 @@ class RuntimeEffectsMixin:
             target = self._resolve_player_scope(owner_idx, effect.target_player)
             engine.draw_cards(target, max(0, int(effect.amount or 1)))
             return
+        if action == "draw_cards_and_set_play_cost_for_drawn_until_turn_end":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            draw_amount = max(0, int(effect.amount or 0))
+            fixed_cost = max(0, int(effect.override_cost or 0))
+            if draw_amount <= 0:
+                return
+            drawn_map = engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})
+            before = list(drawn_map.get(str(target), []) or [])
+            engine.draw_cards(target, draw_amount)
+            after = list(drawn_map.get(str(target), []) or [])
+            new_uids = [uid for uid in after if uid not in before]
+            if not new_uids:
+                return
+            cost_map_all = engine.state.flags.setdefault("drawn_play_cost_override_until_turn_end", {"0": {}, "1": {}})
+            target_map = dict(cost_map_all.get(str(target), {}) or {})
+            for uid in new_uids:
+                target_map[str(uid)] = fixed_cost
+            cost_map_all[str(target)] = target_map
+            return
         if action == "process_deck_edges_by_type":
             player = engine.state.players[owner_idx]
             deck_now = list(player.deck)
@@ -2012,6 +2051,76 @@ class RuntimeEffectsMixin:
             flags["_runtime_resume_same_action"] = True
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
+            return
+        if action == "choose_up_to_n_from_hand_to_relicario_then_draw_same":
+            flags = engine.state.flags
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            expected_choice_source = f"{source_uid}:choose_up_to_n_from_hand_to_relicario_then_draw_same"
+
+            if choice_ready and choice_source == expected_choice_source:
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
+                candidates = [v for v in candidates_raw.split(";;") if v]
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                selected_uids = [uid for uid in selected_uids if uid in candidates]
+
+                max_cards = int(flags.get("_runtime_trigger_amount", "0") or "0")
+                max_cards = max(0, max_cards)
+                if max_cards > 0:
+                    selected_uids = selected_uids[:max_cards]
+                else:
+                    selected_uids = []
+
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_candidates",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+
+                moved = 0
+                for uid in selected_uids:
+                    inst = engine.state.instances.get(uid)
+                    if inst is None:
+                        continue
+                    owner = int(inst.owner)
+                    if self._move_uid_to_zone(engine, uid, "relicario", owner):
+                        moved += 1
+                if moved > 0:
+                    target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+                    engine.draw_cards(target, moved)
+                return
+
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            max_cards = max(0, int(effect.amount or 0))
+            candidates = list(player.hand)
+            if not candidates or max_cards <= 0:
+                return
+
+            flags["_runtime_choice_source"] = expected_choice_source
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
+            flags["_runtime_choice_owner"] = str(owner_idx)
+            flags["_runtime_choice_title"] = "Prigioniero Sacrificale"
+            flags["_runtime_choice_prompt"] = "Scegli fino a 3 carte dalla tua mano da rimettere nel reliquiario."
+            flags["_runtime_choice_min_targets"] = "0"
+            flags["_runtime_choice_max_targets"] = str(max_cards)
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            flags["_runtime_resume_source"] = source_uid
+            flags["_runtime_resume_owner"] = str(owner_idx)
+            flags["_runtime_pending_mode"] = "trigger_action"
+            flags["_runtime_trigger_action"] = "choose_up_to_n_from_hand_to_relicario_then_draw_same"
+            flags["_runtime_trigger_target_player"] = str(effect.target_player or "me")
+            flags["_runtime_trigger_amount"] = str(max_cards)
             return
 
         if action == "choose_targets_and_summon_to_field":
@@ -3443,12 +3552,16 @@ class RuntimeEffectsMixin:
             summon_owner = self._resolve_owner_scope(owner_idx, effect.owner or "me")
             copies = max(1, int(effect.amount or 1))
             preferred_zone = str(effect.zone or "").strip() or None
+            preferred_slot_token = None
+            if _norm(str(effect.position or "")) == "selected_target_slot":
+                preferred_slot_token = self._selected_target_raw_for_current_action(engine)
             for _ in range(copies):
                 self._summon_generated_token(
                     engine,
                     summon_owner,
                     token_name,
                     preferred_zone=preferred_zone,
+                    preferred_slot_token=preferred_slot_token,
                 )
             return
         if action == "summon_generated_token_in_each_free_saint_slot":

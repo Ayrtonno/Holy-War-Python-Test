@@ -9,7 +9,8 @@ SCRIPT = {
     "play_targeting": "none",
     "blocks_enemy_artifact_slots": 0,
     "triggered_effects": [],
-    "on_play_actions": [
+    "on_play_actions": [],
+    "on_enter_actions": [
         {
             "effect": {
                 "action": "choose_option",

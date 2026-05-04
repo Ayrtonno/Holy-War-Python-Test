@@ -415,6 +415,7 @@ class RuntimeResolutionMixin:
                 flags.pop("_runtime_trigger_action", None)
                 flags.pop("_runtime_trigger_target_player", None)
                 flags.pop("_runtime_trigger_card_name", None)
+                flags.pop("_runtime_trigger_amount", None)
 
     # This method executes the on-enter actions defined in a card's script when the card enters the field. It iterates through the list of actions, checks any conditions for each action, resolves targets, and applies effects accordingly. If at any point an action requires a player input or reveal that cannot be immediately resolved, it sets flags to indicate that it is waiting for a reveal and stores the current state of the resolution so that it can be resumed later when the necessary input is provided. This allows for complex interactions and timing during the resolution of card effects when a card enters the field.
     def _run_enter_actions(

@@ -109,6 +109,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "pay_sin_or_destroy_self",
     "mill_cards",
     "draw_cards",
+    "draw_cards_and_set_play_cost_for_drawn_until_turn_end",
     "draw_by_zone_count_comparison",
     "draw_by_excommunicated_count_comparison",
     "set_blocked_enemy_artifact_slot_from_selected_option",
@@ -171,6 +172,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "floor_divide_flag",
     "draw_cards_from_flag",
     "choose_targets",
+    "choose_up_to_n_from_hand_to_relicario_then_draw_same",
     "choose_option",
     "inflict_sin_from_flag",
     "store_target_faith",
@@ -311,6 +313,7 @@ class EffectSpec:
     compare_target_player: str | None = None
     tie_policy: str | None = None
     tie_amount: int | None = None
+    override_cost: int | None = None
     top_count: int | None = None
     bottom_count: int | None = None
     unique_edges_only: bool = True

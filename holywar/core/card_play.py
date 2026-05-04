@@ -573,7 +573,17 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
             if spend_error is not None:
                 return spend_error
         else:
-            cost = calculate_play_cost(engine, player_idx, hand_index, card)
+            override_by_player = dict(
+                engine.state.flags.setdefault("drawn_play_cost_override_until_turn_end", {"0": {}, "1": {}}).get(
+                    str(player_idx), {}
+                )
+                or {}
+            )
+            override_cost_raw = override_by_player.get(str(selected_uid))
+            if override_cost_raw is not None:
+                cost = max(0, int(override_cost_raw))
+            else:
+                cost = calculate_play_cost(engine, player_idx, hand_index, card)
             paid_inspiration = int(cost)
             spend_error = spend_inspiration_for_cost(engine, player_idx, cost)
             if spend_error is not None:

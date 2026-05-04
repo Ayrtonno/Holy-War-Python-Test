@@ -362,6 +362,14 @@ class GUIGameActionsMixin:
                             out.append(c_uid)
                             seen.add(c_uid)
 
+                elif zone == "building":
+                    b_uid = player.building
+                    if b_uid is not None:
+                        inst = engine.state.instances[b_uid]
+                        if matches(inst) and b_uid not in seen:
+                            out.append(b_uid)
+                            seen.add(b_uid)
+
                 elif zone == "hand":
                     for c_uid in player.hand:
                         inst = engine.state.instances[c_uid]
@@ -509,6 +517,13 @@ class GUIGameActionsMixin:
                         if matches(c_uid) and c_uid not in seen:
                             out.append(c_uid)
                             seen.add(c_uid)
+
+                elif zone == "building":
+                    if player.building is not None and matches(player.building):
+                        token = player.building
+                        if token not in seen:
+                            out.append(token)
+                            seen.add(token)
 
         return out
 
@@ -852,6 +867,11 @@ class GUIGameActionsMixin:
                 messagebox.showwarning("Catena", "Durante la catena puoi giocare solo Benedizioni/Maledizioni.")
                 return
             res = self.engine.quick_play(own_idx, idx, target)
+            if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                self._post_reveal_chain_actor = own_idx
+                self._maybe_show_runtime_reveal()
+                self.begin_turn_if_needed()
+                return
             if res.ok:
                 self.chain_pass_count = 0
                 self.chain_priority_idx = 1 - own_idx
@@ -859,6 +879,11 @@ class GUIGameActionsMixin:
                 self._handle_chain_priority()
         else:
             res = self.engine.play_card(own_idx, idx, target)
+            if res.ok and bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                self._post_reveal_chain_actor = own_idx
+                self._maybe_show_runtime_reveal()
+                self.begin_turn_if_needed()
+                return
             if res.ok:
                 self.start_chain(actor_idx=own_idx)
         if not res.ok:

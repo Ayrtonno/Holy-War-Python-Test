@@ -148,6 +148,7 @@ class RuntimeRegistryMixin:
                 ),
                 tie_policy=str(raw.get("tie_policy")) if raw.get("tie_policy") is not None else None,
                 tie_amount=_to_int_or_none(raw.get("tie_amount")),
+                override_cost=_to_int_or_none(raw.get("override_cost")),
                 top_count=_to_int_or_none(raw.get("top_count")),
                 bottom_count=_to_int_or_none(raw.get("bottom_count")),
                 unique_edges_only=bool(raw.get("unique_edges_only", True)),

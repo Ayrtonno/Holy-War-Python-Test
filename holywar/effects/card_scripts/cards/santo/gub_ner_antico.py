@@ -4,34 +4,9 @@ CARD_NAME = """Gub-ner Antico"""
 
 SCRIPT = {
     "on_play_mode": "noop",
-    "on_enter_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
     "triggered_effects": [
-        {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {"event_card_name_is": "Gub-ner Antico"},
-            "target": {"type": "source_card"},
-            "effect": {
-                "action": "choose_option",
-                "choice_title": "Gub-ner Antico",
-                "choice_prompt": "Vuoi evocare un Token Gub-ner?",
-                "choice_options": [
-                    {"value": "yes", "label": "Si"},
-                    {"value": "no", "label": "No"},
-                ],
-            },
-        },
-        {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {
-                "all_of": [
-                    {"event_card_name_is": "Gub-ner Antico"},
-                    {"selected_option_in": ["yes"]},
-                ]
-            },
-            "target": {"type": "source_card"},
-            "effect": {"action": "summon_generated_token", "card_name": "Token Gub-ner"},
-        },
         {
             "trigger": {"event": "on_saint_defeated_in_battle", "frequency": "each_time"},
             "condition": {"event_card_name_is": "Token Gub-ner"},
@@ -68,4 +43,19 @@ SCRIPT = {
         },
     ],
     "on_play_actions": [],
+    "on_enter_actions": [
+        {
+            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "target": {"type": "source_card"},
+            "effect": {
+                "action": "summon_generated_token",
+                "card_name": "Token Gub-ner",
+                "owner": "me",
+                "position": "selected_target_slot",
+            },
+        },
+    ],
 }

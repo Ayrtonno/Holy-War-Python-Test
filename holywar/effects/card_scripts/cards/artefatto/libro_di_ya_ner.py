@@ -71,8 +71,17 @@ SCRIPT = {
     "on_play_actions": [],
     "on_activate_actions": [
         {
+            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
             "target": {"type": "source_card"},
-            "effect": {"action": "summon_generated_token", "card_name": "Token Gub-ner", "owner": "me"},
+            "effect": {
+                "action": "summon_generated_token",
+                "card_name": "Token Gub-ner",
+                "owner": "me",
+                "position": "selected_target_slot",
+            },
         }
     ],
 }

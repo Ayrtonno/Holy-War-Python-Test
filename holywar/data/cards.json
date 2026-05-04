@@ -2222,7 +2222,7 @@
     "crosses": "7",
     "faith": 6,
     "strength": null,
-    "effect_text": "Rendi inutilizzabile uno slot Artefatto dell'avversario a tua scelta.",
+    "effect_text": "Quando questa carta entra in campo, scegli uno slot Artefatto avversario: quello slot diventa inutilizzabile finche questa carta rimane sul terreno.",
     "expansion": "PHD-1",
     "is_token": false,
     "aliases": []
@@ -2266,7 +2266,7 @@
     "crosses": "5",
     "faith": 5,
     "strength": null,
-    "effect_text": "Una volta per turno, finche questa carta e sul terreno, puoi evocare un Token Gub-ner sul tuo lato del terreno.",
+    "effect_text": "Una volta per turno, puoi distruggere un Token Gub-ner sul tuo terreno. Se lo fai, seleziona e distruggi una carta sul terreno avversario.",
     "expansion": "PHD-1",
     "is_token": false,
     "aliases": []

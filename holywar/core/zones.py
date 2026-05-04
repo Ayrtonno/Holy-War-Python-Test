@@ -194,6 +194,13 @@ def send_to_graveyard(
     if leaving_field:
         cleanup_equipment_links_on_leave_field(engine, uid)
 
+    if is_token:
+        remove_from_board(engine, player, uid)
+        if leaving_field:
+            engine._reset_card_runtime_state(uid)
+            engine._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="vanished")
+        return
+
     if is_token and token_to_white:
         if uid not in engine.state.players[grave_target_idx].white_deck:
             engine.state.players[grave_target_idx].white_deck.insert(0, uid)
@@ -249,6 +256,14 @@ def excommunicate_card(
     if leaving_field:
         cleanup_equipment_links_on_leave_field(engine, uid)
 
+    is_token = bool(getattr(inst.definition, "is_token", False)) or str(inst.definition.card_type).strip().lower() == "token"
+    if is_token:
+        remove_from_board(engine, player, uid)
+        if leaving_field:
+            engine._reset_card_runtime_state(uid)
+            engine._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="vanished")
+        return
+
     if uid not in player.excommunicated:
         player.excommunicated.append(uid)
 
@@ -288,6 +303,17 @@ def remove_from_board_no_sin(engine: "GameEngine", owner_idx: int, uid: str) -> 
 
     if leaving_field:
         cleanup_equipment_links_on_leave_field(engine, uid)
+
+    inst = engine.state.instances.get(uid)
+    is_token = False
+    if inst is not None:
+        is_token = bool(getattr(inst.definition, "is_token", False)) or str(inst.definition.card_type).strip().lower() == "token"
+    if is_token:
+        remove_from_board(engine, player, uid)
+        if leaving_field:
+            engine._reset_card_runtime_state(uid)
+            engine._emit_event("on_this_card_leaves_field", owner_idx, card=uid, destination="vanished")
+        return
 
     if uid not in player.graveyard:
         player.graveyard.append(uid)

@@ -25,53 +25,7 @@ SCRIPT = {
         {
             "trigger": {
                 "event": "on_card_excommunicated",
-                "frequency": "each_turn",
-                "condition": {
-                    "all_of": [
-                        {"event_card_name_is": "Prigioniero Sacrificale"},
-                        {"event_card_owner": "me"},
-                    ]
-                },
-            },
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "hand",
-                "owner": "me",
-            },
-            "effect": {"action": "choose_targets", "min_targets": 0, "max_targets": 3},
-        },
-        {
-            "trigger": {
-                "event": "on_card_excommunicated",
-                "frequency": "each_turn",
-                "condition": {
-                    "all_of": [
-                        {"event_card_name_is": "Prigioniero Sacrificale"},
-                        {"event_card_owner": "me"},
-                    ]
-                },
-            },
-            "target": {"type": "selected_targets"},
-            "effect": {"action": "store_target_count", "flag": "prigioniero_sacrificale_cards_moved"},
-        },
-        {
-            "trigger": {
-                "event": "on_card_excommunicated",
-                "frequency": "each_turn",
-                "condition": {
-                    "all_of": [
-                        {"event_card_name_is": "Prigioniero Sacrificale"},
-                        {"event_card_owner": "me"},
-                    ]
-                },
-            },
-            "target": {"type": "selected_targets"},
-            "effect": {"action": "move_to_relicario"},
-        },
-        {
-            "trigger": {
-                "event": "on_card_excommunicated",
-                "frequency": "each_turn",
+                "frequency": "each_time",
                 "condition": {
                     "all_of": [
                         {"event_card_name_is": "Prigioniero Sacrificale"},
@@ -81,8 +35,8 @@ SCRIPT = {
             },
             "target": {"type": "source_card"},
             "effect": {
-                "action": "draw_cards_from_flag",
-                "flag": "prigioniero_sacrificale_cards_moved",
+                "action": "choose_up_to_n_from_hand_to_relicario_then_draw_same",
+                "amount": 3,
                 "target_player": "me",
             },
         },
