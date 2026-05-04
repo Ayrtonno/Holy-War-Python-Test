@@ -256,6 +256,9 @@ def excommunicate_card(
     if leaving_field:
         cleanup_equipment_links_on_leave_field(engine, uid)
 
+    if inst is None:
+        return
+
     is_token = bool(getattr(inst.definition, "is_token", False)) or str(inst.definition.card_type).strip().lower() == "token"
     if is_token:
         remove_from_board(engine, player, uid)

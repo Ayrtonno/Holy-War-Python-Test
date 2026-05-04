@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING
+from typing import Any
 
 from holywar.core.state import TURN_INSPIRATION, hand_has_space_for_non_innata, is_innata_card_type
 from holywar.effects.runtime import EffectSpec, runtime_cards
 from holywar.effects.state_flags import ensure_runtime_state, refresh_player_flags, set_phase
 
-if TYPE_CHECKING:
-    from holywar.core.engine import GameEngine
+GameEngine = Any
 
 # The turn_flow module contains functions that manage the flow of turns in the game, including starting and ending turns, handling the draw phase, and applying turn-based effects. It also includes helper functions for normalizing text, checking card types, and managing hand limits. These functions work together to ensure that the game progresses smoothly and that all relevant effects and rules are applied correctly during each player's turn.
 def _norm(text: str) -> str:

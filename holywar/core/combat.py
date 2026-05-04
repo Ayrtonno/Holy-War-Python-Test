@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING
+from typing import Any
 
 from holywar.core.results import ActionResult
 from holywar.core.state import ATTACK_SLOTS, CardInstance
 from holywar.effects.runtime import runtime_cards
 from holywar.effects.state_flags import ensure_runtime_state, refresh_player_flags, set_phase
 
-if TYPE_CHECKING:
-    from holywar.core.engine import GameEngine
+GameEngine = Any
 
 # Utility function to normalize text for consistent comparisons, removing accents and converting to lowercase. This is used for comparing card types and other string attributes in a way that is insensitive to formatting differences.
 def _norm(text: str) -> str:

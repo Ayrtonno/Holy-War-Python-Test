@@ -763,7 +763,8 @@ class GUIGameFlowMixin:
     def replay_jump_to_turn(self) -> None:
         if not self._replay_playback or not self._replay_loaded_snapshots:
             return
-        raw = str(getattr(self, "replay_jump_turn_var", None).get() if hasattr(self, "replay_jump_turn_var") else "").strip()
+        jump_var = getattr(self, "replay_jump_turn_var", None)
+        raw = str(jump_var.get() if jump_var is not None else "").strip()
         if not raw:
             return
         try:

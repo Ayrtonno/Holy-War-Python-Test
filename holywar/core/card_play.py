@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
-from typing import TYPE_CHECKING
+from typing import Any
 
 from holywar.core.results import ActionResult
 from holywar.core.state import ARTIFACT_SLOTS
@@ -9,9 +9,9 @@ from holywar.core import query_helpers as query_ops
 from holywar.effects.library import resolve_card_effect, resolve_enter_effect
 from holywar.effects.runtime import runtime_cards
 
-if TYPE_CHECKING:
-    from holywar.core.engine import GameEngine
-    from holywar.core.state import CardInstance
+from holywar.core.state import CardInstance
+
+GameEngine = Any
 
 
 SAINT_TYPES = {"santo", "token"}
