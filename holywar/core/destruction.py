@@ -32,6 +32,74 @@ def _equipped_card_types(engine: "GameEngine", saint_uid: str) -> list[str]:
     return out
 
 
+def _matches_owner_scope(scope: str, source_owner: int, target_owner: int) -> bool:
+    key = _norm(scope)
+    if key in {"", "any"}:
+        return True
+    if key == "enemy":
+        return int(source_owner) != int(target_owner)
+    if key in {"friendly", "self", "owner", "controller"}:
+        return int(source_owner) == int(target_owner)
+    return False
+
+
+def _apply_equipped_destroy_protection(
+    engine: "GameEngine",
+    target_uid: str,
+    target_inst,
+) -> bool:
+    source_uid = str(engine.state.flags.get("_runtime_effect_source", "")).strip()
+    if not source_uid or source_uid not in engine.state.instances:
+        return False
+    source_inst = engine.state.instances[source_uid]
+    target_owner = int(target_inst.owner)
+    target_type = _norm(target_inst.definition.card_type)
+
+    for tag in list(target_inst.blessed):
+        if not isinstance(tag, str) or not tag.startswith("equipped_by:"):
+            continue
+        equip_uid = tag.split(":", 1)[1].strip()
+        equip_inst = engine.state.instances.get(equip_uid)
+        if equip_inst is None:
+            continue
+        rules = runtime_cards.get_protection_rules(equip_inst.definition.name)
+        for rule in rules:
+            if _norm(str(rule.get("event", ""))) != "destroy_by_effect":
+                continue
+            if bool(rule.get("requires_source_to_be_equipped", False)) and equip_uid != source_uid:
+                continue
+            if not _matches_owner_scope(str(rule.get("source_owner", "any")), int(source_inst.owner), int(equip_inst.owner)):
+                continue
+            if not _matches_owner_scope(str(rule.get("target_owner", "any")), target_owner, int(equip_inst.owner)):
+                continue
+            target_types = {_norm(str(v)) for v in list(rule.get("target_card_types", []) or []) if str(v).strip()}
+            if target_types and target_type not in target_types:
+                continue
+
+            faith_cfg = rule.get("set_target_faith")
+            if isinstance(faith_cfg, str) and _norm(faith_cfg) in {"base", "initial", "printed"}:
+                base = int(target_inst.definition.faith or 0)
+                target_inst.current_faith = max(0, base)
+            elif faith_cfg is not None:
+                try:
+                    target_inst.current_faith = max(0, int(faith_cfg))
+                except (TypeError, ValueError):
+                    pass
+
+            if bool(rule.get("excommunicate_source", False)):
+                engine.excommunicate_card(equip_inst.owner, equip_uid)
+
+            log_msg = str(rule.get("log", "")).strip()
+            if log_msg:
+                engine.state.log(log_msg)
+            else:
+                engine.state.log(
+                    f"{equip_inst.definition.name} protegge {target_inst.definition.name}: distruzione annullata."
+                )
+            return True
+    return False
+
+
 # Destroys all saints whose current Faith has reached zero or less.
 def cleanup_zero_faith_saints(engine: "GameEngine") -> None:
     saint_types = {"santo", "token"}
@@ -300,25 +368,8 @@ def destroy_any_card(engine: "GameEngine", owner_idx: int, uid: str) -> None:
         if allowed_uid != uid:
             return
 
-    # Building protection granted by equipped blessings (e.g. Protezione dall'Oscurita):
-    # when this card would be destroyed by a card effect, set its Faith to 10 and excommunicate the equipment.
-    source_uid = str(engine.state.flags.get("_runtime_effect_source", "")).strip()
-    if source_uid and source_uid in engine.state.instances:
-        for tag in list(inst.blessed):
-            if not isinstance(tag, str) or not tag.startswith("equipped_by:"):
-                continue
-            equip_uid = tag.split(":", 1)[1].strip()
-            equip_inst = engine.state.instances.get(equip_uid)
-            if equip_inst is None:
-                continue
-            if _norm(equip_inst.definition.name) != _norm("Protezione dall'Oscurita"):
-                continue
-            inst.current_faith = 10
-            engine.excommunicate_card(equip_inst.owner, equip_uid)
-            engine.state.log(
-                f"{equip_inst.definition.name} protegge {inst.definition.name}: Fede impostata a 10 e carta scomunicata."
-            )
-            return
+    if _apply_equipped_destroy_protection(engine, uid, inst):
+        return
 
     # Optional script-driven shield: spend seal counters equal to source card crosses to negate destruction.
     if script and script.altare_seal_shield_from_source_crosses:

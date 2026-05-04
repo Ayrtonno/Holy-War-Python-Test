@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-CARD_NAME = "Spiriti dell'Eternita"
+CARD_NAME = "Spiriti dell'Eternità"
 
 SCRIPT = {
     "on_play_mode": "scripted",

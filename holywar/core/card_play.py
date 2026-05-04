@@ -209,6 +209,16 @@ def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement
                     out.append(uid)
     return list(dict.fromkeys(out))
 
+
+def _free_play_condition_met(engine: "GameEngine", owner_idx: int, condition: dict | None) -> bool:
+    if not isinstance(condition, dict) or not condition:
+        return False
+    controller_has_cards = condition.get("controller_has_cards")
+    if isinstance(controller_has_cards, dict):
+        min_count = max(0, int(controller_has_cards.get("min_count", 1) or 1))
+        return len(_collect_requirement_cards(engine, owner_idx, controller_has_cards)) >= min_count
+    return False
+
 # Parses the play target string to extract the main placement target and any additional directives, which is used for handling complex play requirements that may involve specific targeting or selection of cards. This allows for a flexible way to encode both the intended placement of the card being played and any additional instructions for how to handle sacrifices or other interactions.
 def _split_play_target_with_directives(target: str | None) -> tuple[str | None, dict[str, str]]:
     raw = str(target or "").strip()
@@ -293,6 +303,11 @@ def calculate_play_cost(engine: "GameEngine", player_idx: int, hand_index: int, 
     free_uids = set(free_play_flags.get(str(player_idx), []) or [])
     if hand_index >= 0 and hand_index < len(player.hand):
         if player.hand[hand_index] in free_uids:
+            return 0
+    script = runtime_cards.get_script(card.definition.name)
+    if script is not None:
+        free_if = script.play_requirements.get("can_play_without_inspiration_cost_if")
+        if _free_play_condition_met(engine, player_idx, free_if):
             return 0
     cost = card.definition.faith or 0
 
@@ -493,6 +508,10 @@ def resolve_quick_play_from_hand(engine: "GameEngine", player_idx: int, uid: str
         return ActionResult(True, "Attivazione annullata da Barriera Magica.")
     resolved = resolve_card_effect(engine, player_idx, uid, target)
     moved_elsewhere = False
+    is_equipped_overlay = any(
+        isinstance(tag, str) and tag.startswith("equipped_to:")
+        for tag in list(card.blessed)
+    )
     for owner_idx in (0, 1):
         p = engine.state.players[owner_idx]
         if (
@@ -508,6 +527,8 @@ def resolve_quick_play_from_hand(engine: "GameEngine", player_idx: int, uid: str
         ):
             moved_elsewhere = True
             break
+    if is_equipped_overlay:
+        moved_elsewhere = True
     if not moved_elsewhere:
         engine.send_to_graveyard(player_idx, uid)
     engine._cleanup_zero_faith_saints()

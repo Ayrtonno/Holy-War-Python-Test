@@ -371,15 +371,3 @@ PREMADE_DECKS: dict[str, dict] = {
     },
 }
 
-# Carte neutre "consigliate" per riempire a 45 quando un premade e' corto.
-NEUTRAL_FILL_ORDER = [
-    ("Barriera Magica", 3),
-    ("Concentrazione", 3),
-    ("Meditazione", 2),
-    ("Cura", 3),
-    ("Cura Rapida", 3),
-    ("Seguace", 3),
-    ("Moribondo", 3),
-    ("Ricerca Archeologica", 2),
-    ("Rinforzi", 2),
-]

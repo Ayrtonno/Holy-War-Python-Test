@@ -32,10 +32,12 @@ SCRIPT = {
             "effect": {"action": "destroy_card"},
         },
         {
+            "condition": {"selected_target_exists": True},
             "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "opponent"},
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
+            "condition": {"selected_target_exists": True},
             "target": {"type": "selected_target", "zone": "field", "owner": "opponent", "min_targets": 0, "max_targets": 1},
             "effect": {"action": "destroy_card"},
         },

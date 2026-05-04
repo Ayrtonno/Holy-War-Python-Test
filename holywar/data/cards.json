@@ -2173,6 +2173,17 @@
     "aliases": []
   },
   {
+    "name": "Forgiatura Oscura",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Cerca nel tuo reliquiario un artefatto. Giocalo sul tuo terreno e scomunica questa carta.",
+    "expansion": "PHD-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Frammento dello Specchio",
     "card_type": "Artefatto",
     "crosses": "4",
@@ -2405,11 +2416,11 @@
   },
   {
     "name": "Specchio di Ykknødar",
-    "card_type": "Artefatto",
+    "card_type": "Maledizione",
     "crosses": "10",
-    "faith": 9,
+    "faith": null,
     "strength": null,
-    "effect_text": "Gioca questa carta solo se ogni giocatore ha più di 50 Peccato. Scomunica tutte le carte sul campo, in mano e nei cimiteri di ogni giocatore. Poi evoca \"Ykknødar\" dalla tua mano o dal tuo reliquiario sul tuo campo.",
+    "effect_text": "Gioca questa carta solo se ogni giocatore ha più di 50 Peccato. Scomunica tutte le carte sul campo, in mano e nei cimiteri di ogni giocatore. Poi evoca \"Ykknødar\" dalla tua mano o dal tuo reliquiario sul tuo campo. Scomunica questa carta.",
     "expansion": "PHD-1",
     "is_token": false,
     "aliases": []
@@ -2453,7 +2464,7 @@
     "crosses": "10",
     "faith": 30,
     "strength": 0,
-    "effect_text": "Questa carta può essere evocata solo tramite \"Specchio di Ykknødar\". Non può essere distrutta da effetti. Non può attaccare. Ogni volta che l'avversario pesca una carta, rimuovi 3 Peccato. Quando questa carta viene sconfitta, distruggi e scomunica \"Specchio di Ykknødar\".",
+    "effect_text": "Questa carta può essere evocata solo tramite \"Specchio di Ykknødar\". Non può essere distrutta da effetti. Non può attaccare. Ogni volta che l'avversario pesca una carta, rimuovi 3 Peccato.",
     "expansion": "PHD-1",
     "is_token": false,
     "aliases": []
@@ -2662,7 +2673,7 @@
     "crosses": "4",
     "faith": 7,
     "strength": 3,
-    "effect_text": "Dopo il calcolo dei danni, infliggi al Santo avversario attaccante danni pari a quelli ricevuti da questa carta. Se quel Santo viene distrutto da questo effetto, rimuovi Peccato pari alla sua Fede iniziale.",
+    "effect_text": "Quando questa carta riceve danno da un Santo avversario, quel Santo subisce lo stesso danno. Se quel Santo viene distrutto da questo effetto, rimuovi Peccato pari alla sua Fede iniziale.",
     "expansion": "PHD-1",
     "is_token": false,
     "aliases": []

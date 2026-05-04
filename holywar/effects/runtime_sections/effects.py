@@ -807,6 +807,7 @@ class RuntimeEffectsMixin:
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
                 return
+            source_is_artifact = _norm(source_inst.definition.card_type) == _norm("artefatto")
             for t_uid in targets:
                 target_inst = engine.state.instances.get(t_uid)
                 if target_inst is None:
@@ -814,13 +815,15 @@ class RuntimeEffectsMixin:
                 if not self._is_uid_on_field(engine, t_uid):
                     continue
                 previous_target = self._clear_equipment_link(engine, source_uid)
-                if not self._place_equipment_on_field(engine, source_inst.owner, source_uid):
+                if source_is_artifact and not self._place_equipment_on_field(engine, source_inst.owner, source_uid):
                     if previous_target and previous_target in engine.state.instances:
                         source_inst.blessed.append(f"equipped_to:{previous_target}")
                         prev_inst = engine.state.instances[previous_target]
                         if f"equipped_by:{source_uid}" not in prev_inst.blessed:
                             prev_inst.blessed.append(f"equipped_by:{source_uid}")
                     continue
+                if not source_is_artifact:
+                    self._remove_uid_from_all_player_zones(engine, source_inst.owner, source_uid)
                 source_inst.blessed.append(f"equipped_to:{t_uid}")
                 equip_tag = f"equipped_by:{source_uid}"
                 if equip_tag not in target_inst.blessed:
@@ -971,7 +974,7 @@ class RuntimeEffectsMixin:
                 base_faith = max(0, int(attacker_inst.definition.faith or 0))
                 engine.destroy_saint_by_uid(attacker_inst.owner, attacker_uid, cause="effect", by_whom=source_uid)
                 if base_faith > 0:
-                    engine.remove_sin(owner_idx, base_faith)
+                    engine.reduce_sin(owner_idx, base_faith)
             return
         if action == "destroy_source_if_linked_to_event_card":
             source_inst = engine.state.instances.get(source_uid)
@@ -2057,6 +2060,7 @@ class RuntimeEffectsMixin:
             choice_source = str(flags.get("_runtime_choice_source", "")).strip()
             choice_ready = bool(flags.get("_runtime_choice_ready"))
             expected_choice_source = f"{source_uid}:choose_up_to_n_from_hand_to_relicario_then_draw_same"
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
 
             if choice_ready and choice_source == expected_choice_source:
                 selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
@@ -2065,7 +2069,7 @@ class RuntimeEffectsMixin:
                 selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
                 selected_uids = [uid for uid in selected_uids if uid in candidates]
 
-                max_cards = int(flags.get("_runtime_trigger_amount", "0") or "0")
+                max_cards = int(flags.get("_runtime_trigger_amount", effect.amount or 0) or 0)
                 max_cards = max(0, max_cards)
                 if max_cards > 0:
                     selected_uids = selected_uids[:max_cards]
@@ -2086,19 +2090,20 @@ class RuntimeEffectsMixin:
                     flags.pop(key, None)
 
                 moved = 0
+                target_player = engine.state.players[target]
                 for uid in selected_uids:
-                    inst = engine.state.instances.get(uid)
-                    if inst is None:
+                    if uid not in target_player.hand:
                         continue
-                    owner = int(inst.owner)
-                    if self._move_uid_to_zone(engine, uid, "relicario", owner):
-                        moved += 1
+                    target_player.hand.remove(uid)
+                    if uid in target_player.deck:
+                        target_player.deck.remove(uid)
+                    target_player.deck.append(uid)
+                    moved += 1
                 if moved > 0:
-                    target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+                    engine.rng.shuffle(target_player.deck)
                     engine.draw_cards(target, moved)
                 return
 
-            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
             max_cards = max(0, int(effect.amount or 0))
             candidates = list(player.hand)
@@ -2107,7 +2112,7 @@ class RuntimeEffectsMixin:
 
             flags["_runtime_choice_source"] = expected_choice_source
             flags["_runtime_choice_candidates"] = ";;".join(candidates)
-            flags["_runtime_choice_owner"] = str(owner_idx)
+            flags["_runtime_choice_owner"] = str(target)
             flags["_runtime_choice_title"] = "Prigioniero Sacrificale"
             flags["_runtime_choice_prompt"] = "Scegli fino a 3 carte dalla tua mano da rimettere nel reliquiario."
             flags["_runtime_choice_min_targets"] = "0"
@@ -3031,12 +3036,32 @@ class RuntimeEffectsMixin:
         if action == "excommunicate_top_cards_from_relicario":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             count = max(1, int(effect.amount or 1))
+            promise_state = dict(
+                engine.state.flags.get("oltretomba_promise_active", {"0": False, "1": False})
+                or {"0": False, "1": False}
+            )
+            merged = bool(promise_state.get(str(target), False))
             for _ in range(count):
                 player = engine.state.players[target]
-                if not player.deck:
-                    break
-                top_uid = player.deck[-1]
-                engine.excommunicate_card(target, top_uid, from_zone_override="relicario")
+                if merged:
+                    # With Promessa dell'oltretomba active, deck and graveyard are one logical zone.
+                    # Prefer deck top, then graveyard top if deck is empty.
+                    if player.deck:
+                        top_uid = player.deck[-1]
+                        player.deck.pop()
+                        engine.excommunicate_card(target, top_uid, from_zone_override="relicario")
+                    elif player.graveyard:
+                        top_uid = player.graveyard[-1]
+                        player.graveyard.pop()
+                        engine.excommunicate_card(target, top_uid, from_zone_override="graveyard")
+                    else:
+                        break
+                else:
+                    if not player.deck:
+                        break
+                    top_uid = player.deck[-1]
+                    player.deck.pop()
+                    engine.excommunicate_card(target, top_uid, from_zone_override="relicario")
             return
         if action in {"draw_by_excommunicated_count_comparison", "draw_by_zone_count_comparison"}:
             first_idx = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -4118,6 +4143,13 @@ class RuntimeEffectsMixin:
                     counter = 0
                 break
             if counter < int(source_counter_gte):
+                return False
+        selected_target_exists = condition.get("selected_target_exists")
+        if selected_target_exists is not None:
+            selected_raw = str(ctx.engine.state.flags.get("_runtime_selected_target", "")).strip()
+            selected_uid = selected_raw.split(",", 1)[0].strip() if selected_raw else ""
+            has_selected_target = bool(selected_uid and selected_uid in ctx.engine.state.instances)
+            if bool(selected_target_exists) != has_selected_target:
                 return False
 
         target_uid = str(payload.get("card", ""))

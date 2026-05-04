@@ -37,20 +37,6 @@ SCRIPT = {
             "target": {"type": "source_card"},
             "effect": {"action": "remove_sin", "amount": 3, "target_player": "me"},
         },
-        {
-            "trigger": {
-                "event": "on_saint_defeated_in_battle",
-                "frequency": "each_time",
-                "condition": {"event_card_name_is": "Ykknødar"},
-            },
-            "target": {
-                "type": "cards_controlled_by_owner",
-                "zone": "field",
-                "owner": "any",
-                "card_filter": {"name_equals": "Specchio di Ykknødar"},
-            },
-            "effect": {"action": "excommunicate_card_no_sin"},
-        },
     ],
     "on_play_actions": [],
 }

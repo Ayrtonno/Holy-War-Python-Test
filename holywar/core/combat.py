@@ -350,14 +350,10 @@ def resolve_targeted_attack(
     forced_destroy: list[tuple[int, str]] = []
     attacker_on_board = attacker_uid in (attacker_player.attack + attacker_player.defense)
     defender_on_board = defender_uid in (defender_player.attack + defender_player.defense)
-    if runtime_cards.get_post_battle_forced_destroy(attacker.definition.name) and attacker_on_board:
-        forced_destroy.append((player_idx, attacker_uid))
-        if defender_on_board:
-            forced_destroy.append((defender_idx, defender_uid))
-    if runtime_cards.get_post_battle_forced_destroy(defender.definition.name) and defender_on_board:
+    if runtime_cards.get_post_battle_forced_destroy(attacker.definition.name) and defender_on_board:
         forced_destroy.append((defender_idx, defender_uid))
-        if attacker_on_board:
-            forced_destroy.append((player_idx, attacker_uid))
+    if runtime_cards.get_post_battle_forced_destroy(defender.definition.name) and attacker_on_board:
+        forced_destroy.append((player_idx, attacker_uid))
     for owner_idx, forced_uid in forced_destroy:
         if forced_uid not in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense):
             continue

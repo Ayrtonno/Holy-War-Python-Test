@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -9,7 +8,6 @@ import unicodedata
 
 from holywar.app_paths import appdata_dir, bundled_data_dir
 from holywar.data.models import CardDefinition
-from holywar.data.premade_decks import NEUTRAL_FILL_ORDER
 
 
 CANONICAL_RELIGIONS = [
@@ -81,33 +79,6 @@ PREMADE_STORE_PATH = _resolve_premade_store_path()
 def _is_in_group(card: CardDefinition, canonical: str) -> bool:
     aliases = RELIGION_ALIASES.get(canonical, {canonical})
     return card.expansion in aliases
-
-
-def _cross_value(crosses: str) -> int | None:
-    text = (crosses or "").strip().lower()
-    if text in {"white", "croce bianca"}:
-        return 11
-    try:
-        return int(float(text))
-    except ValueError:
-        return None
-
-
-def _copy_limits(card: CardDefinition) -> tuple[int, str]:
-    value = _cross_value(card.crosses)
-    if value is None:
-        return 1, "unknown"
-    if 1 <= value <= 3:
-        return 5, "low"
-    if 4 <= value <= 6:
-        return 3, "mid"
-    if 7 <= value <= 9:
-        return 1, "high"
-    if value == 10:
-        return 1, "ten"
-    if value >= 11:
-        return 1, "white"
-    return 1, "unknown"
 
 
 def _sort_cards(cards: Iterable[CardDefinition]) -> list[CardDefinition]:
@@ -298,94 +269,6 @@ def disable_runtime_premade(deck_id: str) -> None:
     return
 
 
-def build_test_deck(cards: list[CardDefinition], religion: str) -> DeckBuildResult:
-    religion_cards = [
-        c for c in cards
-        if _is_in_group(c, religion)
-    ]
-    neutral_cards = [
-        c for c in cards
-        if _is_in_group(c, "Neutre")
-    ]
-
-    if not religion_cards:
-        religion_cards = [c for c in cards if c.expansion == religion]
-
-    base_pool = [
-        c for c in religion_cards + neutral_cards
-        if c.card_type.lower() not in {"token", "innata"}
-    ]
-    white_pool = [c for c in religion_cards if c.card_type.lower() == "token"]
-    innate_pool = [
-        c for c in religion_cards + neutral_cards
-        if c.card_type.lower() == "innata"
-    ]
-
-    base_pool = _sort_cards(base_pool)
-    by_name: dict[str, CardDefinition] = {}
-    for card in base_pool:
-        by_name.setdefault(card.name, card)
-
-    chosen: list[CardDefinition] = []
-    per_card = defaultdict(int)
-    band_count = defaultdict(int)
-
-    # First pass: one copy per card if legal, in deterministic order.
-    for card in by_name.values():
-        max_copy, band = _copy_limits(card)
-        if max_copy <= 0:
-            continue
-        if band == "high" and band_count[band] >= 10:
-            continue
-        if band == "ten" and band_count[band] >= 3:
-            continue
-        if band == "white" and band_count[band] >= 1:
-            continue
-        chosen.append(card)
-        per_card[card.name] += 1
-        band_count[band] += 1
-        if len(chosen) >= 45:
-            break
-
-    # Second pass: add extra copies until 45.
-    if len(chosen) < 45:
-        fill_order = _sort_cards(by_name.values())
-        changed = True
-        while len(chosen) < 45 and changed:
-            changed = False
-            for card in fill_order:
-                max_copy, band = _copy_limits(card)
-                if per_card[card.name] >= max_copy:
-                    continue
-                if band == "high" and band_count[band] >= 10:
-                    continue
-                if band == "ten" and band_count[band] >= 3:
-                    continue
-                if band == "white" and band_count[band] >= 1:
-                    continue
-                chosen.append(card)
-                per_card[card.name] += 1
-                band_count[band] += 1
-                changed = True
-                if len(chosen) >= 45:
-                    break
-
-    # Last resort for tiny test pools: allow duplicates up to 45.
-    if len(chosen) < 45 and by_name:
-        fallback = list(by_name.values())
-        idx = 0
-        while len(chosen) < 45:
-            chosen.append(fallback[idx % len(fallback)])
-            idx += 1
-
-    white_deck: list[CardDefinition] = []
-    for token in _sort_cards(white_pool):
-        for _ in range(5):
-            white_deck.append(token)
-
-    return DeckBuildResult(main_deck=chosen[:45], white_deck=white_deck, innate_deck=_sort_cards(innate_pool))
-
-
 def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuild:
     cfg = _RUNTIME_PREMADE_DECKS[deck_id]
     religion = cfg["religion"]
@@ -418,28 +301,8 @@ def build_premade_deck(cards: list[CardDefinition], deck_id: str) -> PremadeBuil
     for name, qty in cfg["cards"]:
         add_card(name, qty, cfg["name"])
 
-    # Fill with suggested neutral package if under 45.
     if len(main) < 45:
-        for name, qty in NEUTRAL_FILL_ORDER:
-            if len(main) >= 45:
-                break
-            card = by_name.get(_norm(name))
-            if card is None or card.card_type.lower() in {"token", "innata"}:
-                continue
-            for _ in range(qty):
-                if len(main) >= 45:
-                    break
-                main.append(card)
-
-    # Fallback with auto test deck of same religion.
-    if len(main) < 45:
-        auto = build_test_deck(cards, religion).main_deck
-        idx = 0
-        while len(main) < 45 and auto:
-            main.append(auto[idx % len(auto)])
-            idx += 1
-        if len(main) < 45:
-            warnings.append(f"{cfg['name']}: deck incompleto ({len(main)}/45)")
+        warnings.append(f"{cfg['name']}: deck incompleto ({len(main)}/45)")
 
     if not allow_over_45:
         main = main[:45]

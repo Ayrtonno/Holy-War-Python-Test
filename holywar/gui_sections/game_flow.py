@@ -56,10 +56,10 @@ class GUIGameFlowMixin:
         self.replay_manager_frame.pack(fill="both", expand=True)
         self._replay_manager_reload()
 
-    # This method updates the options for premade decks in the game setup screen based on the selected religions for player 1 and player 2. It builds a mapping of available premade decks for each religion, updates the dropdown options for selecting premade decks, and ensures that the currently selected premade deck is valid for the chosen religion, defaulting to "AUTO (test)" if the previously selected deck is no longer available.
+    # This method updates the options for premade decks in the game setup screen based on the selected religions for player 1 and player 2. It builds a mapping of available premade decks for each religion, updates the dropdown options for selecting premade decks, and ensures that the currently selected premade deck is valid for the chosen religion.
     def update_premade_options(self) -> None:
         def build_map(religion: str) -> dict[str, str | None]:
-            out: dict[str, str | None] = {"AUTO (test)": None}
+            out: dict[str, str | None] = {}
             for deck_id, _, _name in available_premade_decks(religion):
                 out[get_premade_label(deck_id)] = deck_id
             return out
@@ -71,9 +71,9 @@ class GUIGameFlowMixin:
         self.p1_deck_combo.configure(values=p1_vals)
         self.p2_deck_combo.configure(values=p2_vals)
         if self.p1_deck_var.get() not in self._p1_deck_map:
-            self.p1_deck_var.set("AUTO (test)")
+            self.p1_deck_var.set(p1_vals[0] if p1_vals else "")
         if self.p2_deck_var.get() not in self._p2_deck_map:
-            self.p2_deck_var.set("AUTO (test)")
+            self.p2_deck_var.set(p2_vals[0] if p2_vals else "")
 
     # This method initializes a new game based on the current settings selected in the game setup screen, including player names, selected premade decks, and game mode (AI or two-player). It creates a new game engine instance with the specified parameters, sets up the necessary callbacks for certain game actions, initializes the random number generator with the provided seed, and resets various state variables related to turn flow and chain interactions. Finally, it updates the status message and refreshes the GUI to reflect the new game state.
     def new_game(self) -> None:
@@ -151,9 +151,13 @@ class GUIGameFlowMixin:
             return
         if self.engine is None or self.ai_running:
             return
-        if not self.turn_started and self.engine.state.winner is None:
+        guard = 0
+        while not self.turn_started and self.engine.state.winner is None and guard < 8:
+            guard += 1
             self.engine.start_turn()
-            self.turn_started = True
+            # If the turn has been auto-closed inside start_turn (e.g. Albero Sacro),
+            # phase returns to setup and we must immediately start the next one.
+            self.turn_started = self.engine.state.phase != "setup"
             self.refresh()
         if self.mode_var.get() == "ai" and self.engine and self.engine.state.active_player == 1 and not self.ai_running:
             self.start_ai_turn()

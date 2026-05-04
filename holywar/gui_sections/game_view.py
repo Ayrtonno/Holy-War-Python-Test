@@ -166,11 +166,13 @@ class GUIGameViewMixin:
         self._set_slot_widgets(self.own_defense, own.defense)
         self._set_slot_widgets(self.own_artifacts, own.artifacts, hide_equipped=True)
         self.own_building.configure(text=self.card_label(own.building))
+        self._apply_equipment_highlight(self.own_building, own.building)
 
         self._set_slot_widgets(self.enemy_attack, enemy.attack)
         self._set_slot_widgets(self.enemy_defense, enemy.defense)
         self._set_slot_widgets(self.enemy_artifacts, enemy.artifacts, hide_equipped=True)
         self.enemy_building.configure(text=self.card_label(enemy.building))
+        self._apply_equipment_highlight(self.enemy_building, enemy.building)
         self._apply_blocked_artifact_slot_highlights()
 
         self.hand_list.delete(0, tk.END)

@@ -41,8 +41,8 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         religions = available_religions(cards)
         self.p1_rel_var = tk.StringVar(value=religions[0] if religions else "Animismo")
         self.p2_rel_var = tk.StringVar(value=religions[1] if len(religions) > 1 else self.p1_rel_var.get())
-        self.p1_deck_var = tk.StringVar(value="AUTO (test)")
-        self.p2_deck_var = tk.StringVar(value="AUTO (test)")
+        self.p1_deck_var = tk.StringVar(value="")
+        self.p2_deck_var = tk.StringVar(value="")
         self.chain_enabled = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="Pronto")
         self.engine: GameEngine | None = None
@@ -132,7 +132,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.p1_rel_combo = ttk.Combobox(top, textvariable=self.p1_rel_var, values=self.religions, width=16, state="readonly")
         self.p1_rel_combo.grid(row=0, column=5, padx=4, sticky="ew")
         ttk.Label(top, text="Deck P1").grid(row=0, column=6)
-        self.p1_deck_combo = ttk.Combobox(top, textvariable=self.p1_deck_var, values=["AUTO (test)"], width=28, state="readonly")
+        self.p1_deck_combo = ttk.Combobox(top, textvariable=self.p1_deck_var, values=[], width=28, state="readonly")
         self.p1_deck_combo.grid(row=0, column=7, padx=4, sticky="ew")
         ttk.Label(top, text="P2").grid(row=0, column=8)
         ttk.Entry(top, textvariable=self.p2_name_var, width=12).grid(row=0, column=9, padx=4, sticky="ew")
@@ -140,7 +140,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.p2_rel_combo = ttk.Combobox(top, textvariable=self.p2_rel_var, values=self.religions, width=16, state="readonly")
         self.p2_rel_combo.grid(row=0, column=11, padx=4, sticky="ew")
         ttk.Label(top, text="Deck P2").grid(row=0, column=12)
-        self.p2_deck_combo = ttk.Combobox(top, textvariable=self.p2_deck_var, values=["AUTO (test)"], width=28, state="readonly")
+        self.p2_deck_combo = ttk.Combobox(top, textvariable=self.p2_deck_var, values=[], width=28, state="readonly")
         self.p2_deck_combo.grid(row=0, column=13, padx=4, sticky="ew")
 
         actions = ttk.Frame(top)

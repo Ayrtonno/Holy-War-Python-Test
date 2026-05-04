@@ -4,12 +4,18 @@ CARD_NAME = """Sacerdote del Vuoto"""
 
 SCRIPT = {
     "on_play_mode": "noop",
-    "on_enter_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {"event_card_name_is": "Sacerdote del Vuoto"},
+            "trigger": {"event": "on_card_excommunicated", "frequency": "each_time"},
+            "target": {"type": "source_card"},
+            "effect": {"action": "increase_strength", "amount": 1},
+        },
+    ],
+    "on_play_actions": [],
+    "on_enter_actions": [
+        {
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "excommunicated",
@@ -18,8 +24,6 @@ SCRIPT = {
             "effect": {"action": "choose_targets", "min_targets": 0, "max_targets": 1},
         },
         {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {"event_card_name_is": "Sacerdote del Vuoto"},
             "target": {
                 "type": "selected_target",
                 "zone": "excommunicated",
@@ -30,8 +34,6 @@ SCRIPT = {
             "effect": {"action": "move_to_relicario"},
         },
         {
-            "trigger": {"event": "on_enter_field", "frequency": "each_time"},
-            "condition": {"event_card_name_is": "Sacerdote del Vuoto"},
             "target": {
                 "type": "selected_target",
                 "zone": "deck",
@@ -41,11 +43,5 @@ SCRIPT = {
             },
             "effect": {"action": "shuffle_target_owner_decks"},
         },
-        {
-            "trigger": {"event": "on_card_excommunicated", "frequency": "each_time"},
-            "target": {"type": "source_card"},
-            "effect": {"action": "increase_strength", "amount": 1},
-        },
     ],
-    "on_play_actions": [],
 }

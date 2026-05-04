@@ -7,6 +7,15 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "play_targeting": "none",
+    "play_requirements": {
+        "can_play_without_inspiration_cost_if": {
+            "controller_has_cards": {
+                "owner": "me",
+                "zone": "excommunicated",
+                "min_count": 10,
+            }
+        }
+    },
     "triggered_effects": [
         {
             "trigger": {"event": "on_card_excommunicated", "frequency": "each_time"},

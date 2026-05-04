@@ -13,7 +13,7 @@ from holywar.core import turn_flow as turn_flow_ops
 from holywar.core import zones as zone_ops
 from holywar.core.results import ActionResult
 from holywar.core.state import ATTACK_SLOTS, CardInstance, GameState, PlayerState
-from holywar.data.deck_builder import build_premade_deck, build_test_deck
+from holywar.data.deck_builder import build_premade_deck
 from holywar.data.models import CardDefinition
 from holywar.effects.library import resolve_activated_effect
 from holywar.effects.runtime import runtime_cards
@@ -154,12 +154,11 @@ class GameEngine:
 
         # Builds and shuffles the main deck and white deck for one player.
         def build_decks(owner: int, expansion: str, premade_deck_id: str | None) -> tuple[list[str], list[str], list[str]]:
-            if premade_deck_id:
-                premade = build_premade_deck(cards, premade_deck_id)
-                built = premade.deck
-                deck_warnings.extend(premade.warnings)
-            else:
-                built = build_test_deck(cards, expansion)
+            if not premade_deck_id:
+                raise ValueError(f"Nessun premade deck selezionato per {expansion}.")
+            premade = build_premade_deck(cards, premade_deck_id)
+            built = premade.deck
+            deck_warnings.extend(premade.warnings)
             deck: list[str] = []
             white: list[str] = []
             innate: list[str] = []
