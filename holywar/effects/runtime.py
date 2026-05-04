@@ -289,7 +289,6 @@ class EffectSpec:
     target_player: str | None = None
     card_name: str | None = None
     flag: str | None = None
-
     owner: str | None = None
     from_zone: str | None = None
     zone: str | None = None

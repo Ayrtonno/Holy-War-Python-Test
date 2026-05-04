@@ -2715,6 +2715,16 @@ class RuntimeEffectsMixin:
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
             flags = engine.state.flags
+            condition_name = _norm(effect.controller_has_saint_with_name or "")
+            conditional_to = str(effect.to_zone_if_controller_has_saint_with_name or "").strip()
+            default_to = str(effect.to_zone or "relicario").strip() or "relicario"
+            has_condition_saint = False
+            if condition_name:
+                has_condition_saint = any(
+                    _norm(engine.state.instances[uid].definition.name) == condition_name
+                    for uid in engine.all_saints_on_field(target)
+                )
+            destination_zone = conditional_to if (condition_name and has_condition_saint and conditional_to) else default_to
 
             choice_source = str(flags.get("_runtime_choice_source", "")).strip()
             choice_ready = bool(flags.get("_runtime_choice_ready"))
@@ -2723,13 +2733,8 @@ class RuntimeEffectsMixin:
                 candidates_raw = str(flags.get("_runtime_choice_candidates", "")).strip()
                 candidates = [v for v in candidates_raw.split(";;") if v]
                 if selected_uid and selected_uid in candidates and selected_uid in player.graveyard:
-                    has_odino = any(
-                        _norm(engine.state.instances[uid].definition.name) == _norm("Odino")
-                        for uid in engine.all_saints_on_field(target)
-                    )
-                    to_zone = "hand" if has_odino else "relicario"
-                    moved = self._move_uid_to_zone(engine, selected_uid, to_zone, target)
-                    if not moved and to_zone == "hand":
+                    moved = self._move_uid_to_zone(engine, selected_uid, destination_zone, target)
+                    if not moved and _norm(destination_zone) == "hand":
                         self._move_uid_to_zone(engine, selected_uid, "relicario", target)
                 engine.rng.shuffle(player.deck)
                 for key in (
@@ -2750,15 +2755,11 @@ class RuntimeEffectsMixin:
             if not candidates:
                 engine.rng.shuffle(player.deck)
                 return
-            has_odino = any(
-                _norm(engine.state.instances[uid].definition.name) == _norm("Odino")
-                for uid in engine.all_saints_on_field(target)
-            )
             flags["_runtime_choice_source"] = source_uid
             flags["_runtime_choice_candidates"] = ";;".join(candidates)
             flags["_runtime_choice_owner"] = str(target)
             flags["_runtime_choice_title"] = "Cimitero"
-            if has_odino:
+            if _norm(destination_zone) == "hand":
                 flags["_runtime_choice_prompt"] = "Scegli una carta dal tuo cimitero da aggiungere alla mano, oppure Nessuna."
             else:
                 flags["_runtime_choice_prompt"] = "Scegli una carta dal tuo cimitero da mettere nel reliquiario, oppure Nessuna."

@@ -678,23 +678,31 @@ def quick_play(engine: "GameEngine", player_idx: int, hand_index: int, target: s
     if card is None:
         return ActionResult(False, "Indice mano non valido.")
     ctype = _norm(card.definition.card_type)
-    is_moribondo = _norm(card.definition.name) == _norm("Moribondo")
-    if ctype not in QUICK_TYPES and not is_moribondo:
-        return ActionResult(False, "Solo Benedizione/Maledizione (o Moribondo) sono giocabili fuori turno.")
+    script = runtime_cards.get_script(card.definition.name)
+    quick_cfg = dict(script.play_requirements) if script is not None else {}
+    is_quick_override = bool(quick_cfg.get("allow_quick_play_out_of_turn", False))
+    if ctype not in QUICK_TYPES and not is_quick_override:
+        return ActionResult(False, "Solo Benedizione/Maledizione (o carte con Quick Play dedicato) sono giocabili fuori turno.")
     uid = player.hand.pop(hand_index)
     emit_play_events(engine, player_idx, uid, ctype, target)
-    if is_moribondo:
+
+    if is_quick_override:
         target_card = engine.resolve_target_saint(player_idx, target)
         if target_card is None:
             own = engine.all_saints_on_field(player_idx)
             target_card = engine.state.instances[own[0]] if own else None
         if target_card is None:
             player.hand.insert(hand_index, uid)
-            return ActionResult(False, "Nessun santo valido da proteggere con Moribondo.")
-        player.excommunicated.append(uid)
-        target_card.blessed.append("moribondo_shield")
+            return ActionResult(False, "Nessun santo valido bersaglio per il Quick Play.")
+        if bool(quick_cfg.get("quick_play_excommunicate_self", True)):
+            player.excommunicated.append(uid)
+        else:
+            engine.send_to_graveyard(player_idx, uid, from_zone_override="hand")
+        bless_tag = str(quick_cfg.get("quick_play_grant_blessed_tag", "")).strip()
+        if bless_tag and bless_tag not in target_card.blessed:
+            target_card.blessed.append(bless_tag)
         engine._cleanup_zero_faith_saints()
         engine.check_win_conditions()
-        return ActionResult(True, f"{player.name} scomunica Moribondo e protegge {target_card.definition.name}.")
+        return ActionResult(True, f"{player.name} attiva {card.definition.name} su {target_card.definition.name}.")
     return resolve_quick_play_from_hand(engine, player_idx, uid, target)
 
