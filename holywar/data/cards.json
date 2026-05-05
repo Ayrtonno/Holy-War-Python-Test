@@ -3025,5 +3025,181 @@
     "expansion": "NEU-1",
     "is_token": false,
     "aliases": []
+  },
+  {
+    "name": "Editto del Faraone",
+    "card_type": "Maledizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli 1 Artefatto o 1 Edificio avversario. Distruggilo. Poi ricevi 3 Peccato.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Offerta al Nilo",
+    "card_type": "Benedizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Manda 1 carta dalla mano al cimitero; pesca 2 carte. Se la carta mandata era un Santo, rimuovi 3 Peccato.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Rito di Imbalsamazione Regale",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli 1 tuo Santo nel cimitero con Croci pari o inferiori a 6: aggiungilo alla mano. Poi puoi mandare 1 carta dalla tua mano al cimitero.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Guardia del Sarcofago",
+    "card_type": "Artefatto",
+    "crosses": "5",
+    "faith": 6,
+    "strength": null,
+    "effect_text": "Una volta per turno, quando subiresti il primo attacco diretto, annullalo. Poi questa carta perde 2 Fede. Quando la Fede di questa carta diventa pari o inferiore a 0, distruggila.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Via della Piramide",
+    "card_type": "Benedizione",
+    "crosses": "6",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Guarda le prime 5 carte del tuo reliquiario. Puoi aggiungerne 1 alla tua mano. Poi mischia il reliquiario.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Acque di Sangue",
+    "card_type": "Maledizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Ogni Santo avversario perde 2 Fede. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Rane Invasive",
+    "card_type": "Maledizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Infliggi 6 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga delle Locuste",
+    "card_type": "Santo",
+    "crosses": "5",
+    "faith": 6,
+    "strength": 6,
+    "effect_text": "Una volta per turno, quando questa carta attacca un Santo avversario, puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Tenebre d'Egitto",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Durante il prossimo turno dell'avversario, pesca 1 carta in meno (minimo 1). Cerca nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Morte dei Primogeniti",
+    "card_type": "Maledizione",
+    "crosses": "7",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Un Santo avversario perde 6 Fede. Poi infliggi 4 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Zanzare del Deserto",
+    "card_type": "Maledizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Ogni Santo avversario perde 3 Fede. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Mosche d'Egitto",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli 1 Artefatto o 1 Edificio avversario: distruggilo. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Ulcere della Carne",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli fino a 2 Santi avversari: ognuno perde 4 Fede. Poi infliggi 3 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Grandine di Fuoco",
+    "card_type": "Maledizione",
+    "crosses": "6",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Ogni Santo avversario perde 3 Fede. Poi puoi distruggere 1 Artefatto avversario. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Piaga: Morte del Bestiame",
+    "card_type": "Maledizione",
+    "crosses": "6",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un santo sul terreno e distruggilo. Poi infliggi 3 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Portatore delle Piaghe",
+    "card_type": "Santo",
+    "crosses": "White",
+    "faith": 25,
+    "strength": 10,
+    "effect_text": "Puoi evocare questa carta scomunicando 3 carte Piaga dalla tua mano o cimitero. Questa carta non può essere bersagliata dagli effetti di altre carte. Una volta per turno, scegli e attiva un effetto di qualsiasi carta \"Piaga\" benedizione o maledizione.",
+    "expansion": "EGI-1",
+    "is_token": false,
+    "aliases": []
   }
 ]

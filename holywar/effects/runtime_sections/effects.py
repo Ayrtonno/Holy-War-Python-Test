@@ -2005,6 +2005,125 @@ class RuntimeEffectsMixin:
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
             return
+        if action == "choose_and_activate_effect":
+            flags = engine.state.flags
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            expected_choice_source = f"{source_uid}:choose_and_activate_effect:{target}"
+
+            conf = {}
+            if effect.choice_options and isinstance(effect.choice_options[0], dict):
+                conf = dict(effect.choice_options[0])
+            candidate_source = _norm(str(conf.get("candidate_source", "")).strip())
+            zone_list = [
+                str(z).strip()
+                for z in list(conf.get("zones", []) or [])
+                if str(z).strip()
+            ]
+            if not zone_list:
+                fallback_zone = str(effect.zone or effect.from_zone or "deck").strip() or "deck"
+                zone_list = [fallback_zone]
+
+            allowed_types = {
+                _norm(str(v))
+                for v in list(conf.get("card_type_in", []) or ["benedizione", "maledizione"])
+                if str(v).strip()
+            }
+            name_contains = _norm(str(conf.get("name_contains", effect.card_name or "")).strip())
+
+            candidates: list[str] = []
+            seen: set[str] = set()
+            if candidate_source == "initial_deck":
+                for uid, inst in engine.state.instances.items():
+                    if uid in seen:
+                        continue
+                    if int(inst.owner) != int(target):
+                        continue
+                    if bool(getattr(inst.definition, "is_token", False)):
+                        continue
+                    ctype = _norm(inst.definition.card_type)
+                    if allowed_types and ctype not in allowed_types:
+                        continue
+                    if name_contains and name_contains not in _norm(inst.definition.name):
+                        continue
+                    candidates.append(uid)
+                    seen.add(uid)
+            else:
+                for z in zone_list:
+                    for uid in self._get_zone_cards(engine, target, z):
+                        if uid in seen:
+                            continue
+                        inst = engine.state.instances.get(uid)
+                        if inst is None:
+                            continue
+                        ctype = _norm(inst.definition.card_type)
+                        if allowed_types and ctype not in allowed_types:
+                            continue
+                        if name_contains and name_contains not in _norm(inst.definition.name):
+                            continue
+                        candidates.append(uid)
+                        seen.add(uid)
+
+            if choice_ready and choice_source == expected_choice_source:
+                selected_uid = str(flags.get("_runtime_choice_selected", "")).strip()
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_values",
+                    "_runtime_choice_labels",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+                if selected_uid not in candidates:
+                    return
+                if selected_uid not in engine.state.instances:
+                    return
+                selected_inst = engine.state.instances[selected_uid]
+                selected_script = self._scripts.get(_norm(selected_inst.definition.name), CardScript(name=selected_inst.definition.name))
+                copied_actions = list(selected_script.on_play_actions or [])
+                if not copied_actions:
+                    return
+                previous_selected = str(flags.get("_runtime_selected_target", ""))
+                flags["_runtime_selected_target"] = ""
+                try:
+                    self._run_play_actions(engine, owner_idx, source_uid, copied_actions)
+                finally:
+                    flags["_runtime_selected_target"] = previous_selected
+                return
+
+            if not candidates:
+                return
+
+            labels: dict[str, str] = {}
+            for uid in candidates:
+                inst = engine.state.instances.get(uid)
+                if inst is None:
+                    continue
+                effect_text = str(getattr(inst.definition, "effect_text", "") or "").strip()
+                if effect_text:
+                    labels[uid] = f"{inst.definition.name} - {effect_text}"
+                else:
+                    labels[uid] = inst.definition.name
+            flags["_runtime_choice_source"] = expected_choice_source
+            flags["_runtime_choice_values"] = ";;".join(candidates)
+            flags["_runtime_choice_labels"] = json.dumps(labels, ensure_ascii=False)
+            flags["_runtime_choice_owner"] = str(target)
+            flags["_runtime_choice_title"] = str(effect.choice_title or "Scegli effetto da copiare")
+            flags["_runtime_choice_prompt"] = str(effect.choice_prompt or "Scegli una carta da cui copiare l'effetto.")
+            flags["_runtime_choice_min_targets"] = "1"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            return
 
         if action == "choose_targets":
             flags = engine.state.flags
@@ -4165,6 +4284,10 @@ class RuntimeEffectsMixin:
         if target_current_faith_gte is not None:
             if current_faith is None or current_faith < int(target_current_faith_gte):
                 return False
+        target_current_faith_lte = condition.get("target_current_faith_lte")
+        if target_current_faith_lte is not None:
+            if current_faith is None or current_faith > int(target_current_faith_lte):
+                return False
 
         controller_has_name = condition.get("controller_has_saint_with_name")
         if controller_has_name:
@@ -4311,6 +4434,16 @@ class RuntimeEffectsMixin:
         if selected_target_in:
             allowed = {_norm(v) for v in selected_target_in}
             if selected_target not in allowed:
+                return False
+        selected_target_card_type_in = condition.get("selected_target_card_type_in")
+        if selected_target_card_type_in:
+            selected_uid_raw = str(ctx.engine.state.flags.get("_runtime_selected_target", "")).strip()
+            selected_uid = selected_uid_raw.split(",", 1)[0].strip() if selected_uid_raw else ""
+            if not selected_uid or selected_uid not in ctx.engine.state.instances:
+                return False
+            selected_inst = ctx.engine.state.instances[selected_uid]
+            allowed_types = {_norm(str(v)) for v in list(selected_target_card_type_in or [])}
+            if allowed_types and _norm(selected_inst.definition.card_type) not in allowed_types:
                 return False
         selected_target_startswith = condition.get("selected_target_startswith")
         if selected_target_startswith:

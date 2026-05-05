@@ -47,6 +47,7 @@ SUPPORTED_CONDITION_KEYS = {
     "opponent_sin_lte",
     "payload_reason_in",
     "target_current_faith_gte",
+    "target_current_faith_lte",
     "controller_has_saint_with_name",
     "controller_has_artifact_with_name",
     "can_play_by_sacrificing_specific_card_from_field",
@@ -61,6 +62,7 @@ SUPPORTED_CONDITION_KEYS = {
     "controller_has_distinct_saints_gte",
     "selected_option_in",
     "selected_target_in",
+    "selected_target_card_type_in",
     "selected_target_startswith",
     "event_card_name_is",
     "event_card_name_contains",
@@ -90,6 +92,7 @@ EFFECT_ACTION_ALIASES = {
     "gain_inspiration": "add_inspiration",
     "pay_inspiration": "pay_inspiration",
     "move_to_graveyard": "send_to_graveyard",
+    "choose_and_activate_piaga_effect": "choose_and_activate_effect",
 }
 
 # This set defines the supported effect actions that the runtime can process. It includes a wide range of actions that can be performed as part of card effects, such as increasing or decreasing faith and strength, adding or removing counters, inflicting sin, drawing cards, moving cards between zones, and many more. This set is used to validate that any effect action specified in card scripts or effect definitions is recognized and can be handled by the runtime.
@@ -210,6 +213,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "activate_oltretomba_promise",
     "discard_hand_then_pressure_opponent",
     "choose_draw_amount_with_self_sin_cost",
+    "choose_and_activate_effect",
 }
 
 # This set defines the supported effect conditions that can be used in card scripts or effect definitions. These conditions are used to determine whether certain effects should be applied based on the current game state, the event context, or other factors. The runtime will evaluate these conditions when processing effects to ensure that they are only applied when the specified conditions are met.
