@@ -29,6 +29,9 @@ SCRIPT = {
                 "shuffle_after": False,
             },
         },
+        {
+            "target": {"type": "source_card"},
+            "effect": {"action": "inflict_sin", "amount": 1, "target_player": "me"},
+        },
     ],
 }
-

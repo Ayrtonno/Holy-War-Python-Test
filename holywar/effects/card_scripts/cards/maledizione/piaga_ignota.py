@@ -16,6 +16,10 @@ SCRIPT = {
                 "card_name": "Token Piaga",
                 "owner": "opponent",
             },
-        }
+        },
+        {
+            "target": {"type": "source_card"},
+            "effect": {"action": "inflict_sin", "amount": 1, "target_player": "me"},
+        },
     ],
 }

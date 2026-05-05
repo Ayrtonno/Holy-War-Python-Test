@@ -3197,9 +3197,10 @@
     "crosses": "White",
     "faith": 25,
     "strength": 10,
-    "effect_text": "Puoi evocare questa carta scomunicando 3 carte Piaga dalla tua mano o cimitero. Questa carta non può essere bersagliata dagli effetti di altre carte. Una volta per turno, scegli e attiva un effetto di qualsiasi carta \"Piaga\" benedizione o maledizione.",
+    "effect_text": "Questa carta può essere evocata solo scomunicando 3 carte Piaga dalla tua mano o cimitero, senza pagare costo di Ispirazione. Questa carta non può essere bersagliata dagli effetti di altre carte. Una volta per turno, scegli e attiva un effetto di qualsiasi carta \"Piaga\" benedizione o maledizione.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
   }
 ]
+

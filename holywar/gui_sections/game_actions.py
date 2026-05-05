@@ -914,22 +914,83 @@ class GUIGameActionsMixin:
             return
 
         count = max(1, int(req.get("count", 1) or 1))
-        owner = self.engine.state.players[own_idx]
-        candidates = [
-            c_uid
-            for c_uid in (owner.attack + owner.defense)
-            if (
-                c_uid is not None
-                and _norm(self.engine.state.instances[c_uid].definition.card_type) == "santo"
-            )
-        ]
+
+        owner_key = _norm(str(req.get("owner", "me")))
+        if owner_key in {"opponent", "enemy", "other"}:
+            owners = [1 - own_idx]
+        elif owner_key in {"any", "both", "all", "either"}:
+            owners = [own_idx, 1 - own_idx]
+        else:
+            owners = [own_idx]
+
+        zones = list(req.get("zones", []) or [])
+        if not zones:
+            zones = [str(req.get("zone", "field"))]
+
+        card_filter = dict(req.get("card_filter", {}) or {})
+        name_eq = _norm(str(card_filter.get("name_equals", "")))
+        name_contains = _norm(str(card_filter.get("name_contains", "")))
+        type_filter = {_norm(str(v)) for v in list(card_filter.get("card_type_in", []) or []) if str(v).strip()}
+
+        def _zone_uids(owner_idx: int, zone_name: str) -> list[str]:
+            p = self.engine.state.players[owner_idx]
+            zone = _norm(zone_name)
+            if zone == "field":
+                out = [x for x in (p.attack + p.defense + p.artifacts) if x]
+                if p.building:
+                    out.append(p.building)
+                return out
+            if zone == "attack":
+                return [x for x in p.attack if x]
+            if zone == "defense":
+                return [x for x in p.defense if x]
+            if zone in {"artifact", "artifacts"}:
+                return [x for x in p.artifacts if x]
+            if zone == "building":
+                return [p.building] if p.building else []
+            if zone == "hand":
+                return list(p.hand)
+            if zone in {"deck", "relicario"}:
+                return list(p.deck)
+            if zone == "graveyard":
+                return list(p.graveyard)
+            if zone == "excommunicated":
+                return list(p.excommunicated)
+            return []
+
+        def _matches(c_uid: str) -> bool:
+            inst2 = self.engine.state.instances.get(c_uid)
+            if inst2 is None:
+                return False
+            card_name_norm = _norm(inst2.definition.name)
+            if name_eq and card_name_norm != name_eq:
+                return False
+            if name_contains and name_contains not in card_name_norm:
+                return False
+            if type_filter and _norm(inst2.definition.card_type) not in type_filter:
+                return False
+            return True
+
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for owner_idx in owners:
+            for zone_name in zones:
+                for c_uid in _zone_uids(owner_idx, str(zone_name)):
+                    if not c_uid or c_uid in seen:
+                        continue
+                    if not _matches(c_uid):
+                        continue
+                    candidates.append(c_uid)
+                    seen.add(c_uid)
+
         if not candidates:
-            messagebox.showwarning("Sacrificio richiesto", "Non ci sono Santi da sacrificare.")
+            messagebox.showwarning("Sacrificio richiesto", "Non ci sono carte valide da sacrificare.")
             return
         choices = [(self._format_guided_candidate(c_uid, own_idx), c_uid) for c_uid in candidates]
+        card_name = inst.definition.name if inst is not None else "Carta"
         canceled, selected = self._open_board_target_picker(
-            title="Brigante - Sacrificio",
-            prompt=f"Seleziona {count} Santo/i da sacrificare.",
+            title=f"{card_name} - Sacrificio",
+            prompt=f"Seleziona {count} carta/e da sacrificare.",
             choices=choices,
             allow_multi=(count > 1),
             min_targets=count,

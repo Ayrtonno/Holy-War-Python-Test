@@ -251,6 +251,7 @@ def _consume_scripted_play_costs(
         return None, 0
     sacrificed_total_faith = 0
     mark_sacrifices_no_sin = bool(script.play_requirements.get("play_sacrifices_no_sin_on_death", False))
+    sacrifice_to_zone = _norm(str(script.play_requirements.get("play_sacrifices_to_zone", "graveyard")))
     requirement_cfg = script.play_requirements.get("can_play_by_sacrificing")
     if isinstance(requirement_cfg, dict):
         count = max(1, int(requirement_cfg.get("count", 1) or 1))
@@ -278,7 +279,12 @@ def _consume_scripted_play_costs(
             sacrificed_total_faith += max(0, int(sacr_inst.definition.faith or 0))
             if mark_sacrifices_no_sin and "no_sin_on_death" not in sacr_inst.blessed:
                 sacr_inst.blessed.append("no_sin_on_death")
-            engine.send_to_graveyard(owner, uid)
+            if sacrifice_to_zone == "excommunicated":
+                from_zone = engine._locate_uid_zone(owner, uid)
+                from_zone_override = from_zone if from_zone != "unknown" else None
+                engine.excommunicate_card(owner, uid, from_zone_override=from_zone_override)
+            else:
+                engine.send_to_graveyard(owner, uid)
         return None, sacrificed_total_faith
 
     # Legacy single-card sacrifice by name requirement for backward compatibility with older scripts. This checks for the "can_play_by_sacrificing_specific_card_from_field" requirement and processes it by finding a card with the specified name on the player's field and sacrificing it. This allows older card scripts that use this specific requirement to still function without needing to be updated to the new format.

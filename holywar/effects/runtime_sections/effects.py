@@ -2085,12 +2085,19 @@ class RuntimeEffectsMixin:
                     return
                 if selected_uid not in engine.state.instances:
                     return
+                activation_turn = int(engine.state.turn_number)
+                replay_guard_key = f"{expected_choice_source}:{selected_uid}:{activation_turn}"
+                if str(flags.get("_runtime_choose_copy_guard", "")).strip() == replay_guard_key:
+                    return
+                flags["_runtime_choose_copy_guard"] = replay_guard_key
                 selected_inst = engine.state.instances[selected_uid]
                 selected_script = self._scripts.get(_norm(selected_inst.definition.name), CardScript(name=selected_inst.definition.name))
                 copied_actions = list(selected_script.on_play_actions or [])
                 if not copied_actions:
                     return
                 previous_selected = str(flags.get("_runtime_selected_target", ""))
+                # Defensive: nested choice/reveal flows must not resume this action again.
+                flags.pop("_runtime_resume_same_action", None)
                 flags["_runtime_selected_target"] = ""
                 try:
                     self._run_play_actions(engine, owner_idx, source_uid, copied_actions)
@@ -2230,6 +2237,8 @@ class RuntimeEffectsMixin:
                 return
 
             flags["_runtime_choice_source"] = expected_choice_source
+            flags.pop("_runtime_choice_values", None)
+            flags.pop("_runtime_choice_labels", None)
             flags["_runtime_choice_candidates"] = ";;".join(candidates)
             flags["_runtime_choice_owner"] = str(target)
             flags["_runtime_choice_title"] = "Prigioniero Sacrificale"
@@ -3311,6 +3320,8 @@ class RuntimeEffectsMixin:
             flags = engine.state.flags
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
+            source_inst = engine.state.instances.get(source_uid)
+            source_name = source_inst.definition.name if source_inst is not None else "Questa carta"
             needle = _norm(effect.card_name or "")
             from_zone = _norm(effect.from_zone or effect.zone or "graveyard")
             to_zone = str(effect.to_zone or "relicario").strip() or "relicario"
@@ -3334,7 +3345,7 @@ class RuntimeEffectsMixin:
                 if uid in engine.state.instances
                 and (not needle or needle in _norm(engine.state.instances[uid].definition.name))
             ]
-            if max_to_move > 0:
+            if action == "optional_recover_matching_then_shuffle" and max_to_move > 0:
                 candidates = candidates[:max_to_move]
             candidate_names = [engine.state.instances[uid].definition.name for uid in candidates]
             listed = ", ".join(candidate_names) if candidate_names else "Nessuna carta."
@@ -3346,13 +3357,15 @@ class RuntimeEffectsMixin:
             )
 
             if choice_ready and choice_source == expected_choice_source:
-                selected = str(flags.get("_runtime_choice_selected", "")).strip().lower()
+                selected_raw = str(flags.get("_runtime_choice_selected", "")).strip()
+                selected_uids = [v.strip() for v in selected_raw.split(",") if v.strip()]
+                allowed = set(candidates)
+                selected_uids = [uid for uid in selected_uids if uid in allowed]
                 for key in (
                     "_runtime_choice_source",
                     "_runtime_choice_ready",
                     "_runtime_choice_selected",
-                    "_runtime_choice_values",
-                    "_runtime_choice_labels",
+                    "_runtime_choice_candidates",
                     "_runtime_choice_owner",
                     "_runtime_choice_title",
                     "_runtime_choice_prompt",
@@ -3361,11 +3374,11 @@ class RuntimeEffectsMixin:
                 ):
                     flags.pop(key, None)
 
-                if selected != "yes":
+                if not selected_uids:
                     return
 
                 moved = 0
-                for uid in candidates:
+                for uid in selected_uids:
                     if self._move_uid_to_zone(engine, uid, to_zone, target):
                         moved += 1
                 if should_shuffle:
@@ -3377,18 +3390,21 @@ class RuntimeEffectsMixin:
                 engine.state.log(f"Effetto opzionale risolto: {moved} carte spostate in {to_zone}.")
                 return
 
-            labels = {"yes": "Si, attiva", "no": "No, non attivare"}
+            max_select = len(candidates)
+            if action == "optional_recover_matching_then_shuffle" and max_to_move > 0:
+                max_select = min(max_select, max_to_move)
+            max_select = max(0, int(max_select))
+
             flags["_runtime_choice_source"] = expected_choice_source
-            flags["_runtime_choice_values"] = "yes;;no"
-            flags["_runtime_choice_labels"] = json.dumps(labels, ensure_ascii=False)
+            flags["_runtime_choice_candidates"] = ";;".join(candidates)
             flags["_runtime_choice_owner"] = str(target)
-            flags["_runtime_choice_title"] = "Albero di Pietra"
+            flags["_runtime_choice_title"] = source_name
             flags["_runtime_choice_prompt"] = (
-                "Attivare l'effetto di Albero di Pietra?\n\n"
-                f"Carte che verranno spostate da {from_zone} a {to_zone}: {listed}"
+                f"Attivare l'effetto di {source_name}?\n\n"
+                f"Seleziona quali carte spostare da {from_zone} a {to_zone}: {listed}"
             )
-            flags["_runtime_choice_min_targets"] = "1"
-            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_min_targets"] = "0"
+            flags["_runtime_choice_max_targets"] = str(max_select)
             flags["_runtime_choice_ready"] = False
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True

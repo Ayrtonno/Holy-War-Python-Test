@@ -35,6 +35,9 @@ SCRIPT = {
             "target": {"type": "source_card"},
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },
+        {
+            "target": {"type": "source_card"},
+            "effect": {"action": "inflict_sin", "amount": 2, "target_player": "me"},
+        },
     ],
 }
-

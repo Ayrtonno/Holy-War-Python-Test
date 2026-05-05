@@ -7,9 +7,32 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
     "activate_once_per_turn": True,
-    "play_targeting": "guided",
+    "play_targeting": "none",
     "activate_targeting": "none",
     "play_requirements": {
+        "can_play_by_sacrificing": {
+            "owner": "me",
+            "zone": "hand",
+            "zones": ["hand", "graveyard"],
+            "count": 3,
+            "card_filter": {
+                "name_contains": "piaga",
+            },
+        },
+        "choose_play_sacrifices_from_target": True,
+        "can_play_without_inspiration_cost_if": {
+            "controller_has_cards": {
+                "owner": "me",
+                "zone": "hand",
+                "zones": ["hand", "graveyard"],
+                "min_count": 3,
+                "card_filter": {
+                    "name_contains": "piaga",
+                },
+            }
+        },
+        "play_sacrifices_to_zone": "excommunicated",
+        "play_sacrifices_no_sin_on_death": True,
         "controller_has_cards": {
             "owner": "me",
             "zone": "hand",
@@ -29,20 +52,7 @@ SCRIPT = {
         }
     ],
     "triggered_effects": [],
-    "on_play_actions": [
-        {
-            "target": {
-                "type": "selected_targets",
-                "owner": "me",
-                "zone": "hand",
-                "zones": ["hand", "graveyard"],
-                "card_filter": {"name_contains": "piaga"},
-                "min_targets": 3,
-                "max_targets": 3,
-            },
-            "effect": {"action": "excommunicate_card_no_sin"},
-        }
-    ],
+    "on_play_actions": [],
     "on_activate_actions": [
         {
             "target": {"type": "source_card"},

@@ -593,6 +593,59 @@ class GUITargetingMixin:
             lb.insert(tk.END, label)
 
         token_to_index = {token: i for i, (_label, token) in enumerate(normalized_choices)}
+        hover_state: dict[str, Any] = {"index": None}
+        effect_tip = tk.Toplevel(win)
+        effect_tip.withdraw()
+        effect_tip.overrideredirect(True)
+        effect_tip.attributes("-topmost", True)
+        effect_tip.configure(bg=p["surface"])
+        tip_label = ttk.Label(
+            effect_tip,
+            text="",
+            wraplength=460,
+            justify="left",
+            style="TargetPicker.TLabel",
+            padding=(8, 6),
+        )
+        tip_label.pack(fill="both", expand=True)
+
+        def _effect_for_token(token: str) -> str:
+            if self.engine is None:
+                return ""
+            token = str(token or "").strip()
+            inst = self.engine.state.instances.get(token)
+            if inst is None:
+                return ""
+            effect_text = str(getattr(inst.definition, "effect_text", "") or "").strip()
+            if not effect_text:
+                return ""
+            return f"{inst.definition.name}\n{effect_text}"
+
+        def _hide_effect_tip() -> None:
+            try:
+                effect_tip.withdraw()
+            except tk.TclError:
+                pass
+            hover_state["index"] = None
+
+        def _show_effect_tip(idx: int, x_root: int, y_root: int) -> None:
+            if idx < 0 or idx >= len(normalized_choices):
+                _hide_effect_tip()
+                return
+            token = normalized_choices[idx][1]
+            text = _effect_for_token(token)
+            if not text:
+                _hide_effect_tip()
+                return
+            if hover_state.get("index") != idx or str(tip_label.cget("text")) != text:
+                tip_label.configure(text=text)
+                hover_state["index"] = idx
+            try:
+                effect_tip.geometry(f"+{x_root + 16}+{y_root + 14}")
+                effect_tip.deiconify()
+                effect_tip.lift()
+            except tk.TclError:
+                pass
 
         # If manual input is allowed, create an entry field for the player to enter a manual target. The value entered in this field will be considered as a valid selection if it is not empty, regardless of the selections made in the listbox. This allows for flexibility in targeting, enabling players to specify targets that may not be listed as candidates or to use custom tokens that are not recognized by the automatic highlighting system.
         manual_var = tk.StringVar(value="")
@@ -699,8 +752,30 @@ class GUITargetingMixin:
                 selected_tokens.extend(tokens)
 
             _refresh_state()
+            if idxs:
+                sel_idx = idxs[0]
+                try:
+                    bbox = lb.bbox(sel_idx)
+                except tk.TclError:
+                    bbox = None
+                if bbox:
+                    x, y, w, _h = bbox
+                    _show_effect_tip(sel_idx, lb.winfo_rootx() + x + w, lb.winfo_rooty() + y)
+                else:
+                    _hide_effect_tip()
+            else:
+                _hide_effect_tip()
 
         lb.bind("<<ListboxSelect>>", _on_listbox_select)
+        lb.bind(
+            "<Motion>",
+            lambda e: _show_effect_tip(
+                lb.nearest(e.y),
+                e.x_root,
+                e.y_root,
+            ),
+        )
+        lb.bind("<Leave>", lambda _e: _hide_effect_tip())
 
         # Bind click events to the widgets corresponding to the board tokens so that clicking on them will toggle their selection in the target picker dialog. The `_toggle_token` function is called when a token widget is clicked, and it updates the selection state accordingly. The bindings are stored in a list so that they can be cleaned up later when the dialog is closed.
         for token in board_tokens:
@@ -717,6 +792,11 @@ class GUITargetingMixin:
                     widget.unbind("<Button-1>", func_id)
                 except tk.TclError:
                     pass
+            _hide_effect_tip()
+            try:
+                effect_tip.destroy()
+            except tk.TclError:
+                pass
             self._clear_slot_highlights()
 
         # This function is called when the OK button is clicked in the target picker dialog. It first checks if there is a valid manual input if manual input is allowed. If there is a valid manual input, it sets the result value to the manual input and closes the dialog. If there is no valid manual input, it checks if the current selection of tokens is valid according to the specified criteria (e.g., minimum and maximum number of targets). If the selection is not valid, it shows a warning message to the user indicating what the requirements are for a valid selection. If the selection is valid, it sets the result value to a comma-separated string of the selected tokens (or None if no tokens are selected and allow_none is True), cleans up the bindings and highlights, and closes the dialog.
