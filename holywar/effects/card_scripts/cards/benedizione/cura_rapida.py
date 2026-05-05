@@ -22,7 +22,7 @@ SCRIPT = {
             },
             "effect": {
                 "action": "increase_faith",
-                "amount": 3,
+                "amount": 6,
             },
         }
     ],

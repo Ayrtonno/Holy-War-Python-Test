@@ -2849,7 +2849,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Pesca 3 carte.",
+    "effect_text": "Manda una tua carta dalla mano al cimitero. Pesca 3 carte.",
     "expansion": "NEU-1",
     "is_token": false,
     "aliases": []
@@ -2871,7 +2871,7 @@
     "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Ripristina la Fede di un Santo bersaglio al suo valore iniziale.",
+    "effect_text": "Un tuo Santo bersaglio riceve Fede pari alla sua fede iniziale.",
     "expansion": "NEU-1",
     "is_token": false,
     "aliases": []
@@ -2981,5 +2981,49 @@
     "strength": null,
     "effect_text": "Cerca e manda 3 carte dal tuo reliquiario al cimitero. Rimuovi 5 peccato.",
     "expansion": "EGI-1"
+  },
+  {
+    "name": "Elementi della Creazione",
+    "card_type": "Benedizione",
+    "crosses": "8",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Se hai almeno due zone artefatto libere, cerca nel tuo cimitero o reliquiario due dei seguenti artefatti: \"Terra\", \"Aria\", \"Fuoco\" e \"Acqua\". Posizionali sul terreno.",
+    "expansion": "CRI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Mutazione Divina",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Sostituisci un tuo artefatto \"Terra\", \"Aria\", \"Fuoco\" o \"Acqua\" presente sul terreno con uno presente nella tua mano.",
+    "expansion": "CRI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Apparizione",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Se \"Terra\", \"Aria\", \"Fuoco\" e \"Acqua\" sono presenti sul tuo terreno, cerca nel reliquiario o cimitero \"Dio, il Creatore\" e portalo nella tua mano.",
+    "expansion": "CRI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Assalto",
+    "card_type": "Maledizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scarta una carta. Distruggi un artefatto avversario.",
+    "expansion": "NEU-1",
+    "is_token": false,
+    "aliases": []
   }
 ]

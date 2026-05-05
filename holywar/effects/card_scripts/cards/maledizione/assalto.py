@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-CARD_NAME = 'Meditazione'
+CARD_NAME = "Assalto"
 
 SCRIPT = {
     "on_play_mode": "scripted",
@@ -20,8 +20,15 @@ SCRIPT = {
             "effect": {"action": "send_to_graveyard"},
         },
         {
-            "target": {"type": "source_card"},
-            "effect": {"action": "draw_cards", "amount": 3, "target_player": "me"},
+            "target": {
+                "type": "selected_target",
+                "zone": "field",
+                "owner": "opponent",
+                "card_filter": {"card_type_in": ["artefatto"]},
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+            "effect": {"action": "send_to_graveyard"},
         },
-    ]
+    ],
 }

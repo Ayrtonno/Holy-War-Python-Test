@@ -490,6 +490,8 @@ class GUIDeckManagerMixin:
         }
         unique_cards = 0
         crosses_sum = 0
+        strength_sum = 0
+        faith_sum = 0
         for key, qty_raw in self._deck_editor_cards.items():
             qty = int(qty_raw or 0)
             if qty <= 0:
@@ -507,6 +509,10 @@ class GUIDeckManagerMixin:
             cval = self._cross_value(str(getattr(card, "crosses", "")))
             if cval is not None:
                 crosses_sum += cval * qty
+            strength = int(getattr(card, "strength", 0) or 0)
+            faith = int(getattr(card, "faith", 0) or 0)
+            strength_sum += strength * qty
+            faith_sum += faith * qty
 
         lines = [
             f"Totale carte reliquiario: {total}",
@@ -529,6 +535,8 @@ class GUIDeckManagerMixin:
             lines.append("Note:")
             lines.extend(f"- {m}" for m in soft)
         avg_crosses = (crosses_sum / total) if total > 0 else 0.0
+        avg_strength = (strength_sum / total) if total > 0 else 0.0
+        avg_faith = (faith_sum / total) if total > 0 else 0.0
         meta_lines = [
             "Composizione attuale:",
             f"Santi: {type_counts['santo']}",
@@ -541,6 +549,8 @@ class GUIDeckManagerMixin:
             "Metriche deck:",
             f"Carte uniche: {unique_cards}",
             f"Media Croci: {avg_crosses:.2f}",
+            f"Forza media: {avg_strength:.2f}",
+            f"Fede media: {avg_faith:.2f}",
         ]
         if type_counts["other"] > 0:
             meta_lines.append(f"Altre tipologie: {type_counts['other']}")

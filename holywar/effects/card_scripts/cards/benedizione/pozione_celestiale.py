@@ -21,7 +21,7 @@ SCRIPT = {
                 "max_targets": 1,
             },
             "effect": {
-                "action": "restore_faith_to_base",
+                "action": "reset_faith_to_base",
             },
         },
     ],

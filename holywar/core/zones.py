@@ -421,28 +421,36 @@ def move_graveyard_card_to_deck_bottom(engine: "GameEngine", player_idx: int, ui
 def place_card_from_uid(engine: "GameEngine", player_idx: int, uid: str, zone: str, slot: int) -> bool:
     player = engine.state.players[player_idx]
     z = zone.strip().lower()
+    placed = False
     if z == "attack":
         if not (0 <= slot < ATTACK_SLOTS) or player.attack[slot] is not None:
             return False
         player.attack[slot] = uid
-        return True
-    if z == "defense":
+        placed = True
+    elif z == "defense":
         if not (0 <= slot < DEFENSE_SLOTS) or player.defense[slot] is not None:
             return False
         player.defense[slot] = uid
         promote_defense_frontline(engine, player_idx)
-        return True
-    if z in {"artifact", "artifacts"}:
+        placed = True
+    elif z in {"artifact", "artifacts"}:
         if not (0 <= slot < ARTIFACT_SLOTS) or player.artifacts[slot] is not None:
             return False
         player.artifacts[slot] = uid
-        return True
-    if z == "building":
+        placed = True
+    elif z == "building":
         if player.building is not None:
             return False
         player.building = uid
-        return True
-    return False
+        placed = True
+    if not placed:
+        return False
+
+    # Ensure triggered effects are always bound when a card enters the field,
+    # regardless of whether it was played from hand or moved from other zones.
+    from holywar.effects.runtime import runtime_cards
+    runtime_cards.on_enter_bind_triggers(engine, player_idx, uid)
+    return True
 
 
 # Lists all currently empty board slots for the requested zone.

@@ -4274,6 +4274,14 @@ class RuntimeEffectsMixin:
         if hand_size_lte is not None:
             if len(ctx.engine.state.players[owner_idx].hand) > int(hand_size_lte):
                 return False
+        free_artifact_slots_gte = condition.get("controller_free_artifact_slots_gte")
+        if free_artifact_slots_gte is not None:
+            player = ctx.engine.state.players[owner_idx]
+            blocked_slots = query_ops.get_blocked_artifact_slots_for_player(ctx.engine, owner_idx)
+            usable_slots = [idx for idx in range(state.ARTIFACT_SLOTS) if idx not in blocked_slots]
+            free_slots = sum(1 for idx in usable_slots if player.artifacts[idx] is None)
+            if free_slots < int(free_artifact_slots_gte):
+                return False
         saints_to_graveyard_gte = condition.get("controller_saints_sent_to_graveyard_this_turn_gte")
         if saints_to_graveyard_gte is not None:
             counts = ctx.engine.state.flags.get("saints_sent_to_graveyard_this_turn", {"0": 0, "1": 0})

@@ -66,6 +66,7 @@ SUPPORTED_CONDITION_KEYS = {
     "event_card_name_contains",
     "target_is_damaged",
     "controller_hand_size_lte",
+    "controller_free_artifact_slots_gte",
     "stored_card_matches",
     "source_counter_gte",
     "controller_saints_sent_to_graveyard_this_turn_gte",

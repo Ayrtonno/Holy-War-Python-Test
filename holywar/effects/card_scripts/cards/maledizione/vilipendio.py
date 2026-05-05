@@ -11,7 +11,7 @@ SCRIPT = {
     "on_play_actions": [
         {
             "target": {"type": "source_card"},
-            "effect": {"action": "inflict_sin", "amount": 15, "target_player": "opponent"},
+            "effect": {"action": "inflict_sin", "amount": 10, "target_player": "opponent"},
         },
     ],
 }

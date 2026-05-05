@@ -8,7 +8,11 @@ SCRIPT = {
     "on_activate_mode": "auto",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_opponent_draws", "frequency": "each_turn"},
+            "trigger": {
+                "event": "on_card_drawn",
+                "frequency": "each_turn",
+                "condition": {"event_card_owner": "opponent"},
+            },
             "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
             "effect": {"action": "av_drna_on_opponent_draw"}
         }
