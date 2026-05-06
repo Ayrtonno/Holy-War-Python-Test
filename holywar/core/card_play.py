@@ -42,6 +42,26 @@ def _name_haystack(inst: "CardInstance") -> str:
     return " ".join(_norm(part) for part in parts if str(part).strip())
 
 
+def _is_piaga_blessing_or_curse(inst: "CardInstance") -> bool:
+    ctype = _norm(inst.definition.card_type)
+    return ctype in QUICK_TYPES and "piaga" in _norm(inst.definition.name)
+
+
+def _consume_piaga_once_per_turn(
+    engine: "GameEngine",
+    player_idx: int,
+    inst: "CardInstance",
+) -> ActionResult | None:
+    if not _is_piaga_blessing_or_curse(inst):
+        return None
+    used = engine.state.flags.setdefault("piaga_effect_used_turn", {})
+    key = f"{player_idx}:{_norm(inst.definition.name)}"
+    if int(used.get(key, -1)) == int(engine.state.turn_number):
+        return ActionResult(False, f"{inst.definition.name}: effetto non puo essere attivato piu di una volta per turno.")
+    used[key] = int(engine.state.turn_number)
+    return None
+
+
 def _all_field_uids_for_player(engine: "GameEngine", player_idx: int) -> list[str]:
     player = engine.state.players[player_idx]
     out = [uid for uid in (player.attack + player.defense + player.artifacts) if uid]
@@ -249,6 +269,7 @@ def _consume_scripted_play_costs(
     script = runtime_cards.get_script(card.definition.name)
     if script is None:
         return None, 0
+    is_portatore = _norm(card.definition.name) == _norm("Portatore delle Piaghe")
     sacrificed_total_faith = 0
     mark_sacrifices_no_sin = bool(script.play_requirements.get("play_sacrifices_no_sin_on_death", False))
     sacrifice_to_zone = _norm(str(script.play_requirements.get("play_sacrifices_to_zone", "graveyard")))
@@ -265,6 +286,11 @@ def _consume_scripted_play_costs(
             requested = [v.strip() for v in raw_selected.split(",") if v.strip()]
             allowed = set(candidates)
             selected_uids = [uid for uid in requested if uid in allowed]
+            if is_portatore:
+                engine.state.log(
+                    "DEBUG_PORTATORE summon:sacrifice_selection "
+                    f"requested={requested} allowed={list(allowed)} selected={selected_uids}"
+                )
             if len(selected_uids) < count:
                 return (
                     ActionResult(False, f"Per giocare {card.definition.name} devi selezionare {count} carta/e da sacrificare."),
@@ -276,15 +302,45 @@ def _consume_scripted_play_costs(
         for uid in selected_uids:
             sacr_inst = engine.state.instances[uid]
             owner = sacr_inst.owner
+            if is_portatore:
+                before_zone = engine._locate_uid_zone(owner, uid)
+                engine.state.log(
+                    "DEBUG_PORTATORE summon:sacrifice_before "
+                    f"uid={uid} name={sacr_inst.definition.name!r} owner={owner} zone={before_zone}"
+                )
             sacrificed_total_faith += max(0, int(sacr_inst.definition.faith or 0))
             if mark_sacrifices_no_sin and "no_sin_on_death" not in sacr_inst.blessed:
                 sacr_inst.blessed.append("no_sin_on_death")
             if sacrifice_to_zone == "excommunicated":
                 from_zone = engine._locate_uid_zone(owner, uid)
-                from_zone_override = from_zone if from_zone != "unknown" else None
-                engine.excommunicate_card(owner, uid, from_zone_override=from_zone_override)
+                if from_zone in {"attack", "defense", "artifact", "building"}:
+                    from_zone_override = from_zone if from_zone != "unknown" else None
+                    engine.excommunicate_card(owner, uid, from_zone_override=from_zone_override)
+                else:
+                    owner_player = engine.state.players[owner]
+                    if uid in owner_player.hand:
+                        owner_player.hand.remove(uid)
+                    if uid in owner_player.deck:
+                        owner_player.deck.remove(uid)
+                    if uid in owner_player.graveyard:
+                        owner_player.graveyard.remove(uid)
+                    if uid in owner_player.white_deck:
+                        owner_player.white_deck.remove(uid)
+                    if uid not in owner_player.excommunicated:
+                        owner_player.excommunicated.append(uid)
             else:
                 engine.send_to_graveyard(owner, uid)
+            if is_portatore:
+                after_zone = engine._locate_uid_zone(owner, uid)
+                engine.state.log(
+                    "DEBUG_PORTATORE summon:sacrifice_after "
+                    f"uid={uid} name={sacr_inst.definition.name!r} zone={after_zone}"
+                )
+        if is_portatore:
+            engine.state.log(
+                "DEBUG_PORTATORE summon:sacrifice_done "
+                f"count={len(selected_uids)} total_faith={sacrificed_total_faith}"
+            )
         return None, sacrificed_total_faith
 
     # Legacy single-card sacrifice by name requirement for backward compatibility with older scripts. This checks for the "can_play_by_sacrificing_specific_card_from_field" requirement and processes it by finding a card with the specified name on the player's field and sacrificing it. This allows older card scripts that use this specific requirement to still function without needing to be updated to the new format.
@@ -583,6 +639,11 @@ def play_card(engine: "GameEngine", player_idx: int, hand_index: int, target: st
     if not can_play:
         return ActionResult(False, reason or "Non puoi giocare questa carta.")
 
+    if ctype in QUICK_TYPES:
+        piaga_limit = _consume_piaga_once_per_turn(engine, player_idx, card)
+        if piaga_limit is not None:
+            return piaga_limit
+
     # Validate placement constraints based on card type and target, ensuring that the card can be played in the intended location and context according to the game rules and any specific requirements for that card type.
     is_valid, error_message, place_owner_idx, zone, slot = validate_play_constraints(engine, player_idx, card, placement_target)
     if not is_valid:
@@ -689,6 +750,10 @@ def quick_play(engine: "GameEngine", player_idx: int, hand_index: int, target: s
     is_quick_override = bool(quick_cfg.get("allow_quick_play_out_of_turn", False))
     if ctype not in QUICK_TYPES and not is_quick_override:
         return ActionResult(False, "Solo Benedizione/Maledizione (o carte con Quick Play dedicato) sono giocabili fuori turno.")
+    if ctype in QUICK_TYPES:
+        piaga_limit = _consume_piaga_once_per_turn(engine, player_idx, card)
+        if piaga_limit is not None:
+            return piaga_limit
     uid = player.hand.pop(hand_index)
     emit_play_events(engine, player_idx, uid, ctype, target)
 

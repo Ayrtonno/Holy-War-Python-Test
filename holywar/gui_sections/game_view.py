@@ -16,6 +16,17 @@ class GUIGameViewMixin:
     if TYPE_CHECKING:
         def __getattr__(self, _name: str) -> Any: ...
 
+    def _ui_alive(self) -> bool:
+        try:
+            if int(self.winfo_exists()) != 1:
+                return False
+            label = getattr(self, "info_label", None)
+            if label is not None and int(label.winfo_exists()) != 1:
+                return False
+            return True
+        except Exception:
+            return False
+
     def _ai_runtime_card_value(self, uid: str) -> int:
         if self.engine is None:
             return 0
@@ -142,7 +153,7 @@ class GUIGameViewMixin:
 
     # This method refreshes the game view by updating the display of player resources, card slots, hand, and logs based on the current state of the game engine. It retrieves the relevant information for both players, updates the labels and widgets accordingly, and handles any necessary visual highlights for equipped cards. The method also checks for any runtime reveal prompts that may need to be displayed and updates the status message to reflect the current game situation.
     def refresh(self) -> None:
-        if self.engine is None:
+        if self.engine is None or not self._ui_alive():
             return
         if hasattr(self, "_capture_replay_snapshot_if_changed"):
             self._capture_replay_snapshot_if_changed()
@@ -192,11 +203,14 @@ class GUIGameViewMixin:
                 prio = st.players[self.chain_priority_idx].name
                 status += f" | CATENA: priorita {prio} (OK Catena = passa)"
             self.status_var.set(status)
-        self.after_idle(self._maybe_show_runtime_reveal)
+        try:
+            self.after_idle(self._maybe_show_runtime_reveal)
+        except Exception:
+            return
 
     # This method checks if there is a pending runtime reveal prompt that needs to be displayed to the player. It verifies the relevant flags in the game engine's state to determine if a reveal is waiting, retrieves the card instance to be revealed, and displays the appropriate prompt or information to the player. The method also handles any choices that may be associated with the reveal and updates the game state accordingly after the player interacts with the prompt.
     def _maybe_show_runtime_reveal(self) -> None:
-        if self.engine is None or self._reveal_prompt_open:
+        if self.engine is None or self._reveal_prompt_open or not self._ui_alive():
             return
 
         flags = self.engine.state.flags
@@ -248,7 +262,8 @@ class GUIGameViewMixin:
                 flags.pop("_runtime_reveal_card", None)
                 runtime_cards.resume_pending_effect(self.engine)
                 self._reveal_prompt_last_uid = ""
-                self.refresh()
+                if self._ui_alive():
+                    self.refresh()
                 return
 
         inst = self.engine.state.instances.get(reveal_uid)
@@ -350,8 +365,9 @@ class GUIGameViewMixin:
         self._post_reveal_chain_actor = None
         self._reveal_prompt_last_uid = ""
 
-        self.refresh()
-        if pending_actor is not None:
+        if self._ui_alive():
+            self.refresh()
+        if pending_actor is not None and self._ui_alive():
             self.start_chain(actor_idx=pending_actor)
 
     # This method updates the resource panel for a player by setting the text of the labels and progress bar to reflect the player's current name, sin level, inspiration, hand size, and deck size. It takes the index of the panel to update and the player object as parameters, and it ensures that the displayed information is accurate based on the player's current state in the game.

@@ -1005,6 +1005,11 @@ class GUIGameActionsMixin:
             return
         choices = [(self._format_guided_candidate(c_uid, own_idx), c_uid) for c_uid in candidates]
         card_name = inst.definition.name if inst is not None else "Carta"
+        if _norm(card_name) == _norm("Portatore delle Piaghe") and self.engine is not None:
+            self.engine.state.log(
+                "DEBUG_PORTATORE ui:sacrifice_picker_open "
+                f"zone_target={zone_target!r} count={count} candidates={candidates}"
+            )
         canceled, selected = self._open_board_target_picker(
             title=f"{card_name} - Sacrificio",
             prompt=f"Seleziona {count} carta/e da sacrificare.",
@@ -1017,7 +1022,11 @@ class GUIGameActionsMixin:
             card_uid=uid,
         )
         if canceled or not selected:
+            if _norm(card_name) == _norm("Portatore delle Piaghe") and self.engine is not None:
+                self.engine.state.log("DEBUG_PORTATORE ui:sacrifice_picker_cancelled")
             return
+        if _norm(card_name) == _norm("Portatore delle Piaghe") and self.engine is not None:
+            self.engine.state.log(f"DEBUG_PORTATORE ui:sacrifice_picker_selected selected={selected!r}")
         target = f"{zone_target}|sac:{selected}"
         self.play_uid(uid, target)
 

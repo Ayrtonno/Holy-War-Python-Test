@@ -215,7 +215,12 @@ class RuntimeResolutionMixin:
             ):
                 continue
 
-            targets = self._resolve_targets(engine, owner_idx, action.target)
+            effect_action = _norm(action.effect.action)
+            target_type = _norm(action.target.type)
+            if effect_action == "choose_targets" and target_type in {"selected_target", "selected_targets"}:
+                targets = self._collect_selectable_targets_for_manual_target(engine, owner_idx, action.target)
+            else:
+                targets = self._resolve_targets(engine, owner_idx, action.target)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
 
             # If the effect application resulted in a state where the resolution is waiting for a reveal (e.g., waiting for the player to reveal a card or make a choice), set the appropriate flags to allow the resolution to be resumed later. This includes storing the index of the next action to execute, the source of the effect, and the owner of the effect. The method then breaks out of the loop, pausing further resolution until the necessary input is provided.
@@ -370,6 +375,9 @@ class RuntimeResolutionMixin:
         # Convert the owner index from the raw string format stored in the flags to an integer. This is necessary because runtime flags are typically stored as strings, but the owner index needs to be an integer for further processing. If the conversion fails, it would raise a ValueError, but in this context we assume that the data in the flags is well-formed.
         owner_idx = int(owner_idx_raw)
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
+        card_type = _norm(inst.definition.card_type)
+        normalized_name = _norm(inst.definition.name)
+        is_piaga_blessing_or_curse = card_type in {"benedizione", "maledizione"} and "piaga" in normalized_name
         start_index = int(flags.get("_runtime_action_index_resume", 0))
         mode = str(flags.get("_runtime_pending_mode", "")).strip().lower()
         previous_source = flags.get("_runtime_effect_source")
@@ -379,7 +387,32 @@ class RuntimeResolutionMixin:
         # The method then checks the mode of the pending effect (e.g., play, enter, activate, trigger_action) and calls the appropriate method to continue executing the remaining actions for that mode. If the mode is "play", it calls `_run_play_actions`; if it's "enter", it calls `_run_enter_actions`; if it's "activate", it calls `_run_activate_actions`. If the mode is "trigger_action", it retrieves the specific action to trigger from the flags and applies that effect directly. After attempting to resume the effect, it clears the relevant runtime flags to clean up the state.
         try:
             if mode == "play":
-                self._run_play_actions(engine, owner_idx, source_uid, script.on_play_actions, start_index=start_index)
+                copied_uid = str(flags.get("_runtime_copied_play_card", "")).strip()
+                if copied_uid and copied_uid in engine.state.instances:
+                    copied_inst = engine.state.instances[copied_uid]
+                    copied_script = self._scripts.get(_norm(copied_inst.definition.name), CardScript(name=copied_inst.definition.name))
+                    copied_actions = list(copied_script.on_play_actions or [])
+                    prepared_actions: list[ActionSpec] = []
+                    for action_spec in copied_actions:
+                        ttype = _norm(action_spec.target.type)
+                        should_force_picker = ttype in {"selected_target", "selected_targets"}
+                        if should_force_picker:
+                            prepared_actions.append(
+                                ActionSpec(
+                                    target=action_spec.target,
+                                    effect=EffectSpec(
+                                        action="choose_targets",
+                                        min_targets=action_spec.target.min_targets,
+                                        max_targets=action_spec.target.max_targets,
+                                    ),
+                                    condition=action_spec.condition,
+                                )
+                            )
+                        prepared_actions.append(action_spec)
+                    flags["_runtime_force_manual_selected_target"] = True
+                    self._run_play_actions(engine, owner_idx, source_uid, prepared_actions, start_index=start_index)
+                else:
+                    self._run_play_actions(engine, owner_idx, source_uid, script.on_play_actions, start_index=start_index)
             elif mode == "enter":
                 self._run_enter_actions(engine, owner_idx, source_uid, script.on_enter_actions, start_index=start_index)
             elif mode == "activate":
@@ -436,6 +469,8 @@ class RuntimeResolutionMixin:
                 flags.pop("_runtime_trigger_to_zone", None)
                 flags.pop("_runtime_trigger_to_zone_if", None)
                 flags.pop("_runtime_trigger_shuffle_after", None)
+                flags.pop("_runtime_copied_play_card", None)
+                flags.pop("_runtime_force_manual_selected_target", None)
 
     # This method executes the on-enter actions defined in a card's script when the card enters the field. It iterates through the list of actions, checks any conditions for each action, resolves targets, and applies effects accordingly. If at any point an action requires a player input or reveal that cannot be immediately resolved, it sets flags to indicate that it is waiting for a reveal and stores the current state of the resolution so that it can be resumed later when the necessary input is provided. This allows for complex interactions and timing during the resolution of card effects when a card enters the field.
     def _run_enter_actions(
