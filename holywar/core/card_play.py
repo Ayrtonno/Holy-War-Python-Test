@@ -269,7 +269,6 @@ def _consume_scripted_play_costs(
     script = runtime_cards.get_script(card.definition.name)
     if script is None:
         return None, 0
-    is_portatore = _norm(card.definition.name) == _norm("Portatore delle Piaghe")
     sacrificed_total_faith = 0
     mark_sacrifices_no_sin = bool(script.play_requirements.get("play_sacrifices_no_sin_on_death", False))
     sacrifice_to_zone = _norm(str(script.play_requirements.get("play_sacrifices_to_zone", "graveyard")))
@@ -286,11 +285,6 @@ def _consume_scripted_play_costs(
             requested = [v.strip() for v in raw_selected.split(",") if v.strip()]
             allowed = set(candidates)
             selected_uids = [uid for uid in requested if uid in allowed]
-            if is_portatore:
-                engine.state.log(
-                    "DEBUG_PORTATORE summon:sacrifice_selection "
-                    f"requested={requested} allowed={list(allowed)} selected={selected_uids}"
-                )
             if len(selected_uids) < count:
                 return (
                     ActionResult(False, f"Per giocare {card.definition.name} devi selezionare {count} carta/e da sacrificare."),
@@ -302,12 +296,6 @@ def _consume_scripted_play_costs(
         for uid in selected_uids:
             sacr_inst = engine.state.instances[uid]
             owner = sacr_inst.owner
-            if is_portatore:
-                before_zone = engine._locate_uid_zone(owner, uid)
-                engine.state.log(
-                    "DEBUG_PORTATORE summon:sacrifice_before "
-                    f"uid={uid} name={sacr_inst.definition.name!r} owner={owner} zone={before_zone}"
-                )
             sacrificed_total_faith += max(0, int(sacr_inst.definition.faith or 0))
             if mark_sacrifices_no_sin and "no_sin_on_death" not in sacr_inst.blessed:
                 sacr_inst.blessed.append("no_sin_on_death")
@@ -330,17 +318,6 @@ def _consume_scripted_play_costs(
                         owner_player.excommunicated.append(uid)
             else:
                 engine.send_to_graveyard(owner, uid)
-            if is_portatore:
-                after_zone = engine._locate_uid_zone(owner, uid)
-                engine.state.log(
-                    "DEBUG_PORTATORE summon:sacrifice_after "
-                    f"uid={uid} name={sacr_inst.definition.name!r} zone={after_zone}"
-                )
-        if is_portatore:
-            engine.state.log(
-                "DEBUG_PORTATORE summon:sacrifice_done "
-                f"count={len(selected_uids)} total_faith={sacrificed_total_faith}"
-            )
         return None, sacrificed_total_faith
 
     # Legacy single-card sacrifice by name requirement for backward compatibility with older scripts. This checks for the "can_play_by_sacrificing_specific_card_from_field" requirement and processes it by finding a card with the specified name on the player's field and sacrificing it. This allows older card scripts that use this specific requirement to still function without needing to be updated to the new format.

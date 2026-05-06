@@ -2061,17 +2061,6 @@ class RuntimeEffectsMixin:
             choice_source = str(flags.get("_runtime_choice_source", "")).strip()
             choice_ready = bool(flags.get("_runtime_choice_ready"))
             expected_choice_source = f"{source_uid}:choose_and_activate_effect:{target}"
-            source_inst_dbg = engine.state.instances.get(source_uid)
-            is_portatore_dbg = (
-                source_inst_dbg is not None
-                and _norm(source_inst_dbg.definition.name) == _norm("Portatore delle Piaghe")
-            )
-            if is_portatore_dbg:
-                engine.state.log(
-                    "DEBUG_PORTATORE copy:start "
-                    f"source_uid={source_uid} owner_idx={owner_idx} target_player={target} "
-                    f"choice_ready={choice_ready} choice_source={choice_source!r}"
-                )
 
             conf = {}
             if effect.choice_options and isinstance(effect.choice_options[0], dict):
@@ -2125,17 +2114,8 @@ class RuntimeEffectsMixin:
                             continue
                         candidates.append(uid)
                         seen.add(uid)
-            if is_portatore_dbg:
-                cand_names = [engine.state.instances[u].definition.name for u in candidates if u in engine.state.instances]
-                engine.state.log(
-                    "DEBUG_PORTATORE copy:candidates "
-                    f"count={len(candidates)} names={cand_names}"
-                )
-
             if choice_ready and choice_source == expected_choice_source:
                 selected_uid = str(flags.get("_runtime_choice_selected", "")).strip()
-                if is_portatore_dbg:
-                    engine.state.log(f"DEBUG_PORTATORE copy:choice_selected uid={selected_uid!r}")
                 for key in (
                     "_runtime_choice_source",
                     "_runtime_choice_ready",
@@ -2153,27 +2133,14 @@ class RuntimeEffectsMixin:
                     activation_turn = int(engine.state.turn_number)
                     replay_guard_key = f"{expected_choice_source}:{selected_uid}:{activation_turn}"
                     if str(flags.get("_runtime_choose_copy_guard", "")).strip() == replay_guard_key:
-                        if is_portatore_dbg:
-                            engine.state.log("DEBUG_PORTATORE copy:replay_guard_hit")
                         return
                     flags["_runtime_choose_copy_guard"] = replay_guard_key
                     selected_inst = engine.state.instances[selected_uid]
                     selected_script = self._scripts.get(_norm(selected_inst.definition.name), CardScript(name=selected_inst.definition.name))
                     copied_actions = list(selected_script.on_play_actions or [])
-                    if is_portatore_dbg:
-                        engine.state.log(
-                            "DEBUG_PORTATORE copy:script "
-                            f"selected_name={selected_inst.definition.name!r} actions={len(copied_actions)}"
-                        )
                     if copied_actions:
                         prepared_actions: list[ActionSpec] = []
                         for action_spec in copied_actions:
-                            if is_portatore_dbg:
-                                engine.state.log(
-                                    "DEBUG_PORTATORE copy:action "
-                                    f"target_type={_norm(action_spec.target.type)} effect={_norm(action_spec.effect.action)} "
-                                    f"min={action_spec.target.min_targets} max={action_spec.target.max_targets}"
-                                )
                             ttype = _norm(action_spec.target.type)
                             should_force_picker = ttype in {"selected_target", "selected_targets"}
                             if should_force_picker:
@@ -2197,27 +2164,16 @@ class RuntimeEffectsMixin:
                         try:
                             # Keep Portatore as source card: copy resolves selected effect block
                             # without moving/materializing the selected template card.
-                            if is_portatore_dbg:
-                                engine.state.log(
-                                    "DEBUG_PORTATORE copy:run_actions "
-                                    f"count={len(prepared_actions)} source_uid={source_uid}"
-                                )
                             self._run_play_actions(engine, owner_idx, source_uid, prepared_actions)
-                            if is_portatore_dbg:
-                                engine.state.log("DEBUG_PORTATORE copy:run_done")
                         finally:
                             flags["_runtime_selected_target"] = previous_selected
                             if not flags.get("_runtime_waiting_for_reveal"):
                                 flags.pop("_runtime_copied_play_card", None)
                                 flags.pop("_runtime_force_manual_selected_target", None)
-                    elif is_portatore_dbg:
-                        engine.state.log("DEBUG_PORTATORE copy:no_actions")
                     return
                 # stale/invalid selection: fall through and reopen prompt
 
             if not candidates:
-                if is_portatore_dbg:
-                    engine.state.log("DEBUG_PORTATORE copy:no_candidates")
                 return
 
             labels: dict[str, str] = {}
@@ -2242,11 +2198,6 @@ class RuntimeEffectsMixin:
             flags["_runtime_resume_same_action"] = True
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
-            if is_portatore_dbg:
-                engine.state.log(
-                    "DEBUG_PORTATORE copy:prompt_open "
-                    f"title={flags.get('_runtime_choice_title')!r} prompt={flags.get('_runtime_choice_prompt')!r}"
-                )
             return
 
         if action == "choose_targets":

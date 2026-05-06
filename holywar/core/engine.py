@@ -520,12 +520,6 @@ class GameEngine:
             return ActionResult(False, "Sorgente non valida. Usa a1..a3, d1..d3, r1..r4 o b.")
         inst = self.state.instances[uid]
         src_name = inst.definition.name
-        is_portatore = _norm(src_name) == _norm("Portatore delle Piaghe")
-        if is_portatore:
-            self.state.log(
-                f"DEBUG_PORTATORE activate:start player={player_idx} uid={uid} "
-                f"source={source!r} target={target!r} turn={self.state.turn_number}"
-            )
         self.state.log(f"{player.name} attiva l'effetto di {src_name}.")
         if "silenced" in inst.cursed:
             return ActionResult(False, "Questa carta ha i suoi effetti annullati.")
@@ -555,13 +549,9 @@ class GameEngine:
             return ActionResult(True, f"{inst.definition.name}: abilita gia usata in questo turno.")
         can_activate, reason = runtime_cards.can_activate(self, player_idx, uid, target=target)
         if not can_activate:
-            if is_portatore:
-                self.state.log(f"DEBUG_PORTATORE activate:blocked reason={reason!r}")
             self.state.log(f"{src_name}: attivazione fallita. {reason or 'Nessun bersaglio valido disponibile per questa abilita.'}")
             return ActionResult(False, reason or "Nessun bersaglio valido disponibile per questa abilita.")
         msg = resolve_activated_effect(self, player_idx, uid, target)
-        if is_portatore:
-            self.state.log(f"DEBUG_PORTATORE activate:resolved msg={msg!r}")
         if is_piaga_blessing_or_curse:
             self.mark_activated_this_turn(uid)
         self._cleanup_zero_faith_saints()
