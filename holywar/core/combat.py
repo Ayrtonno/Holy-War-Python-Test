@@ -345,7 +345,10 @@ def resolve_targeted_attack(
         if gain:
             attacker.definition.strength = (attacker.definition.strength or 0) + int(gain)
 
-    # Check for any post-battle forced destruction effects from the attacker or defender, which can cause one or both of the combatants to be destroyed after combat based on their definitions and the current game state. This includes checking for effects that trigger on either the attacker or defender that can force the destruction of one or both cards after combat, and applying those effects accordingly.
+    apply_fiamma_primordiale_after_attack(engine, player_idx, defender_idx, attacker_uid)
+
+    # Resolve post-battle forced destruction strictly at the end of combat
+    # so other attack-related effects complete first.
     forced_destroy: list[tuple[int, str]] = []
     attacker_on_board = attacker_uid in (attacker_player.attack + attacker_player.defense)
     defender_on_board = defender_uid in (defender_player.attack + defender_player.defense)
@@ -361,7 +364,6 @@ def resolve_targeted_attack(
         engine.gain_sin(0, faith_val)
         engine.gain_sin(1, faith_val)
 
-    apply_fiamma_primordiale_after_attack(engine, player_idx, defender_idx, attacker_uid)
     engine.check_win_conditions()
     return ActionResult(True, f"Danno inflitto: {damage}.")
 

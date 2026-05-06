@@ -388,13 +388,29 @@ class RuntimeResolutionMixin:
                 action_name = str(flags.get("_runtime_trigger_action", "")).strip()
                 target_player = str(flags.get("_runtime_trigger_target_player", "me")).strip() or "me"
                 trigger_card_name = str(flags.get("_runtime_trigger_card_name", "")).strip() or None
+                trigger_from_zone = str(flags.get("_runtime_trigger_from_zone", "")).strip() or None
+                trigger_to_zone = str(flags.get("_runtime_trigger_to_zone", "")).strip() or None
+                trigger_to_zone_if = str(flags.get("_runtime_trigger_to_zone_if", "")).strip() or None
+                trigger_amount_raw = str(flags.get("_runtime_trigger_amount", "")).strip()
+                trigger_shuffle_after_raw = str(flags.get("_runtime_trigger_shuffle_after", "")).strip().lower()
+                trigger_amount = int(trigger_amount_raw) if trigger_amount_raw else 0
+                trigger_shuffle_after = trigger_shuffle_after_raw in {"1", "true", "yes", "y"}
                 if action_name:
                     self._apply_effect(
                         engine,
                         owner_idx,
                         source_uid,
                         [],
-                        EffectSpec(action=action_name, target_player=target_player, card_name=trigger_card_name),
+                        EffectSpec(
+                            action=action_name,
+                            target_player=target_player,
+                            card_name=trigger_card_name,
+                            from_zone=trigger_from_zone,
+                            to_zone=trigger_to_zone,
+                            to_zone_if=trigger_to_zone_if,
+                            amount=trigger_amount,
+                            shuffle_after=trigger_shuffle_after,
+                        ),
                     )
         finally:
             if previous_source is None:
@@ -416,6 +432,10 @@ class RuntimeResolutionMixin:
                 flags.pop("_runtime_trigger_target_player", None)
                 flags.pop("_runtime_trigger_card_name", None)
                 flags.pop("_runtime_trigger_amount", None)
+                flags.pop("_runtime_trigger_from_zone", None)
+                flags.pop("_runtime_trigger_to_zone", None)
+                flags.pop("_runtime_trigger_to_zone_if", None)
+                flags.pop("_runtime_trigger_shuffle_after", None)
 
     # This method executes the on-enter actions defined in a card's script when the card enters the field. It iterates through the list of actions, checks any conditions for each action, resolves targets, and applies effects accordingly. If at any point an action requires a player input or reveal that cannot be immediately resolved, it sets flags to indicate that it is waiting for a reveal and stores the current state of the resolution so that it can be resumed later when the necessary input is provided. This allows for complex interactions and timing during the resolution of card effects when a card enters the field.
     def _run_enter_actions(
@@ -734,6 +754,9 @@ class RuntimeResolutionMixin:
         type_filter = {_norm(v) for v in target.card_filter.card_type_in}
         event_uid = str(engine.state.flags.get("_runtime_event_card", ""))
         source_uid = str(engine.state.flags.get("_runtime_source_card", ""))
+        scoped_zones = [str(z).strip() for z in (target.zones if target.zones else [target.zone])]
+        scoped_zone_keys = {_norm(z) for z in scoped_zones if z}
+        non_field_move_zones = {"hand", "deck", "relicario", "reliquiary", "graveyard", "grave", "excommunicated", "excom"}
         top_n = target.card_filter.top_n_from_zone
         top_n_allowed: set[str] | None = None
         if top_n is not None and int(top_n) > 0:
@@ -741,6 +764,9 @@ class RuntimeResolutionMixin:
         out: list[str] = []
         for uid in pool:
             if uid not in engine.state.instances:
+                continue
+            # Never allow self-targeting when selecting cards from movable non-field zones.
+            if source_uid and uid == source_uid and bool(scoped_zone_keys.intersection(non_field_move_zones)):
                 continue
             if top_n_allowed is not None and uid not in top_n_allowed:
                 continue

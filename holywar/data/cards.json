@@ -1881,7 +1881,7 @@
     "crosses": "1",
     "faith": null,
     "strength": null,
-    "effect_text": "Equipaggia questa carta a un tuo Santo non danneggiato bersaglio. Dimezza (arrotondando per difetto) la Fede iniziale di quel Santo. Quando quel Santo viene sconfitto, distruggi questa carta.",
+    "effect_text": "Equipaggia questa carta a un tuo Santo. Aggiungi Forza a quel Santo pari alla sua Fede iniziale. Quando quel Santo viene sconfitto, distruggi anche questa carta.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3084,10 +3084,10 @@
   {
     "name": "Piaga: Acque di Sangue",
     "card_type": "Maledizione",
-    "crosses": "4",
+    "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Ogni Santo avversario perde 2 Fede. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "effect_text": "Ogni Santo avversario perde 2 Fede. Puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario. Infine infliggi 1 Peccato a te stesso.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3095,10 +3095,10 @@
   {
     "name": "Piaga: Rane Invasive",
     "card_type": "Maledizione",
-    "crosses": "4",
+    "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Infliggi 6 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "effect_text": "Infliggi 6 Peccato all'avversario e 1 a te stesso. Puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3117,10 +3117,10 @@
   {
     "name": "Piaga: Tenebre d'Egitto",
     "card_type": "Maledizione",
-    "crosses": "5",
+    "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Durante il prossimo turno dell'avversario, pesca 1 carta in meno (minimo 1). Cerca nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "effect_text": "Durante il prossimo turno dell'avversario, pesca 1 carta in meno (minimo 1). Cerca nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario. Infine infliggi 1 Peccato a te stesso.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3128,10 +3128,10 @@
   {
     "name": "Piaga: Morte dei Primogeniti",
     "card_type": "Maledizione",
-    "crosses": "7",
+    "crosses": "8",
     "faith": null,
     "strength": null,
-    "effect_text": "Un Santo avversario perde 6 Fede. Poi infliggi 4 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "effect_text": "Un Santo avversario perde 6 Fede. Infliggi 4 Peccato all'avversario e 1 a te stesso. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3139,10 +3139,10 @@
   {
     "name": "Piaga: Zanzare del Deserto",
     "card_type": "Maledizione",
-    "crosses": "4",
+    "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Ogni Santo avversario perde 3 Fede. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "effect_text": "Ogni Santo avversario perde 3 Fede. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano. Infine, infliggi 1 Peccato a te stesso.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3150,10 +3150,10 @@
   {
     "name": "Piaga: Mosche d'Egitto",
     "card_type": "Maledizione",
-    "crosses": "5",
+    "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Scegli 1 Artefatto o 1 Edificio avversario: distruggilo. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "effect_text": "Scegli 1 Artefatto o 1 Edificio avversario: distruggilo. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario. Infine infliggi 2 Peccato a te stesso.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3161,10 +3161,10 @@
   {
     "name": "Piaga: Ulcere della Carne",
     "card_type": "Maledizione",
-    "crosses": "5",
+    "crosses": "7",
     "faith": null,
     "strength": null,
-    "effect_text": "Scegli fino a 2 Santi avversari: ognuno perde 4 Fede. Poi infliggi 3 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "effect_text": "Scegli fino a 2 Santi avversari: ognuno perde 4 Fede. Poi infliggi 3 Peccato all'avversario e 1 a te stesso. Puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3172,10 +3172,10 @@
   {
     "name": "Piaga: Grandine di Fuoco",
     "card_type": "Maledizione",
-    "crosses": "6",
+    "crosses": "8",
     "faith": null,
     "strength": null,
-    "effect_text": "Ogni Santo avversario perde 3 Fede. Poi puoi distruggere 1 Artefatto avversario. Poi puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario.",
+    "effect_text": "Ogni Santo avversario perde 3 Fede. Poi puoi distruggere 1 Artefatto avversario. Puoi cercare nel tuo reliquiario una carta \"Piaga\", aggiungerla alla tua mano e mischiare il reliquiario. Infine infliggi 2 Peccato a te stesso.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3183,10 +3183,10 @@
   {
     "name": "Piaga: Morte del Bestiame",
     "card_type": "Maledizione",
-    "crosses": "6",
+    "crosses": "8",
     "faith": null,
     "strength": null,
-    "effect_text": "Scegli un santo sul terreno e distruggilo. Poi infliggi 3 Peccato all'avversario. Poi puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
+    "effect_text": "Scegli un santo sul terreno e distruggilo. Poi infliggi 3 Peccato all'avversario e 2 a te stesso. Puoi riprendere dal tuo cimitero una carta \"Piaga\" e aggiungerla alla tua mano.",
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
@@ -3203,4 +3203,5 @@
     "aliases": []
   }
 ]
+
 

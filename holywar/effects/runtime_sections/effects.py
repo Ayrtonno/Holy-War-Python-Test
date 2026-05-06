@@ -725,6 +725,16 @@ class RuntimeEffectsMixin:
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")
             return
+        if action == "increase_strength_equal_to_target_base_faith":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                bonus = max(0, int(inst.definition.faith or 0))
+                if bonus <= 0:
+                    continue
+                inst.blessed.append(f"buff_str:{bonus}")
+            return
         if action == "increase_source_stats_from_zone_count_div":
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
@@ -2081,29 +2091,26 @@ class RuntimeEffectsMixin:
                     "_runtime_choice_max_targets",
                 ):
                     flags.pop(key, None)
-                if selected_uid not in candidates:
+                if selected_uid in candidates and selected_uid in engine.state.instances:
+                    activation_turn = int(engine.state.turn_number)
+                    replay_guard_key = f"{expected_choice_source}:{selected_uid}:{activation_turn}"
+                    if str(flags.get("_runtime_choose_copy_guard", "")).strip() == replay_guard_key:
+                        return
+                    flags["_runtime_choose_copy_guard"] = replay_guard_key
+                    selected_inst = engine.state.instances[selected_uid]
+                    selected_script = self._scripts.get(_norm(selected_inst.definition.name), CardScript(name=selected_inst.definition.name))
+                    copied_actions = list(selected_script.on_play_actions or [])
+                    if copied_actions:
+                        previous_selected = str(flags.get("_runtime_selected_target", ""))
+                        # Defensive: nested choice/reveal flows must not resume this action again.
+                        flags.pop("_runtime_resume_same_action", None)
+                        flags["_runtime_selected_target"] = ""
+                        try:
+                            self._run_play_actions(engine, owner_idx, source_uid, copied_actions)
+                        finally:
+                            flags["_runtime_selected_target"] = previous_selected
                     return
-                if selected_uid not in engine.state.instances:
-                    return
-                activation_turn = int(engine.state.turn_number)
-                replay_guard_key = f"{expected_choice_source}:{selected_uid}:{activation_turn}"
-                if str(flags.get("_runtime_choose_copy_guard", "")).strip() == replay_guard_key:
-                    return
-                flags["_runtime_choose_copy_guard"] = replay_guard_key
-                selected_inst = engine.state.instances[selected_uid]
-                selected_script = self._scripts.get(_norm(selected_inst.definition.name), CardScript(name=selected_inst.definition.name))
-                copied_actions = list(selected_script.on_play_actions or [])
-                if not copied_actions:
-                    return
-                previous_selected = str(flags.get("_runtime_selected_target", ""))
-                # Defensive: nested choice/reveal flows must not resume this action again.
-                flags.pop("_runtime_resume_same_action", None)
-                flags["_runtime_selected_target"] = ""
-                try:
-                    self._run_play_actions(engine, owner_idx, source_uid, copied_actions)
-                finally:
-                    flags["_runtime_selected_target"] = previous_selected
-                return
+                # stale/invalid selection: fall through and reopen prompt
 
             if not candidates:
                 return
@@ -3344,9 +3351,8 @@ class RuntimeEffectsMixin:
                 uid for uid in source_pool
                 if uid in engine.state.instances
                 and (not needle or needle in _norm(engine.state.instances[uid].definition.name))
+                and uid != source_uid
             ]
-            if action == "optional_recover_matching_then_shuffle" and max_to_move > 0:
-                candidates = candidates[:max_to_move]
             candidate_names = [engine.state.instances[uid].definition.name for uid in candidates]
             listed = ", ".join(candidate_names) if candidate_names else "Nessuna carta."
 
@@ -3390,6 +3396,9 @@ class RuntimeEffectsMixin:
                 engine.state.log(f"Effetto opzionale risolto: {moved} carte spostate in {to_zone}.")
                 return
 
+            if not candidates:
+                return
+
             max_select = len(candidates)
             if action == "optional_recover_matching_then_shuffle" and max_to_move > 0:
                 max_select = min(max_select, max_to_move)
@@ -3414,6 +3423,11 @@ class RuntimeEffectsMixin:
             flags["_runtime_trigger_action"] = "optional_recover_matching_then_shuffle"
             flags["_runtime_trigger_target_player"] = str(effect.target_player or "me")
             flags["_runtime_trigger_card_name"] = str(effect.card_name or "")
+            flags["_runtime_trigger_from_zone"] = str(effect.from_zone or effect.zone or "graveyard")
+            flags["_runtime_trigger_to_zone"] = str(effect.to_zone or "relicario")
+            flags["_runtime_trigger_amount"] = str(effect.amount or 0)
+            flags["_runtime_trigger_shuffle_after"] = "1" if bool(effect.shuffle_after) else "0"
+            flags["_runtime_trigger_to_zone_if"] = str(effect.to_zone_if or "")
             return
         if action == "summon_card_from_hand":
             selected = str(engine.state.flags.get("_runtime_selected_target", "")).strip()

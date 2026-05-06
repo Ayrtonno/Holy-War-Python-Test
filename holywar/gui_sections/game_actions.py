@@ -859,6 +859,23 @@ class GUIGameActionsMixin:
         hand = self.engine.state.players[own_idx].hand
         if uid not in hand:
             return
+        inst = self.engine.state.instances.get(uid)
+        script = runtime_cards.get_script(inst.definition.name) if inst is not None else None
+
+        # Ensure sacrifice-picker flow always runs when required by scripted play costs.
+        # This covers non-context-menu play paths (e.g. quick play from selected hand card).
+        if (
+            script is not None
+            and _norm(inst.definition.card_type) in {"santo", "token"}
+            and isinstance(script.play_requirements.get("can_play_by_sacrificing"), dict)
+            and bool(script.play_requirements.get("choose_play_sacrifices_from_target", False))
+        ):
+            raw_target = str(target or "")
+            if "|sac:" not in raw_target.lower():
+                zone_target = raw_target.split("|", 1)[0].strip()
+                if zone_target:
+                    self.play_saint_with_optional_sacrifice(uid, zone_target)
+                    return
         idx = hand.index(uid)
         if self.chain_active:
             ctype = self.engine.state.instances[uid].definition.card_type.lower()

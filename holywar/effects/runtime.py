@@ -100,6 +100,7 @@ SUPPORTED_EFFECT_ACTIONS = {
     "increase_faith",
     "decrease_faith",
     "increase_strength",
+    "increase_strength_equal_to_target_base_faith",
     "calice_upkeep",
     "calice_endturn",
     "add_seal_counter",

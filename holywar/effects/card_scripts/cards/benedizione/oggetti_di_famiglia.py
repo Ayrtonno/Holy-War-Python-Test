@@ -24,12 +24,11 @@ SCRIPT = {
                 "min_targets": 1,
                 "max_targets": 1,
             },
-            "condition": {"not": {"target_is_damaged": True}},
             "effect": {"action": "equip_card"},
         },
         {
             "target": {"type": "equipped_target_of_source"},
-            "effect": {"action": "halve_target_base_faith_rounded_down"},
+            "effect": {"action": "increase_strength_equal_to_target_base_faith"},
         },
     ],
 }

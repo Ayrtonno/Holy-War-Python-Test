@@ -710,5 +710,6 @@ def quick_play(engine: "GameEngine", player_idx: int, hand_index: int, target: s
         engine._cleanup_zero_faith_saints()
         engine.check_win_conditions()
         return ActionResult(True, f"{player.name} attiva {card.definition.name} su {target_card.definition.name}.")
-    return resolve_quick_play_from_hand(engine, player_idx, uid, target)
+    result = resolve_quick_play_from_hand(engine, player_idx, uid, target)
+    return result
 
