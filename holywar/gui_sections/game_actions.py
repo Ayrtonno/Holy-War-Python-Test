@@ -653,6 +653,7 @@ class GUIGameActionsMixin:
             max_targets=3,
             allow_none=True,
             allow_manual=False,
+            card_uid=spell_uid,
         )
         if canceled:
             return (True, None)
@@ -713,6 +714,7 @@ class GUIGameActionsMixin:
             max_targets=3,
             allow_none=True,
             allow_manual=False,
+            card_uid=spell_uid,
         )
         if canceled:
             return (True, None)

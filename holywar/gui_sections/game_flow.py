@@ -329,29 +329,9 @@ class GUIGameFlowMixin:
         # AI side: deterministic first available slot.
         if self._is_ai_player(player_idx):
             return slot_tokens[0]
-
-        inst = self.engine.state.instances.get(source_uid)
-        card_name = inst.definition.name if inst is not None else "questa carta"
-        choices: list[tuple[str, str]] = []
-        for token in slot_tokens:
-            side = "Attacco" if token.startswith("a") else "Difesa"
-            label = f"{side} {token[1:]}"
-            choices.append((label, token))
-
-        canceled, selected = self._open_board_target_picker(
-            title=f"{card_name} - Posizionamento",
-            prompt=f"Scegli dove posizionare {card_name}.",
-            choices=choices,
-            allow_multi=False,
-            min_targets=1,
-            max_targets=1,
-            allow_none=False,
-            allow_manual=False,
-            card_uid=source_uid,
-        )
-        if canceled or not selected:
-            return slot_tokens[0]
-        return str(selected).strip().lower()
+        # Human side: auto-effects should not open looping slot pickers.
+        # Keep deterministic placement by choosing the first valid slot.
+        return str(slot_tokens[0]).strip().lower()
 
     def _choose_auto_play_drawn_card(
         self,

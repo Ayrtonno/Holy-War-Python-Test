@@ -18,6 +18,16 @@ class GUITargetingMixin:
     if TYPE_CHECKING:
         def __getattr__(self, _name: str) -> Any: ...
 
+    def _target_picker_reference_text(self, card_uid: str | None) -> str:
+        if self.engine is None or not card_uid:
+            return "Carta di riferimento: n/d"
+        inst = self.engine.state.instances.get(str(card_uid).strip())
+        if inst is None:
+            return "Carta di riferimento: n/d"
+        card_name = str(inst.definition.name or "").strip() or "Carta sconosciuta"
+        card_type = str(inst.definition.card_type or "").strip() or "tipo sconosciuto"
+        return f"Carta di riferimento: {card_name} ({card_type})"
+
     # This attribute is used to store a snapshot of the game state for simulation purposes. It is initialized as None and is populated with a dictionary representation of the game state when the `_clone_engine` method is called for the first time. The snapshot allows for efficient cloning of the game engine state without needing to serialize and deserialize the entire state multiple times during targeting simulations.
     def _clone_engine(self) -> GameEngine | None:
         if self.engine is None:
@@ -552,7 +562,10 @@ class GUITargetingMixin:
         container = ttk.Frame(win, style="TargetPicker.TFrame", padding=(10, 10))
         container.pack(fill="both", expand=True)
 
-        ttk.Label(container, text=prompt, wraplength=660, style="TargetPicker.TLabel").pack(anchor="w", pady=(0, 4))
+        prompt_text = str(prompt or "").strip() or "Seleziona i bersagli validi."
+        reference_text = self._target_picker_reference_text(card_uid)
+        unified_prompt = f"{prompt_text}\n{reference_text}"
+        ttk.Label(container, text=unified_prompt, wraplength=660, style="TargetPicker.TLabel").pack(anchor="w", pady=(0, 4))
 
         # Display instructions for selecting targets, which may vary depending on whether multiple selection is allowed and if there are limits on the number of targets. If multiple selection is allowed, the instructions will indicate how many targets can be selected, and if there are specific minimum or maximum limits, those will be included in the instructions as well. If multiple selection is not allowed, the instructions will simply indicate that the player can select from the list or by clicking on the field.
         if allow_multi:
