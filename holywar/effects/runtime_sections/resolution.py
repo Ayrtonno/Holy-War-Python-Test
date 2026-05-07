@@ -74,6 +74,142 @@ class RuntimeResolutionMixin:
         def _get_zone_cards(self, engine: GameEngine, owner_idx: int, zone_name: str) -> list[str]: ...
     """Play/enter/activate resolution and trigger binding lifecycle."""
 
+    def _describe_effect_action(self, effect: EffectSpec) -> str:
+        action = _norm(effect.action)
+        amount = int(effect.amount) if isinstance(effect.amount, int) else effect.amount
+        if action == "draw_cards":
+            qty = int(amount or 0)
+            desc = f"pesca {qty} carta" if qty == 1 else f"pesca {qty} carte"
+        elif action == "discard_cards":
+            qty = int(amount or 0)
+            desc = f"scarta {qty} carta" if qty == 1 else f"scarta {qty} carte"
+        elif action == "inflict_damage":
+            qty = int(amount or 0)
+            desc = f"infligge {qty} danno" if qty == 1 else f"infligge {qty} danni"
+        elif action == "restore_faith":
+            qty = int(amount or 0)
+            desc = f"ripristina {qty} Fede"
+        elif action == "increase_faith":
+            qty = int(amount or 0)
+            desc = f"aumenta la Fede di {qty}"
+        elif action == "decrease_faith":
+            qty = int(amount or 0)
+            desc = f"riduce la Fede di {qty}"
+        elif action == "increase_strength":
+            qty = int(amount or 0)
+            desc = f"aumenta la Forza di {qty}"
+        else:
+            base_map = {
+                "destroy_target": "distrugge il bersaglio",
+                "destroy_selected_targets": "distrugge i bersagli selezionati",
+                "inflict_damage_and_self_damage": "infligge danno reciproco",
+                "inflict_sin": "infligge Peccato",
+                "remove_sin": "rimuove Peccato",
+                "add_to_hand": "aggiunge una carta alla mano",
+                "send_to_graveyard": "manda al cimitero",
+                "return_to_reliquiary": "rimanda al reliquiario",
+                "shuffle_deck": "mischia il reliquiario",
+                "summon_token": "evoca un token",
+                "summon_target_to_field": "evoca il bersaglio sul campo",
+                "move_source_to_board": "posiziona questa carta sul campo",
+                "choose_option": "sceglie un'opzione",
+            }
+            desc = base_map.get(action, action.replace("_", " "))
+        extras: list[str] = []
+        if effect.amount not in (None, 0) and action not in {
+            "draw_cards",
+            "discard_cards",
+            "inflict_damage",
+            "restore_faith",
+            "increase_faith",
+            "decrease_faith",
+            "increase_strength",
+        }:
+            extras.append(f"valore {effect.amount}")
+        if str(effect.card_name or "").strip():
+            extras.append(f"carta {effect.card_name}")
+        if str(effect.from_zone or "").strip():
+            extras.append(f"da {effect.from_zone}")
+        if str(effect.to_zone or "").strip():
+            extras.append(f"a {effect.to_zone}")
+        if str(effect.target_player or "").strip():
+            raw_target = str(effect.target_player).strip().lower()
+            target_txt = {"me": "me", "opponent": "avversario", "any": "chiunque"}.get(raw_target, raw_target)
+            extras.append(f"su {target_txt}")
+        if extras:
+            return f"{desc} ({', '.join(extras)})"
+        return desc
+
+    def _should_log_effect_action(self, action_name: str) -> bool:
+        # Internal bookkeeping actions are too noisy for gameplay logs.
+        noisy = {
+            "choose_targets",
+            "store_target_count",
+            "draw_cards_from_flag",
+            "draw_cards_equal_to_flag",
+            "set_flag",
+            "clear_flag",
+            "bind_trigger",
+            "unbind_trigger",
+        }
+        return action_name not in noisy
+
+    def _describe_target_names(self, engine: GameEngine, targets: list[str]) -> str:
+        if not targets:
+            return ""
+        out: list[str] = []
+        for token in targets:
+            inst = engine.state.instances.get(token)
+            if inst is not None:
+                out.append(inst.definition.name)
+            else:
+                out.append(str(token))
+        return ", ".join(out)
+
+    def _log_script_action(self, engine: GameEngine, source_uid: str, effect: EffectSpec, targets: list[str]) -> None:
+        if not bool(engine.state.flags.get("verbose_effect_logs", False)):
+            return
+        source_inst = engine.state.instances.get(source_uid)
+        source_name = source_inst.definition.name if source_inst is not None else source_uid
+        action_name = _norm(effect.action)
+        if not self._should_log_effect_action(action_name):
+            return
+        effect_text = self._describe_effect_action(effect)
+        engine.state.log(f"{source_name} attiva: {effect_text}.")
+        target_text = self._describe_target_names(engine, targets)
+        if target_text:
+            engine.state.log(f"{source_name} seleziona: {target_text}.")
+
+    def _can_resolve_exclusive_trigger_source(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        source_uid: str,
+        trigger: TriggerSpec,
+    ) -> bool:
+        if not bool(trigger.exclusive_trigger_per_turn):
+            return True
+        inst = engine.state.instances.get(source_uid)
+        if inst is None:
+            return False
+        group = str(trigger.exclusive_group or "").strip()
+        event_name = _norm(trigger.event)
+        if not group:
+            group = f"{event_name}:{_norm(inst.definition.name)}"
+        runtime_state = engine.state.flags.setdefault("runtime_state", {})
+        chosen_by_owner = runtime_state.setdefault("exclusive_trigger_source_by_turn", {"0": {}, "1": {}})
+        owner_key = str(owner_idx)
+        owner_bucket = dict(chosen_by_owner.get(owner_key, {}) or {})
+        slot = dict(owner_bucket.get(group, {}) or {})
+        turn = int(engine.state.turn_number)
+        saved_turn = int(slot.get("turn", -1))
+        saved_uid = str(slot.get("uid", "")).strip()
+        if saved_turn != turn or not saved_uid:
+            owner_bucket[group] = {"turn": turn, "uid": source_uid}
+            chosen_by_owner[owner_key] = owner_bucket
+            return True
+        return saved_uid == source_uid
+
     # The following methods implement the logic for resolving card effects and managing triggers during gameplay. They interact with the game engine's state and rules API to determine when effects can be activated, to execute the effects of playing or activating cards, and to handle triggered effects based on game events. The methods also manage pending effects that require player input, allowing for complex interactions and timing during the resolution of card effects.
     def can_play(
         self,
@@ -161,17 +297,17 @@ class RuntimeResolutionMixin:
         try:
             is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"noop", "none"}:
-                return f"{inst.definition.name}: nessun effetto all'ingresso."
+                return "Nessun effetto all'ingresso."
             if mode in {"scripted", "custom"} and script.on_play_actions:
                 self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
-                return f"{inst.definition.name}: effetto risolto via script."
+                return "Effetto risolto."
             if mode == "auto" and script.on_play_actions:
                 self._run_play_actions(engine, player_idx, uid, script.on_play_actions)
-                return f"{inst.definition.name}: effetto risolto via script."
+                return "Effetto risolto."
             if mode in {"scripted", "custom", "auto"} and not script.on_play_actions:
-                return f"{inst.definition.name}: nessun effetto scriptato."
+                return "Nessun effetto scriptato."
             if is_saint:
-                return f"{inst.definition.name}: nessun effetto scriptato."
+                return "Nessun effetto scriptato."
             return self._legacy_removed_message(engine, inst.definition.name, "on_play", mode)
         finally:
             if previous_source is None:
@@ -221,6 +357,7 @@ class RuntimeResolutionMixin:
                 targets = self._collect_selectable_targets_for_manual_target(engine, owner_idx, action.target)
             else:
                 targets = self._resolve_targets(engine, owner_idx, action.target)
+            self._log_script_action(engine, source_uid, action.effect, targets)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
 
             # If the effect application resulted in a state where the resolution is waiting for a reveal (e.g., waiting for the player to reveal a card or make a choice), set the appropriate flags to allow the resolution to be resumed later. This includes storing the index of the next action to execute, the source of the effect, and the owner of the effect. The method then breaks out of the loop, pausing further resolution until the necessary input is provided.
@@ -257,10 +394,10 @@ class RuntimeResolutionMixin:
                 return None
             if mode in {"scripted", "custom"} and script.on_enter_actions:
                 self._run_enter_actions(engine, player_idx, uid, script.on_enter_actions)
-                return f"{inst.definition.name}: effetto di ingresso risolto via script."
+                return "Effetto di ingresso risolto."
             if mode == "auto" and script.on_enter_actions:
                 self._run_enter_actions(engine, player_idx, uid, script.on_enter_actions)
-                return f"{inst.definition.name}: effetto di ingresso risolto via script."
+                return "Effetto di ingresso risolto."
             if mode in {"scripted", "custom", "auto"} and not script.on_enter_actions:
                 return None
             if is_saint:
@@ -293,13 +430,13 @@ class RuntimeResolutionMixin:
                 self._run_activate_actions(engine, player_idx, uid, script.on_activate_actions)
                 if script.activate_once_per_turn and not flags.get("_runtime_waiting_for_reveal"):
                     engine.mark_activated_this_turn(uid)
-                return f"{inst.definition.name}: effetto attivato via script."
+                return "Effetto attivato."
             if mode in {"scripted", "custom"} and not script.on_activate_actions:
-                return f"{inst.definition.name}: nessun effetto attivabile."
+                return "Nessun effetto attivabile."
             if mode in {"auto", "noop", "none"}:
-                return f"{inst.definition.name}: nessun effetto attivabile."
+                return "Nessun effetto attivabile."
             if is_saint:
-                return f"{inst.definition.name}: nessun effetto scriptato."
+                return "Nessun effetto scriptato."
             return self._legacy_removed_message(engine, inst.definition.name, "on_activate", mode)
         finally:
             if previous_source is None:
@@ -315,7 +452,7 @@ class RuntimeResolutionMixin:
         _ = engine
         _ = event
         _ = mode
-        return f"{card_name}: nessun effetto scriptato."
+        return "Nessun effetto scriptato."
 
     # This method executes the on-activate actions defined in a card's script when the card's effect is activated. It iterates through the list of actions, checks any conditions for each action, resolves targets, and applies effects accordingly. If at any point an action requires a player input or reveal that cannot be immediately resolved, it sets flags to indicate that it is waiting for a reveal and stores the current state of the resolution so that it can be resumed later when the necessary input is provided. This allows for complex interactions and timing during the activation of card effects.
     def _run_activate_actions(
@@ -342,6 +479,7 @@ class RuntimeResolutionMixin:
             ):
                 continue
             targets = self._resolve_targets(engine, owner_idx, action.target)
+            self._log_script_action(engine, source_uid, action.effect, targets)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
             if flags.get("_runtime_waiting_for_reveal"):
                 if bool(flags.pop("_runtime_resume_same_action", False)):
@@ -498,6 +636,7 @@ class RuntimeResolutionMixin:
             ):
                 continue
             targets = self._resolve_targets(engine, owner_idx, action.target)
+            self._log_script_action(engine, source_uid, action.effect, targets)
             self._apply_effect(engine, owner_idx, source_uid, targets, action.effect)
             if flags.get("_runtime_waiting_for_reveal"):
                 if bool(flags.pop("_runtime_resume_same_action", False)):
@@ -567,6 +706,8 @@ class RuntimeResolutionMixin:
                         return
                     if int(saint_inst.owner) == int(source_inst.owner):
                         return
+                if not self._can_resolve_exclusive_trigger_source(ctx.engine, _owner, _source, _te.trigger):
+                    return
                 if not self._event_matches(ctx, _owner, _te.trigger.condition):
                     return
                 source_inst = ctx.engine.state.instances.get(_source)
@@ -581,6 +722,7 @@ class RuntimeResolutionMixin:
                 ctx.engine.state.flags["_runtime_source_card"] = _source
                 try:
                     targets = self._resolve_targets(ctx.engine, _owner, _te.target)
+                    self._log_script_action(ctx.engine, _source, _te.effect, targets)
                     if not targets:
                         self._apply_effect(ctx.engine, _owner, _source, [], _te.effect)
                         return

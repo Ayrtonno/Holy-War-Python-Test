@@ -254,6 +254,8 @@ class TriggerSpec:
     event: str
     frequency: str = "each_turn"
     condition: dict[str, Any] = field(default_factory=dict)
+    exclusive_trigger_per_turn: bool = False
+    exclusive_group: str = ""
 
 # The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)

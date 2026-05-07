@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 import unicodedata
 from pathlib import Path
 from typing import Callable, Optional
@@ -114,6 +115,50 @@ class GameEngine:
     # Returns the current zone string for a card uid owned by a player.
     def _locate_uid_zone(self, owner_idx: int, uid: str) -> str:
         return zone_ops.locate_uid_zone(self, owner_idx, uid)
+
+    def _describe_selected_target(self, target: str | None) -> str:
+        raw = str(target or "").strip()
+        if not raw:
+            return ""
+        # Skip noise for ordinary board placement tokens.
+        if raw.lower() in {"a1", "a2", "a3", "d1", "d2", "d3", "r1", "r2", "r3", "r4", "b"}:
+            return ""
+        uid_hits = re.findall(r"c\d{5}", raw)
+        if not uid_hits:
+            return raw
+        names: list[str] = []
+        for uid in uid_hits:
+            inst = self.state.instances.get(uid)
+            if inst is None:
+                continue
+            names.append(inst.definition.name)
+        if not names:
+            return raw
+        return f"{raw} ({', '.join(dict.fromkeys(names))})"
+
+    def _clean_effect_outcome(self, source_name: str, message: str | None) -> str:
+        text = str(message or "").strip()
+        if not text:
+            return ""
+        prefix = f"{source_name}:"
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+        text = text.replace("effetto risolto via script.", "Effetto risolto.")
+        text = text.replace("effetto di ingresso risolto via script.", "Effetto di ingresso risolto.")
+        text = text.replace("effetto attivato via script.", "Effetto attivato.")
+        text = text.replace("Carta giocata.", "").strip()
+        text = text.strip(" .")
+        low = text.lower()
+        if low in {
+            "effetto risolto",
+            "effetto attivato",
+            "effetto di ingresso risolto",
+            "nessun effetto scriptato",
+            "nessun effetto all'ingresso",
+            "nessun effetto attivabile",
+        }:
+            return ""
+        return text
 
     # Builds a brand-new game state, decks, and initial hands.
     @staticmethod
@@ -231,10 +276,14 @@ class GameEngine:
             if inst is not None:
                 card_name = inst.definition.name
         self.state.log(f"{player.name} gioca {card_name}.")
+        selected_target = self._describe_selected_target(target)
+        if selected_target:
+            self.state.log(f"{card_name}: bersaglio selezionato -> {selected_target}.")
         result = card_play_ops.play_card(self, player_idx, hand_index, target)
         if result.ok:
-            outcome = str(result.message or "").strip() or "Risoluzione completata."
-            self.state.log(f"{card_name}: effetto risolto. {outcome}")
+            outcome = self._clean_effect_outcome(card_name, result.message)
+            if outcome:
+                self.state.log(f"{card_name}: effetto risolto -> {outcome}.")
         else:
             reason = str(result.message or "").strip() or "Azione non valida."
             self.state.log(f"{card_name}: giocata fallita. {reason}")
@@ -521,6 +570,9 @@ class GameEngine:
         inst = self.state.instances[uid]
         src_name = inst.definition.name
         self.state.log(f"{player.name} attiva l'effetto di {src_name}.")
+        selected_target = self._describe_selected_target(target)
+        if selected_target:
+            self.state.log(f"{src_name}: bersaglio selezionato -> {selected_target}.")
         if "silenced" in inst.cursed:
             return ActionResult(False, "Questa carta ha i suoi effetti annullati.")
         keep_curses: list[str] = []
@@ -556,7 +608,9 @@ class GameEngine:
             self.mark_activated_this_turn(uid)
         self._cleanup_zero_faith_saints()
         self.check_win_conditions()
-        self.state.log(f"{src_name}: effetto risolto. {msg}")
+        outcome = self._clean_effect_outcome(src_name, str(msg))
+        if outcome:
+            self.state.log(f"{src_name}: effetto risolto -> {outcome}.")
         return ActionResult(True, msg)
 
     # Checks whether a card has already used its once-per-turn activation.

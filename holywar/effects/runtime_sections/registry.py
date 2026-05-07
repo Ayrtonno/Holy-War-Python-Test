@@ -226,6 +226,8 @@ class RuntimeRegistryMixin:
                 event=str(trigger_raw.get("event", "")),
                 frequency=str(trigger_raw.get("frequency", "each_turn")),
                 condition=merged_condition,
+                exclusive_trigger_per_turn=bool(trigger_raw.get("exclusive_trigger_per_turn", False)),
+                exclusive_group=str(trigger_raw.get("exclusive_group", "") or ""),
             )
             target = _parse_target(t.get("target", {}) or {})
             effect = _parse_effect(t.get("effect", {}) or {})

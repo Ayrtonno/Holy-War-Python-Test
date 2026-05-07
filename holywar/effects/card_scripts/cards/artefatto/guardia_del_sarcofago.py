@@ -11,6 +11,7 @@ SCRIPT = {
             "trigger": {
                 "event": "on_attack_declared",
                 "frequency": "each_turn",
+                "exclusive_trigger_per_turn": True,
                 "condition": {
                     "all_of": [
                         {"event_card_owner": "opponent"},
@@ -29,6 +30,7 @@ SCRIPT = {
             "trigger": {
                 "event": "on_attack_declared",
                 "frequency": "each_turn",
+                "exclusive_trigger_per_turn": True,
                 "condition": {
                     "all_of": [
                         {"event_card_owner": "opponent"},
@@ -43,6 +45,7 @@ SCRIPT = {
             "trigger": {
                 "event": "on_attack_declared",
                 "frequency": "each_turn",
+                "exclusive_trigger_per_turn": True,
                 "condition": {
                     "all_of": [
                         {"event_card_owner": "opponent"},
