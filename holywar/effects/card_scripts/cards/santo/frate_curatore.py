@@ -9,9 +9,8 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {
-                "event": "on_card_drawn",
+                "event": "on_opponent_draws",
                 "frequency": "each_turn",
-                "condition": {"event_card_owner": "opponent"},
             },
             "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me", "card_filter": {"card_type_in": ["santo", "token"]}},
             "effect": {"action": "increase_faith", "amount": 1},
