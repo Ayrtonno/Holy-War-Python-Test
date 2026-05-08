@@ -738,7 +738,13 @@ class GUIGameActionsMixin:
         picked_parts: list[str] = []
 
         for action_idx, target_spec in manual_actions:
-            candidates = self._guided_target_candidates_for_spec(uid, target_spec)
+            # Use runtime-side selectable target resolution to keep UI choices
+            # perfectly aligned with the actual effect resolver.
+            candidates = runtime_cards._collect_selectable_targets_for_manual_target(  # noqa: SLF001
+                self.engine,
+                own_idx,
+                target_spec,
+            )
 
             min_targets = target_spec.min_targets if target_spec.min_targets is not None else 1
             if target_spec.max_targets_from:
@@ -806,7 +812,15 @@ class GUIGameActionsMixin:
             return
         hand_idx = hand.index(uid)
         is_quick = self.chain_active
-        candidates = self._guided_target_candidates(uid)
+        target_spec = self._first_play_target_spec(uid)
+        if target_spec is not None:
+            candidates = runtime_cards._collect_selectable_targets_for_manual_target(  # noqa: SLF001
+                self.engine,
+                own_idx,
+                target_spec,
+            )
+        else:
+            candidates = self._guided_target_candidates(uid)
         multi = self._card_allows_multi_target(uid)
         min_targets, max_targets = self._target_selection_limits(uid)
         # For multi-target cards (selected_targets), validating one candidate at a time

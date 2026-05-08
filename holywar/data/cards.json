@@ -148,7 +148,7 @@
     "crosses": "5",
     "faith": 6,
     "strength": 2,
-    "effect_text": "Quando questa carta entra in campo, se controlli Altare dei Sette Sigilli, aggiungi 2 Segnalini Sigillo su di esso. Per ogni 6 Segnalini Sigillo su Altare dei Sette Sigilli, questo Santo riceve +3 Forza e +3 Fede.",
+    "effect_text": "Quando questa carta entra in campo, se controlli Altare dei Sette Sigilli, aggiungi 2 Segnalini Sigillo su di esso. Per ogni 3 Segnalini Sigillo su Altare dei Sette Sigilli, questo Santo riceve +4 Forza e +4 Fede.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -401,7 +401,7 @@
     "crosses": "4",
     "faith": null,
     "strength": null,
-    "effect_text": "Distruggi un tuo Santo. Se controlli Altare dei Sette Sigilli, aggiungi 2 Segnalini Sigillo su di esso. Poi pesca una carta.",
+    "effect_text": "Distruggi un tuo Santo. Se controlli Altare dei Sette Sigilli, aggiungi 3 Segnalini Sigillo su di esso. Poi pesca una carta.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -550,6 +550,17 @@
     "aliases": []
   },
   {
+    "name": "Quinto Sigillo: Rovina",
+    "card_type": "Maledizione",
+    "crosses": "8",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli e distruggi 1 Artefatto o Edificio avversario. Se controlli Altare dei Sette Sigilli con almeno 6 Segnalini Sigillo, puoi invece distruggere fino a 2 Artefatti e/o Edifici avversari.",
+    "expansion": "CRI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Rifugio Sacro",
     "card_type": "Artefatto",
     "crosses": "3",
@@ -616,6 +627,17 @@
     "aliases": []
   },
   {
+    "name": "Sesto Sigillo: Ritorno",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Aggiungi alla tua mano un santo dal tuo cimitero. Se controlli Altare dei Sette Sigilli con almeno 6 Segnalini Sigillo, puoi scegliere qualsiasi tipo di carta, escluso Sesto Sigillo.",
+    "expansion": "CRI-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
     "name": "Settimo Sigillo",
     "card_type": "Benedizione",
     "crosses": "8",
@@ -632,7 +654,7 @@
     "crosses": "10",
     "faith": null,
     "strength": null,
-    "effect_text": "Gioca questa carta solo se controlli Altare dei Sette Sigilli con almeno 7 Segnalini Sigillo. Distruggi tutti i Santi sul campo. I Santi distrutti in questo modo non generano Peccato.",
+    "effect_text": "Gioca questa carta solo se controlli Altare dei Sette Sigilli con almeno 7 Segnalini Sigillo. Distruggi tutti i Santi sul campo avversario.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []

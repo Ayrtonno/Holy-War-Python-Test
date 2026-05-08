@@ -1045,10 +1045,15 @@ class RuntimeResolutionMixin:
         previous_action_idx = flags.get("_runtime_action_index")
         manual_actions_present = False
         manual_actions_applicable = False
+        has_choose_option_step = False
 
         flags["_runtime_source_card"] = source_uid
         flags["_runtime_selected_target"] = str(selected_target or "")
         try:
+            for action in actions:
+                if _norm(action.effect.action) == "choose_option":
+                    has_choose_option_step = True
+                    break
             for i, action in enumerate(actions):
                 if not self._target_requires_manual_selection(action.target):
                     continue
@@ -1075,7 +1080,7 @@ class RuntimeResolutionMixin:
                 resolved = self._resolve_targets(engine, owner_idx, action.target)
                 if len(resolved) < required_min:
                     return (False, missing_selection_message)
-            if manual_actions_present and not manual_actions_applicable:
+            if manual_actions_present and not manual_actions_applicable and not has_choose_option_step:
                 return (False, empty_pool_message)
             return (True, None)
         finally:

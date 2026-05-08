@@ -20,12 +20,16 @@ SCRIPT = {
                 "type": "cards_controlled_by_owner",
                 "zone": "deck",
                 "owner": "me",
-                "card_filter": {"script_is_altare_sigilli": True},
+                "card_filter": {
+                    "name_equals": "Altare dei Sette Sigilli",
+                    "card_type_in": ["edificio"],
+                },
                 "max_targets": 1,
             },
             "effect": {"action": "move_to_hand"},
         },
         {
+            "condition": {"not": {"controller_has_building_matching": {"card_filter": {"script_is_altare_sigilli": True}}}},
             "target": {"type": "source_card"},
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },

@@ -1609,13 +1609,25 @@ class RuntimeEffectsMixin:
             amount = max(0, int(effect.amount))
             if amount <= 0:
                 return
-            engine._set_altare_sigilli(owner_idx, engine._get_altare_sigilli(owner_idx) + amount)
+            before = engine._get_altare_sigilli(owner_idx)
+            after = before + amount
+            engine._set_altare_sigilli(owner_idx, after)
+            owner_name = engine.state.players[owner_idx].name
+            engine.state.log(
+                f"Altare dei Sette Sigilli: {owner_name} aggiunge {amount} Segnalini Sigillo ({before}->{after})."
+            )
             return
         if action == "remove_seal_counter":
             amount = max(0, int(effect.amount))
             if amount <= 0:
                 return
-            engine._set_altare_sigilli(owner_idx, max(0, engine._get_altare_sigilli(owner_idx) - amount))
+            before = engine._get_altare_sigilli(owner_idx)
+            after = max(0, before - amount)
+            engine._set_altare_sigilli(owner_idx, after)
+            owner_name = engine.state.players[owner_idx].name
+            engine.state.log(
+                f"Altare dei Sette Sigilli: {owner_name} rimuove {amount} Segnalini Sigillo ({before}->{after})."
+            )
             return
         if action == "decrease_faith":
             amount = int(effect.amount)
@@ -1821,7 +1833,8 @@ class RuntimeEffectsMixin:
             return
         if action == "draw_cards":
             target = self._resolve_player_scope(owner_idx, effect.target_player)
-            engine.draw_cards(target, max(0, int(effect.amount or 1)))
+            amount = 1 if effect.amount is None else int(effect.amount)
+            engine.draw_cards(target, max(0, amount))
             return
         if action == "draw_cards_and_set_play_cost_for_drawn_until_turn_end":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")

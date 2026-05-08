@@ -111,6 +111,37 @@ class GUIGameViewMixin:
             return values[lowered.index("yes")]
         return values[0]
 
+    def _seal_counter_value(self, inst) -> int:
+        if self.engine is not None and runtime_cards.get_is_altare_sigilli(inst.definition.name):
+            try:
+                return int(self.engine._get_altare_sigilli(int(inst.owner)))
+            except Exception:
+                pass
+            for tag in list(inst.blessed):
+                if not isinstance(tag, str) or not tag.startswith("sigilli:"):
+                    continue
+                try:
+                    return int(tag.split(":", 1)[1])
+                except ValueError:
+                    return 0
+        for tag in list(inst.blessed):
+            if not isinstance(tag, str) or not tag.startswith("campana_counter:"):
+                continue
+            try:
+                return int(tag.split(":", 1)[1])
+            except ValueError:
+                return 0
+        return 0
+
+    def _is_altare_sigilli(self, uid: str | None) -> bool:
+        if not uid or self.engine is None:
+            return False
+        inst = self.engine.state.instances.get(uid)
+        if inst is None:
+            return False
+        script = runtime_cards.get_script(inst.definition.name)
+        return bool(script and bool(script.is_altare_sigilli))
+
     # This method arranges the widgets for the attack, defense, artifacts, and building slots in a grid layout within the specified parent frame. It organizes the widgets into rows and columns, with labels indicating the type of slot (attack, defense, artifacts, building) and the corresponding widgets for each slot type. The method uses padding to ensure proper spacing between the widgets and labels for a clean and organized display of the game board elements.
     def _grid_slots(self, parent, attack, defense, artifacts, building) -> None:
         ttk.Label(parent, text="Attacco").grid(row=0, column=0, sticky="w")
@@ -177,12 +208,14 @@ class GUIGameViewMixin:
         self._set_slot_widgets(self.own_defense, own.defense)
         self._set_slot_widgets(self.own_artifacts, own.artifacts, hide_equipped=True)
         self.own_building.configure(text=self.card_label(own.building))
+        self.own_building.configure(fg="#7D3CFF" if self._is_altare_sigilli(own.building) else "black")
         self._apply_equipment_highlight(self.own_building, own.building)
 
         self._set_slot_widgets(self.enemy_attack, enemy.attack)
         self._set_slot_widgets(self.enemy_defense, enemy.defense)
         self._set_slot_widgets(self.enemy_artifacts, enemy.artifacts, hide_equipped=True)
         self.enemy_building.configure(text=self.card_label(enemy.building))
+        self.enemy_building.configure(foreground="#7D3CFF" if self._is_altare_sigilli(enemy.building) else "#222222")
         self._apply_equipment_highlight(self.enemy_building, enemy.building)
         self._apply_blocked_artifact_slot_highlights()
 
@@ -499,17 +532,13 @@ class GUIGameViewMixin:
             strength = f" P:{self.engine.get_effective_strength(uid)}"
         else:
             strength = ""
-        counter_txt = ""
-        for tag in list(inst.blessed):
-            if not isinstance(tag, str) or not tag.startswith("campana_counter:"):
-                continue
-            try:
-                value = int(tag.split(":", 1)[1])
-            except ValueError:
-                value = 0
-            counter_txt = f" S:{value}"
-            break
-        return f"{inst.definition.name}{faith}{strength}{counter_txt}"
+        counter_value = self._seal_counter_value(inst)
+        counter_txt = f" S:{counter_value}" if counter_value > 0 else ""
+        if self._is_altare_sigilli(uid):
+            name = f"[{counter_value}] {inst.definition.name}"
+        else:
+            name = inst.definition.name
+        return f"{name}{faith}{strength}{counter_txt}"
 
     # This method handles the right-click event on a card in the player's hand, providing a context menu with options for playing the card or activating its effects. It checks if the game engine is initialized and if the player can take actions, then determines which card was clicked based on the event's coordinates. Depending on the type of card and the current game state, it generates a context menu with appropriate options for playing the card or activating its effects, including any valid targets for those actions. The method also manages visual highlights for valid targets and ensures that the menu is displayed at the correct location on the screen.
     def on_hand_right_click(self, event) -> None:

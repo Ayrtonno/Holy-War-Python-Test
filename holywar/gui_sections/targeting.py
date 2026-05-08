@@ -211,7 +211,15 @@ class GUITargetingMixin:
     def _valid_play_targets(self, player_idx: int, hand_idx: int, uid: str, quick: bool) -> list[str]:
         if self.engine is None:
             return []
-        candidates = self._guided_target_candidates(uid)
+        target_spec = self._first_play_target_spec(uid)
+        if target_spec is not None:
+            candidates = runtime_cards._collect_selectable_targets_for_manual_target(  # noqa: SLF001
+                self.engine,
+                player_idx,
+                target_spec,
+            )
+        else:
+            candidates = self._guided_target_candidates(uid)
         if not candidates:
             return []
         out: list[str] = []

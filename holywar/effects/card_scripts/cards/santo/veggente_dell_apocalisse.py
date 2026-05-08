@@ -6,25 +6,55 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "scripted",
     "on_activate_mode": "scripted",
+    "activate_once_per_turn": True,
     "play_targeting": "none",
     "activate_targeting": "none",
     "triggered_effects": [],
-    "on_play_actions": [
-        {"effect": {"action": "draw_cards", "amount": 0, "target_player": "me"}},
-    ],
+    "on_play_actions": [],
     "on_enter_actions": [
         {
-            "condition": {"controller_has_card_in_deck_with_name": "Sigillo"},
+            "condition": {
+                "controller_has_cards": {
+                    "owner": "me",
+                    "zone": "deck",
+                    "card_filter": {"name_contains": "Sigillo"},
+                    "min_count": 1,
+                }
+            },
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "deck",
                 "owner": "me",
                 "card_filter": {"name_contains": "Sigillo"},
+            },
+            "effect": {"action": "choose_targets", "min_targets": 0, "max_targets": 1},
+        },
+        {
+            "condition": {
+                "all_of": [
+                    {
+                        "controller_has_cards": {
+                            "owner": "me",
+                            "zone": "deck",
+                            "card_filter": {"name_contains": "Sigillo"},
+                            "min_count": 1,
+                        }
+                    },
+                    {"selected_target_exists": True},
+                ]
+            },
+            "target": {
+                "type": "selected_target",
+                "zone": "deck",
+                "owner": "me",
+                "card_filter": {"name_contains": "Sigillo"},
+                "min_targets": 1,
                 "max_targets": 1,
             },
             "effect": {"action": "move_to_hand"},
         },
         {
+            "condition": {"selected_target_exists": True},
             "target": {"type": "source_card"},
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },

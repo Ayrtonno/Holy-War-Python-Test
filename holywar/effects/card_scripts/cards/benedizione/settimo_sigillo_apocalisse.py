@@ -16,8 +16,13 @@ SCRIPT = {
     "triggered_effects": [],
     "on_play_actions": [
         {
-            "target": {"type": "all_saints_on_field"},
-            "effect": {"action": "remove_from_board_no_sin"},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "opponent",
+                "card_filter": {"card_type_in": ["santo", "token"]},
+            },
+            "effect": {"action": "destroy_card"},
         },
     ],
 }
