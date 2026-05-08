@@ -9,22 +9,16 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {
-                "event": "on_saint_defeated_in_battle",
-                "frequency": "each_turn",
-                "condition": {
-                    "event_card_owner": "opponent",
-                },
+                "event": "on_this_card_kills_in_battle",
+                "frequency": "each_time",
             },
             "target": {"type": "source_card"},
             "effect": {"action": "remove_sin", "amount": 2, "target_player": "me"},
         },
         {
             "trigger": {
-                "event": "on_saint_defeated_in_battle",
-                "frequency": "each_turn",
-                "condition": {
-                    "event_card_owner": "opponent",
-                },
+                "event": "on_this_card_kills_in_battle",
+                "frequency": "each_time",
             },
             "target": {
                 "type": "cards_controlled_by_owner",
@@ -32,20 +26,7 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {"card_type_in": ["santo"], "strength_lte": 6},
             },
-            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
-        },
-        {
-            "trigger": {
-                "event": "on_saint_defeated_in_battle",
-                "frequency": "each_turn",
-                "condition": {
-                    "event_card_owner": "opponent",
-                },
-            },
-            "target": {
-                "type": "selected_target",
-            },
-            "effect": {"action": "summon_target_to_field"},
+            "effect": {"action": "choose_targets_and_summon_to_field", "min_targets": 1, "max_targets": 1},
         },
     ],
     "on_play_actions": [],

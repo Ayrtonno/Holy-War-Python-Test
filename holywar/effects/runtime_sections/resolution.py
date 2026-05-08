@@ -382,6 +382,11 @@ class RuntimeResolutionMixin:
         script = self._scripts.get(_norm(inst.definition.name), CardScript(name=inst.definition.name))
         mode = _norm(script.on_enter_mode)
         flags = engine.state.flags
+        enter_stack = flags.setdefault("_runtime_enter_stack", [])
+        if isinstance(enter_stack, list) and uid in enter_stack:
+            return None
+        if isinstance(enter_stack, list):
+            enter_stack.append(uid)
         previous_source = flags.get("_runtime_effect_source")
         flags["_runtime_effect_source"] = uid
         flags["_runtime_source_card"] = uid
@@ -404,6 +409,13 @@ class RuntimeResolutionMixin:
                 return None
             return self._legacy_removed_message(engine, inst.definition.name, "on_enter", mode)
         finally:
+            if isinstance(enter_stack, list):
+                for i in range(len(enter_stack) - 1, -1, -1):
+                    if enter_stack[i] == uid:
+                        del enter_stack[i]
+                        break
+                if not enter_stack:
+                    flags.pop("_runtime_enter_stack", None)
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
             else:
