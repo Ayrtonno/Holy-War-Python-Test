@@ -169,7 +169,7 @@
     "card_type": "Santo",
     "crosses": "White",
     "faith": 25,
-    "strength": 10,
+    "strength": 20,
     "effect_text": "Puoi giocare questa carta dalla tua mano o dal reliquiario solo se controlli \"Aria\", \"Fuoco\", \"Terra\" e \"Acqua\". Quando giochi questa carta, distruggi quelle quattro carte. Ogni volta che un Santo avversario viene sconfitto, rimuovi Peccato pari alla sua Fede iniziale.",
     "expansion": "CRI-1",
     "is_token": false,

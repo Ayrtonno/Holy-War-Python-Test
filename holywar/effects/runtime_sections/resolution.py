@@ -1043,6 +1043,8 @@ class RuntimeResolutionMixin:
         previous_source = flags.get("_runtime_source_card")
         previous_selected = flags.get("_runtime_selected_target")
         previous_action_idx = flags.get("_runtime_action_index")
+        manual_actions_present = False
+        manual_actions_applicable = False
 
         flags["_runtime_source_card"] = source_uid
         flags["_runtime_selected_target"] = str(selected_target or "")
@@ -1050,6 +1052,7 @@ class RuntimeResolutionMixin:
             for i, action in enumerate(actions):
                 if not self._target_requires_manual_selection(action.target):
                     continue
+                manual_actions_present = True
                 flags["_runtime_action_index"] = str(i)
                 if action.condition and not self._eval_condition_node(
                     RuleEventContext(engine=engine, event=event_name, player_idx=owner_idx, payload={"card": source_uid}),
@@ -1057,6 +1060,7 @@ class RuntimeResolutionMixin:
                     action.condition,
                 ):
                     continue
+                manual_actions_applicable = True
                 
                 # For each action that requires manual selection, the method first checks if the action's condition is met. If the condition is not met, it skips to the next action. If the condition is met, it then determines how many targets are required for this action and collects the list of selectable targets based on the target specification. If the number of selectable targets is less than the required minimum, it returns False along with a message indicating that there are no valid targets to select. If there are enough selectable targets but the currently selected target does not meet the requirements for this action, it returns False along with a message indicating that a valid target selection is missing. If all actions pass these checks, it returns True and None for the error message.
                 required_min = self._required_min_targets_for_manual_target(action.target)
@@ -1071,6 +1075,8 @@ class RuntimeResolutionMixin:
                 resolved = self._resolve_targets(engine, owner_idx, action.target)
                 if len(resolved) < required_min:
                     return (False, missing_selection_message)
+            if manual_actions_present and not manual_actions_applicable:
+                return (False, empty_pool_message)
             return (True, None)
         finally:
             if previous_source is None:

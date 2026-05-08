@@ -51,7 +51,8 @@ SCRIPT = {
             "effect": {"action": "remove_sin_from_flag", "flag": "dio_creatore_removed_sin", "target_player": "me"},
         },
     ],
-    "on_play_actions": [
+    "on_play_actions": [],
+    "on_enter_actions": [
         {
             "target": {
                 "type": "cards_controlled_by_owner",
