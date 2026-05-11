@@ -25,7 +25,7 @@ SCRIPT = {
                 "zone": "field",
                 "owner": "opponent",
                 "card_filter": {"card_type_in": ["artefatto"]},
-                "min_targets": 1,
+                "min_targets": 0,
                 "max_targets": 1,
             },
             "effect": {"action": "destroy_card"},
