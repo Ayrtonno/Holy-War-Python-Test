@@ -456,6 +456,24 @@ class GameEngine:
         if amount <= 0:
             return
         self.state.players[player_idx].sin += amount
+        self._emit_event(
+            "on_sin_gained",
+            player_idx,
+            target_player=int(player_idx),
+            amount=int(amount),
+        )
+        mirror = self.state.flags.setdefault("sin_mirror_once", {"0": 0, "1": 0})
+        pending = int(mirror.get(str(player_idx), 0))
+        if pending > 0:
+            mirror[str(player_idx)] = max(0, pending - 1)
+            opp = 1 - int(player_idx)
+            self.state.players[opp].sin += int(amount)
+            self._emit_event(
+                "on_sin_gained",
+                opp,
+                target_player=int(opp),
+                amount=int(amount),
+            )
         refresh_player_flags(self)
 
     # Removes Sin from a player without letting the total go below zero.
@@ -463,7 +481,16 @@ class GameEngine:
         if amount <= 0:
             return
         p = self.state.players[player_idx]
+        before = int(p.sin)
         p.sin = max(0, p.sin - amount)
+        removed = max(0, before - int(p.sin))
+        if removed > 0:
+            self._emit_event(
+                "on_sin_removed",
+                player_idx,
+                target_player=int(player_idx),
+                amount=removed,
+            )
         refresh_player_flags(self)
 
     # Destroys a saint or token by uid using the shared destruction flow.

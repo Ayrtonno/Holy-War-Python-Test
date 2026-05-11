@@ -26,6 +26,10 @@ SUPPORTED_CONDITION_KEYS = {
     "payload_from_zone_in",
     "payload_to_zone_in",
     "payload_target_slot_is_set",
+    "payload_target_player",
+    "payload_target_owner",
+    "controller_hand_size_equals_opponent",
+    "stored_values_not_equal",
     "event_card_owner",
     "event_card_type_in",
     "turn_scope",
@@ -60,6 +64,7 @@ SUPPORTED_CONDITION_KEYS = {
     "controller_altare_sigilli_gte",
     "controller_drawn_cards_this_turn_gte",
     "controller_has_distinct_saints_gte",
+    "controller_has_distinct_cards_gte",
     "selected_option_in",
     "selected_target_in",
     "selected_target_card_type_in",
@@ -93,6 +98,7 @@ EFFECT_ACTION_ALIASES = {
     "pay_inspiration": "pay_inspiration",
     "move_to_graveyard": "send_to_graveyard",
     "choose_and_activate_piaga_effect": "choose_and_activate_effect",
+    "remove_sin_equal_to_last_inflicted_to_opponent": "remove_sin_equal_to_stored_value",
 }
 
 # This set defines the supported effect actions that the runtime can process. It includes a wide range of actions that can be performed as part of card effects, such as increasing or decreasing faith and strength, adding or removing counters, inflicting sin, drawing cards, moving cards between zones, and many more. This set is used to validate that any effect action specified in card scripts or effect definitions is recognized and can be handled by the runtime.
@@ -164,6 +170,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "summon_target_to_field",
     "remove_sin_equal_to_target_strength",
     "remove_sin_equal_to_target_faith_and_strength",
+    "remove_sin_equal_to_last_inflicted_to_opponent",
+    "remove_sin_equal_to_stored_value",
     "store_top_card_of_zone",
     "reveal_selected_target",
     "reveal_stored_card",
@@ -174,6 +182,8 @@ SUPPORTED_EFFECT_ACTIONS = {
     "optional_recover_from_graveyard_then_shuffle",
     "optional_recover_cards",
     "store_target_count",
+    "store_distinct_count",
+    "store_target_name",
     "floor_divide_flag",
     "draw_cards_from_flag",
     "choose_targets",
@@ -199,6 +209,14 @@ SUPPORTED_EFFECT_ACTIONS = {
     "destroy_all_saints_except_selected",
     "retaliate_damage_to_event_source_if_enemy_saint",
     "retaliate_event_damage_to_event_source_if_enemy_saint",
+    "retaliate_event_damage_divided_to_event_source_if_enemy_saint",
+    "mill_top_and_store_card_type",
+    "draw_if_stored_values_not_equal",
+    "draw_cards_and_store_last_drawn",
+    "destroy_source_if_effective_strength_lte",
+    "inflict_sin_from_flag_scaled",
+    "remove_sin_from_flag_scaled",
+    "set_pending_sin_mirror_once",
     "grant_attack_barrier",
     "grant_blessed_tag_from_source",
     "prevent_specific_card_from_attacking",
@@ -264,6 +282,7 @@ class CardFilterSpec:
     name_equals: str | None = None
     name_contains: str | None = None
     name_not_contains: str | None = None
+    name_not_equals_stored: str | None = None
     card_type_in: list[str] = field(default_factory=list)
     exclude_event_card: bool = False
     exclude_buildings_if_my_building_zone_occupied: bool = False

@@ -892,6 +892,7 @@ class RuntimeResolutionMixin:
             or (target.card_filter.name_equals or "").strip()
             or (target.card_filter.name_contains or "").strip()
             or (target.card_filter.name_not_contains or "").strip()
+            or (target.card_filter.name_not_equals_stored or "").strip()
             or target.card_filter.card_type_in
             or target.card_filter.exclude_event_card
             or target.card_filter.exclude_buildings_if_my_building_zone_occupied
@@ -977,6 +978,17 @@ class RuntimeResolutionMixin:
             needle_not = _norm(target.card_filter.name_not_contains or "")
             if needle_not and needle_not in name_haystack:
                 continue
+            name_not_equals_stored = str(target.card_filter.name_not_equals_stored or "").strip()
+            if name_not_equals_stored:
+                raw_stored = engine.state.flags.get(f"_runtime_store_{name_not_equals_stored}", "")
+                if isinstance(raw_stored, str) and raw_stored.strip() in engine.state.instances:
+                    stored_uid = raw_stored.strip()
+                    stored_inst = engine.state.instances.get(stored_uid)
+                    stored_name = _norm(stored_inst.definition.name) if stored_inst is not None else ""
+                else:
+                    stored_name = _norm(str(raw_stored))
+                if stored_name and stored_name in name_variants:
+                    continue
             if type_filter and _norm(inst.definition.card_type) not in type_filter:
                 continue
             if (

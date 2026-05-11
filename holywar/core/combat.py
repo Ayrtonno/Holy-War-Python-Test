@@ -307,6 +307,20 @@ def resolve_targeted_attack(
         engine.state.log(
             f"Mitigazione runtime del danno da Santi: {before_damage}->{damage} (divisore {defender_damage_divisor})."
         )
+    if attacker_type_key in {"santo", "token"}:
+        reduction = runtime_cards.get_context_bonus_amount(
+            engine,
+            defender_idx,
+            context="incoming_damage_reduction_from_enemy_saints",
+            amount_mode="per_count_div_floor",
+            target_uid=defender_uid,
+        )
+        if reduction > 0:
+            before_damage = damage
+            damage = max(0, int(damage) - int(reduction))
+            engine.state.log(
+                f"Riduzione danni runtime contro Santi nemici: {before_damage}->{damage} (-{int(reduction)})."
+            )
     damage = engine._apply_damage_mitigation(defender_idx, damage, target_uid=defender_uid)
     def_faith = defender.current_faith or 0
     if damage <= 0:

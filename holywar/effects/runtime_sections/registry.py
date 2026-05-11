@@ -188,6 +188,7 @@ class RuntimeRegistryMixin:
                     name_equals=filt.get("name_equals"),
                     name_contains=filt.get("name_contains"),
                     name_not_contains=filt.get("name_not_contains"),
+                    name_not_equals_stored=filt.get("name_not_equals_stored"),
                     card_type_in=list(filt.get("card_type_in", []) or []),
                     exclude_event_card=bool(filt.get("exclude_event_card", False)),
                     exclude_buildings_if_my_building_zone_occupied=bool(
@@ -920,6 +921,19 @@ class RuntimeRegistryMixin:
                     continue
                 req = dict(rule.get("requirement", {}) or {})
                 candidates = self._collect_cards_for_requirement(engine, owner_idx, req)
+                if bool(rule.get("distinct_by_name", False)):
+                    seen: set[str] = set()
+                    distinct: list[str] = []
+                    for uid in candidates:
+                        inst = engine.state.instances.get(uid)
+                        if inst is None:
+                            continue
+                        name_key = _norm(inst.definition.name)
+                        if name_key in seen:
+                            continue
+                        seen.add(name_key)
+                        distinct.append(uid)
+                    candidates = distinct
                 threshold = max(0, int(rule.get("threshold", 1) or 1))
                 if len(candidates) < threshold:
                     continue

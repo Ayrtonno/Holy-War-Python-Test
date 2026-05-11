@@ -3223,5 +3223,666 @@
     "expansion": "EGI-1",
     "is_token": false,
     "aliases": []
+  },
+  {
+    "name": "Sigillo di Yin e Yang",
+    "card_type": "Artefatto",
+    "crosses": "8",
+    "faith": 5,
+    "strength": null,
+    "effect_text": "Finche questa carta e sul terreno, ogni volta che infliggi Peccato al giocatore avversario, rimuovi la stessa quantita di Peccato da te stesso.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Respiro Alterno",
+    "card_type": "Benedizione",
+    "crosses": "2",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Pesca una carta. Poi il tuo avversario scarta la prima carta del suo reliquiario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Mano che Cede",
+    "card_type": "Benedizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scarta una carta dalla tua mano. Distruggi una carta sul terreno del tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Sentiero dei Due Flussi",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Rimuovi 3 Peccato da te stesso. Infliggi 3 Peccato al tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Passo del Non-Agire",
+    "card_type": "Benedizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un tuo Santo e un Santo avversario. Rimetti entrambe le carte nelle rispettive mani.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Armonia Riflessa",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un tuo Santo e un Santo avversario. Il tuo Santo ottiene +3 Forza, il Santo avversario perde 3 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Vuoto Fecondo",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli una tua Benedizione o Maledizione nel cimitero e aggiungila alla tua mano. Poi il tuo avversario scarta la prima carta del suo reliquiario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Ponte delle Opposte Rive",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un tuo Artefatto nel cimitero e aggiungilo alla tua mano. Poi distruggi un Artefatto avversario sul terreno.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Cielo e Abisso",
+    "card_type": "Benedizione",
+    "crosses": "6",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Pesca 2 carte, poi scarta 1 carta. Il tuo avversario scarta 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Scambio dei Pesi",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un tuo Santo e un Santo avversario. Il tuo Santo ottiene +2 Fede e +2 Forza, il Santo avversario perde 2 Fede e 2 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Rottura dell'Equilibrio",
+    "card_type": "Maledizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Infliggi 3 Peccato al tuo avversario. Poi infliggi 1 Peccato a te stesso.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Debito degli Eccessi",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Il tuo avversario scarta 1 carta dalla mano. Poi pesca 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Nodo del Destino Doppio",
+    "card_type": "Maledizione",
+    "crosses": "6",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un tuo Santo e un Santo avversario. Distruggi entrambe le carte.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Contraccolpo del Vuoto",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Distruggi una carta sul terreno del tuo avversario. Poi distruggi una tua carta sul terreno.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Yin Sopprime Yang",
+    "card_type": "Maledizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un Santo avversario: perde 3 Forza. Poi scegli un tuo Santo: ottiene +1 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Yang Brucia Yin",
+    "card_type": "Maledizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Infliggi 2 Peccato al tuo avversario e 2 Peccato a te stesso.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Bilancia dei Diecimila Esseri",
+    "card_type": "Artefatto",
+    "crosses": "6",
+    "faith": 5,
+    "strength": null,
+    "effect_text": "Finche questa carta e sul terreno, ogni volta che rimuovi Peccato da te stesso, infliggi 1 Peccato al tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Vaso della Corrente Mite",
+    "card_type": "Artefatto",
+    "crosses": "4",
+    "faith": 4,
+    "strength": null,
+    "effect_text": "Una volta per turno: scarta 1 carta, poi pesca 1 carta. Poi il tuo avversario scarta 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Tavoletta del Ritorno",
+    "card_type": "Artefatto",
+    "crosses": "5",
+    "faith": 6,
+    "strength": null,
+    "effect_text": "Una volta per turno: scegli un tuo Santo nel cimitero e aggiungilo alla tua mano. Poi il tuo avversario scarta la prima carta del suo reliquiario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Campana del Vuoto Centrale",
+    "card_type": "Artefatto",
+    "crosses": "7",
+    "faith": 7,
+    "strength": null,
+    "effect_text": "All'inizio del tuo turno, aggiungi 1 Segnalino su questa carta. Puoi rimuovere 2 Segnalini: pesca 1 carta e il tuo avversario scarta 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Specchio del Ritorno",
+    "card_type": "Artefatto",
+    "crosses": "3",
+    "faith": 3,
+    "strength": null,
+    "effect_text": "Ogni volta che un santo avversario attacca un santo sul tuo terreno, esso riceve metà del danno inflitto.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Tempio del Grande Equilibrio",
+    "card_type": "Edificio",
+    "crosses": "8",
+    "faith": 8,
+    "strength": null,
+    "effect_text": "Ogni volta che giochi una Benedizione o una Maledizione, aggiungi 1 Segnalino su questa carta. Puoi rimuovere 3 Segnalini: pesca 1 carta e il tuo avversario scarta 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Padiglione dei Due Venti",
+    "card_type": "Edificio",
+    "crosses": "6",
+    "faith": 7,
+    "strength": null,
+    "effect_text": "Una volta per turno: scegli un tuo Santo, ottiene +2 Forza. Poi scegli un Santo avversario, perde 2 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Laozi, Custode del Vuoto",
+    "card_type": "Santo",
+    "crosses": "7",
+    "faith": 5,
+    "strength": 4,
+    "effect_text": "Quando giochi questa carta, rimuovi 2 Peccato da te stesso e infliggi 2 Peccato al tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Zhuangzi, Sognatore delle Farfalle",
+    "card_type": "Santo",
+    "crosses": "6",
+    "faith": 4,
+    "strength": 3,
+    "effect_text": "Quando giochi questa carta, tu e il tuo avversario pescate 1 carta. Se avete lo stesso numero di carte in mano, questa carta ottiene +2 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Maestro del Tai Chi",
+    "card_type": "Santo",
+    "crosses": "5",
+    "faith": 3,
+    "strength": 3,
+    "effect_text": "Una volta per turno: scegli un Santo avversario, perde 2 Forza. Questa carta ottiene +2 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Guardiano dello Yin",
+    "card_type": "Santo",
+    "crosses": "4",
+    "faith": 4,
+    "strength": 2,
+    "effect_text": "Ogni volta che il tuo avversario ottiene Ispirazione, rimuovi 1 Peccato da te stesso.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Guardiana dello Yang",
+    "card_type": "Santo",
+    "crosses": "4",
+    "faith": 2,
+    "strength": 4,
+    "effect_text": "Ogni volta che rimuovi Peccato da te stesso, infliggi 1 Peccato al tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Monaco della Bilancia",
+    "card_type": "Santo",
+    "crosses": "3",
+    "faith": 3,
+    "strength": 2,
+    "effect_text": "Quando giochi questa carta, tu e il tuo avversario scartate la prima carta del rispettivo reliquiario. Se i tipi delle due carte sono diversi, pesca 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Eremita della Valle",
+    "card_type": "Santo",
+    "crosses": "2",
+    "faith": 2,
+    "strength": 1,
+    "effect_text": "Quando questa carta viene distrutta, pesca 1 carta. Poi il tuo avversario scarta la prima carta del suo reliquiario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Custode dei Due Vasi",
+    "card_type": "Santo",
+    "crosses": "7",
+    "faith": 4,
+    "strength": 5,
+    "effect_text": "Una volta per turno: scarta 1 carta dalla tua mano. Distruggi una carta sul terreno del tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": []
+  },
+  {
+    "name": "Lu Dongbin",
+    "card_type": "Santo",
+    "crosses": "6",
+    "faith": 4,
+    "strength": 7,
+    "effect_text": "Quando giochi questa carta, se controlli un altro Ba Xian, distruggi un Artefatto avversario. Se non lo controlli, questa carta ottiene +2 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "He Xian'gu",
+    "card_type": "Santo",
+    "crosses": "5",
+    "faith": 4,
+    "strength": 5,
+    "effect_text": "Quando giochi questa carta, rimuovi 4 Peccato da te stesso. Se nel tuo cimitero ci sono almeno 2 Ba Xian, rimuovi invece 8 Peccato.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Li Tieguai",
+    "card_type": "Santo",
+    "crosses": "5",
+    "faith": 5,
+    "strength": 8,
+    "effect_text": "Quando un tuo Ba Xian viene distrutto, puoi invece ridurre la Forza di questa carta di 1 e annullare quella distruzione. Se la Forza di questa carta e 0, distruggila.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Han Xiangzi",
+    "card_type": "Santo",
+    "crosses": "4",
+    "faith": 7,
+    "strength": 5,
+    "effect_text": "Quando giochi questa carta, pesca 1 carta. Se la carta pescata e un Ba Xian, pesca 1 carta aggiuntiva, poi scarta 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Lan Caihe",
+    "card_type": "Santo",
+    "crosses": "4",
+    "faith": 8,
+    "strength": 4,
+    "effect_text": "Una volta per turno: puoi scomunicare la prima carta del tuo reliquiario. Se e una Benedizione o Maledizione, pesca una carta. Se e un Ba Xian, posizionali sul terreno senza costo di ispirazione e questa carta ottiene +3 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Zhang Guolao",
+    "card_type": "Santo",
+    "crosses": "6",
+    "faith": 4,
+    "strength": 6,
+    "effect_text": "Quando giochi questa carta, scegli un tuo Ba Xian nel cimitero e aggiungilo alla tua mano. Se controlli almeno 3 Ba Xian, puoi invece evocarlo direttamente.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Cao Guojiu",
+    "card_type": "Santo",
+    "crosses": "white",
+    "faith": 10,
+    "strength": 15,
+    "effect_text": "Finche questa carta e sul terreno, i tuoi Ba Xian non possono essere bersagliati da effetti di carte avversarie. Se controlli almeno 4 Ba Xian diversi, il tuo avversario non puo attivare Benedizioni o Maledizioni. Se controlli 6 Ba Xian diversi, ogni carta del tuo avversario avro il proprio effetto bloccato o negato all'attivazione.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Zhongli Quan",
+    "card_type": "Santo",
+    "crosses": "10",
+    "faith": 6,
+    "strength": 10,
+    "effect_text": "Quando giochi questa carta, scegli fino a 2 Ba Xian nel tuo cimitero e aggiungili alla tua mano. Se i tuoi Ba Xian tra mano, campo e cimitero hanno 8 nomi diversi, infliggi 20 Peccato al tuo avversario e rimuovi 20 Peccato da te stesso.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian",
+      "Immortale"
+    ]
+  },
+  {
+    "name": "Convocazione degli Otto",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Cerca nel tuo reliquiario un Ba Xian, rivelalo e aggiungilo alla tua mano. Poi mischia il reliquiario. Se controlli gia un Ba Xian, pesca 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Banchetto dell'Immortalita",
+    "card_type": "Benedizione",
+    "crosses": "6",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli fino a 2 tuoi Ba Xian nel cimitero e aggiungili alla tua mano. Poi scarta 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Patto dei Reishi",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un tuo Ba Xian: ottiene +2 Forza e +2 Fede. Se controlli 3 o piu Ba Xian, ottiene +4 Fede +4 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Eco dei Nomi Immortali",
+    "card_type": "Benedizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Rivela la tua mano. Per ogni Ba Xian rivelato, pesca 1 carta fino a un massimo di 3. Poi rimetti nel reliquiario 1 carta dalla tua mano.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Ponte tra Cielo e Polvere",
+    "card_type": "Benedizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli e distruggi un tuo Ba Xian sul campo. Cerca nel tuo cimitero un Ba Xian con nome diverso e posizionalo sul terreno.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Passo delle Nubi Gemelle",
+    "card_type": "Benedizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Evoca un Ba Xian dalla tua mano pagando meta Ispirazione. Poi il tuo avversario scarta la prima carta del suo reliquiario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Sigillo dei Mortali",
+    "card_type": "Maledizione",
+    "crosses": "4",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli un Santo avversario: esso perde 5 Forza. Se controlli un Ba Xian, infliggi anche 2 Peccato al tuo avversario.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Frattura del Meridiano",
+    "card_type": "Maledizione",
+    "crosses": "5",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Distruggi un Artefatto o Edificio avversario. Se controlli almeno 2 Ba Xian, pesca 1 carta.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Giudizio delle Otto Tracce",
+    "card_type": "Maledizione",
+    "crosses": "10",
+    "faith": null,
+    "strength": null,
+    "effect_text": "Scegli una carta sul terreno avversario per ogni Ba Xian diverso in mano, terreno o cimitero. Distruggi le carte selezionate. Per ogni carta distrutta infliggi 5 Peccato al tuo avversario e rimuovi 3 Peccato da te stesso.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Riflusso del Karma",
+    "card_type": "Maledizione",
+    "crosses": "3",
+    "faith": null,
+    "strength": null,
+    "effect_text": "La prossima volta che guadagni Peccato, il tuo avversario ne guadagnerà altrettanto.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Ventaglio degli Otto Venti",
+    "card_type": "Artefatto",
+    "crosses": "5",
+    "faith": 5,
+    "strength": null,
+    "effect_text": "Una volta per turno scegli uno: pesca 1 carta; oppure un tuo Ba Xian ottiene +4 Forza; oppure il tuo avversario scarta 1 carta dalla mano al cimitero.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Borraccia di Li Tieguai",
+    "card_type": "Artefatto",
+    "crosses": "4",
+    "faith": 4,
+    "strength": null,
+    "effect_text": "Ogni volta che un tuo Ba Xian viene distrutto, aggiungi 1 Segnalino Elisir su questa carta. Puoi rimuovere 2 Segnalini Elisir: scegli un tuo Ba Xian nel cimitero e aggiungilo alla mano. Puoi rimuovere 5 Segnalini Elisir: scegli un tuo Ba Xian nel cimitero ed evocarlo sul terreno.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Spada Purificante di Lu Dongbin",
+    "card_type": "Artefatto",
+    "crosses": "9",
+    "faith": 6,
+    "strength": null,
+    "effect_text": "Per ogni Ba Xian diverso sul terreno, i tuoi Santi ricevono 2 danni in meno dagli attacchi avversari.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Padiglione degli Immortali",
+    "card_type": "Edificio",
+    "crosses": "8",
+    "faith": 8,
+    "strength": null,
+    "effect_text": "Ogni volta che un Ba Xian entra in campo (dalla mano, reliquiario o cimitero), aggiungi 1 Segnalino Armonia su questa carta. Puoi rimuovere 3 Segnalini Armonia: pesca 1 carta o aggiungi alla mano un Ba Xian dal tuo cimitero.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Altare delle Otto Reliquie",
+    "card_type": "Edificio",
+    "crosses": "9",
+    "faith": 9,
+    "strength": null,
+    "effect_text": "Finche questa carta è sul terreno, ogni volta che peschi una carta, i tuoi Ba Xian ottengono +1 Fede e +1 Forza.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
+  },
+  {
+    "name": "Giardino del Loto Inverso",
+    "card_type": "Edificio",
+    "crosses": "7",
+    "faith": 7,
+    "strength": null,
+    "effect_text": "All'inizio del tuo turno puoi scegliere: rimuovi 4 Peccato da te stesso oppure infliggi 4 Peccato al tuo avversario. Se controlli almeno 3 Ba Xian diversi, puoi fare entrambe le cose.",
+    "expansion": "TAO-1",
+    "is_token": false,
+    "aliases": [
+      "Ba Xian"
+    ]
   }
 ]

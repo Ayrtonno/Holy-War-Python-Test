@@ -1019,6 +1019,41 @@ class RuntimeEffectsMixin:
                 if base_faith > 0:
                     engine.reduce_sin(owner_idx, base_faith)
             return
+        if action == "retaliate_event_damage_divided_to_event_source_if_enemy_saint":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            attacker_uid = str(engine.state.flags.get("_runtime_event_source", "")).strip()
+            if not attacker_uid or attacker_uid not in engine.state.instances:
+                return
+            attacker_inst = engine.state.instances[attacker_uid]
+            if int(attacker_inst.owner) == int(owner_idx):
+                return
+            if _norm(attacker_inst.definition.card_type) not in {"santo", "token"}:
+                return
+            try:
+                event_amount = max(0, int(engine.state.flags.get("_runtime_event_amount", "0") or 0))
+            except (TypeError, ValueError):
+                event_amount = 0
+            if event_amount <= 0:
+                return
+            scale = max(1, int(effect.amount or 1))
+            divisor = max(1, int(effect.divisor or 2))
+            dmg = (event_amount * scale) // divisor
+            if dmg <= 0:
+                return
+            dmg = engine._apply_damage_mitigation(attacker_inst.owner, dmg, target_uid=attacker_uid)
+            if dmg <= 0:
+                return
+            before = attacker_inst.current_faith or 0
+            attacker_inst.current_faith = max(0, (attacker_inst.current_faith or 0) - dmg)
+            after = attacker_inst.current_faith or 0
+            engine.state.log(
+                f"{attacker_inst.definition.name} subisce {dmg} danni di ritorsione (Fede {before}->{after})."
+            )
+            if (attacker_inst.current_faith or 0) <= 0:
+                engine.destroy_saint_by_uid(attacker_inst.owner, attacker_uid, cause="effect")
+            return
         if action == "destroy_source_if_linked_to_event_card":
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
@@ -1093,10 +1128,20 @@ class RuntimeEffectsMixin:
         if action == "add_temporary_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
+            before = int(getattr(player, "temporary_inspiration", 0))
             player.temporary_inspiration = max(
                 0,
-                int(getattr(player, "temporary_inspiration", 0)) + int(effect.amount)
+                before + int(effect.amount)
             )
+            gained = max(0, int(getattr(player, "temporary_inspiration", 0)) - before)
+            if gained > 0:
+                engine._emit_event(
+                    "on_inspiration_gained",
+                    owner_idx,
+                    target_player=int(target),
+                    amount=gained,
+                    temporary=True,
+                )
             return
         
         if action == "store_target_strength":
@@ -1222,10 +1267,20 @@ class RuntimeEffectsMixin:
 
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
+            before = int(getattr(player, "temporary_inspiration", 0))
             player.temporary_inspiration = max(
                 0,
-                int(getattr(player, "temporary_inspiration", 0)) + amount
+                before + amount
             )
+            gained = max(0, int(getattr(player, "temporary_inspiration", 0)) - before)
+            if gained > 0:
+                engine._emit_event(
+                    "on_inspiration_gained",
+                    owner_idx,
+                    target_player=int(target),
+                    amount=gained,
+                    temporary=True,
+                )
 
             engine.state.flags.pop(flag_name, None)
             return
@@ -1814,6 +1869,55 @@ class RuntimeEffectsMixin:
                 player.graveyard.append(uid)
                 self._shuffle_graveyard_if_oltretomba_active(engine, target)
             return
+        if action == "mill_top_and_store_card_type":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            player = engine.state.players[target]
+            store_name = str(effect.store_as or "milled_type").strip()
+            if not player.deck:
+                engine.state.flags[f"_runtime_store_{store_name}"] = ""
+                return
+            uid = player.deck.pop()
+            player.graveyard.append(uid)
+            self._shuffle_graveyard_if_oltretomba_active(engine, target)
+            inst = engine.state.instances.get(uid)
+            engine.state.flags[f"_runtime_store_{store_name}"] = _norm(inst.definition.card_type) if inst is not None else ""
+            return
+        if action == "draw_if_stored_values_not_equal":
+            left_name = str(effect.flag or "").strip()
+            right_name = str(effect.stored or "").strip()
+            if not left_name or not right_name:
+                return
+            left = _norm(str(engine.state.flags.get(f"_runtime_store_{left_name}", "")))
+            right = _norm(str(engine.state.flags.get(f"_runtime_store_{right_name}", "")))
+            if left and right and left != right:
+                target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+                amount = max(0, int(effect.amount or 1))
+                if amount > 0:
+                    engine.draw_cards(target, amount)
+            return
+        if action == "draw_cards_and_store_last_drawn":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            amount = max(0, int(effect.amount or 1))
+            store_name = str(effect.store_as or "last_drawn").strip()
+            drawn_map = engine.state.flags.setdefault("cards_drawn_this_turn", {"0": [], "1": []})
+            before = list(drawn_map.get(str(target), []) or [])
+            if amount <= 0:
+                engine.state.flags[f"_runtime_store_{store_name}"] = ""
+                return
+            engine.draw_cards(target, amount)
+            after = list(drawn_map.get(str(target), []) or [])
+            new_uids = [uid for uid in after if uid not in before]
+            engine.state.flags[f"_runtime_store_{store_name}"] = str(new_uids[-1]) if new_uids else ""
+            return
+        if action == "destroy_source_if_effective_strength_lte":
+            source_inst = engine.state.instances.get(source_uid)
+            if source_inst is None:
+                return
+            threshold = int(effect.threshold) if effect.threshold is not None else 0
+            current = max(0, int(engine.get_effective_strength(source_uid)))
+            if current <= threshold:
+                engine.destroy_any_card(source_inst.owner, source_uid)
+            return
         if action == "draw_cards":
             target = self._resolve_player_scope(owner_idx, effect.target_player)
             amount = 1 if effect.amount is None else int(effect.amount)
@@ -2202,6 +2306,12 @@ class RuntimeEffectsMixin:
             choice_ready = bool(flags.get("_runtime_choice_ready"))
             min_targets = max(0, int(effect.min_targets if effect.min_targets is not None else 0))
             max_targets = int(effect.max_targets if effect.max_targets is not None else 1)
+            max_targets_from_flag = str(getattr(effect, "flag", "") or "").strip()
+            if max_targets_from_flag:
+                try:
+                    max_targets = int(engine.state.flags.get(max_targets_from_flag, max_targets))
+                except Exception:
+                    pass
             max_targets = max(min_targets, max_targets)
 
             if choice_ready and choice_source == source_uid:
@@ -2706,6 +2816,33 @@ class RuntimeEffectsMixin:
                 return
             engine.state.flags[flag_name] = int(len(targets))
             return
+        if action == "store_target_name":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            stored_name = ""
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                stored_name = str(inst.definition.name or "").strip()
+                break
+            engine.state.flags[f"_runtime_store_{flag_name}"] = stored_name
+            return
+        if action == "store_distinct_count":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            req = dict(effect.requirement or {})
+            matches = self._collect_cards_for_requirement(engine, owner_idx, req)
+            seen: set[str] = set()
+            for uid in matches:
+                inst = engine.state.instances.get(uid)
+                if inst is None:
+                    continue
+                seen.add(_norm(inst.definition.name))
+            engine.state.flags[flag_name] = int(len(seen))
+            return
         if action == "add_link_tag_to_source_from_selected_target":
             source_inst = engine.state.instances.get(source_uid)
             if source_inst is None:
@@ -3066,7 +3203,21 @@ class RuntimeEffectsMixin:
             return
         if action == "inflict_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
-            engine.gain_sin(target, max(0, int(effect.amount)))
+            amount = max(0, int(effect.amount))
+            engine.gain_sin(target, amount)
+            if amount > 0:
+                engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}"] = amount
+                engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}_to_{int(target)}"] = amount
+                engine.state.flags[f"_runtime_last_inflicted_sin_to_opponent_{int(owner_idx)}"] = (
+                    amount if target == (1 - int(owner_idx)) else 0
+                )
+                engine._emit_event(
+                    "on_sin_inflicted",
+                    owner_idx,
+                    card=source_uid,
+                    target_player=int(target),
+                    amount=amount,
+                )
             return
         if action == "inflict_sin_from_source_paid_inspiration":
             source_inst = engine.state.instances.get(source_uid)
@@ -3085,6 +3236,19 @@ class RuntimeEffectsMixin:
                 return
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             engine.gain_sin(target, amount)
+            if amount > 0:
+                engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}"] = amount
+                engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}_to_{int(target)}"] = amount
+                engine.state.flags[f"_runtime_last_inflicted_sin_to_opponent_{int(owner_idx)}"] = (
+                    amount if target == (1 - int(owner_idx)) else 0
+                )
+                engine._emit_event(
+                    "on_sin_inflicted",
+                    owner_idx,
+                    card=source_uid,
+                    target_player=int(target),
+                    amount=amount,
+                )
             return
         if action == "inflict_sin_from_flag":
             flag_name = str(effect.flag or "").strip()
@@ -3103,7 +3267,36 @@ class RuntimeEffectsMixin:
 
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             engine.gain_sin(target, amount)
+            if amount > 0:
+                engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}"] = amount
+                engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}_to_{int(target)}"] = amount
+                engine.state.flags[f"_runtime_last_inflicted_sin_to_opponent_{int(owner_idx)}"] = (
+                    amount if target == (1 - int(owner_idx)) else 0
+                )
+                engine._emit_event(
+                    "on_sin_inflicted",
+                    owner_idx,
+                    card=source_uid,
+                    target_player=int(target),
+                    amount=amount,
+                )
             engine.state.flags.pop(flag_name, None)
+            return
+        if action == "inflict_sin_from_flag_scaled":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                base = max(0, int(raw_value))
+            except (TypeError, ValueError):
+                base = 0
+            scale = max(0, int(effect.amount or 1))
+            amount = base * scale
+            if amount <= 0:
+                return
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
+            engine.gain_sin(target, amount)
             return
         if action == "inflict_sin_to_target_owners":
             per_card = max(0, int(effect.amount))
@@ -3117,7 +3310,42 @@ class RuntimeEffectsMixin:
                 counts[inst.owner] = int(counts.get(inst.owner, 0)) + 1
             for p_idx, qty in counts.items():
                 if qty > 0:
-                    engine.gain_sin(p_idx, per_card * qty)
+                    amount = per_card * qty
+                    engine.gain_sin(p_idx, amount)
+                    engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}"] = amount
+                    engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}_to_{int(p_idx)}"] = amount
+                    engine.state.flags[f"_runtime_last_inflicted_sin_to_opponent_{int(owner_idx)}"] = (
+                        amount if int(p_idx) == (1 - int(owner_idx)) else 0
+                    )
+                    engine._emit_event(
+                        "on_sin_inflicted",
+                        owner_idx,
+                        card=source_uid,
+                        target_player=int(p_idx),
+                        amount=amount,
+                    )
+            return
+        if action == "remove_sin_equal_to_stored_value":
+            default_flag = f"_runtime_last_inflicted_sin_to_opponent_{int(owner_idx)}"
+            flag_name = str(effect.flag or default_flag).strip() or default_flag
+            amount_raw = engine.state.flags.get(flag_name, 0)
+            try:
+                amount = max(0, int(amount_raw))
+            except (TypeError, ValueError):
+                amount = 0
+            scale = int(effect.amount) if int(effect.amount) > 0 else 1
+            amount *= scale
+            divisor = int(effect.divisor) if effect.divisor is not None else 0
+            if divisor > 1:
+                amount //= divisor
+            threshold = int(effect.threshold) if effect.threshold is not None else None
+            if threshold is not None:
+                amount = min(amount, max(0, threshold))
+            if amount > 0:
+                target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+                engine.reduce_sin(target, amount)
+            if _norm(str(effect.stored or "")) != "keep":
+                engine.state.flags.pop(flag_name, None)
             return
         if action == "remove_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -3136,6 +3364,28 @@ class RuntimeEffectsMixin:
             if amount > 0:
                 engine.reduce_sin(target, amount)
             engine.state.flags.pop(flag_name, None)
+            return
+        if action == "remove_sin_from_flag_scaled":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            raw_value = engine.state.flags.get(flag_name, 0)
+            try:
+                base = max(0, int(raw_value))
+            except (TypeError, ValueError):
+                base = 0
+            scale = max(0, int(effect.amount or 1))
+            amount = base * scale
+            if amount <= 0:
+                return
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            engine.reduce_sin(target, amount)
+            return
+        if action == "set_pending_sin_mirror_once":
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            mirror = engine.state.flags.setdefault("sin_mirror_once", {"0": 0, "1": 0})
+            key = str(int(target))
+            mirror[key] = max(0, int(mirror.get(key, 0))) + max(1, int(effect.amount or 1))
             return
         if action == "increase_faith_from_flag":
             flag_name = str(effect.flag or "").strip()
@@ -3181,7 +3431,17 @@ class RuntimeEffectsMixin:
         if action == "add_inspiration":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             player = engine.state.players[target]
+            before = int(player.inspiration)
             player.inspiration = max(0, int(player.inspiration) + int(effect.amount))
+            gained = max(0, int(player.inspiration) - before)
+            if gained > 0:
+                engine._emit_event(
+                    "on_inspiration_gained",
+                    owner_idx,
+                    target_player=int(target),
+                    amount=gained,
+                    temporary=False,
+                )
             return
         if action == "destroy_card":
             for t_uid in targets:
@@ -4326,6 +4586,41 @@ class RuntimeEffectsMixin:
             has_target_slot = payload.get("target_slot") is not None
             if bool(target_slot_is_set) != has_target_slot:
                 return False
+        payload_target_player = condition.get("payload_target_player")
+        if payload_target_player is not None:
+            raw_target = payload.get("target_player")
+            try:
+                target_idx = int(raw_target)
+            except (TypeError, ValueError):
+                return False
+            wanted = _norm(str(payload_target_player))
+            if wanted == "me" and target_idx != int(owner_idx):
+                return False
+            elif wanted == "opponent" and target_idx != (1 - int(owner_idx)):
+                return False
+            elif wanted not in {"me", "opponent"}:
+                try:
+                    if target_idx != int(payload_target_player):
+                        return False
+                except (TypeError, ValueError):
+                    return False
+        payload_target_owner = condition.get("payload_target_owner")
+        if payload_target_owner is not None:
+            target_uid = str(payload.get("target", "")).strip()
+            if not target_uid or target_uid not in ctx.engine.state.instances:
+                return False
+            target_owner = int(ctx.engine.state.instances[target_uid].owner)
+            wanted = _norm(str(payload_target_owner))
+            if wanted == "me" and target_owner != int(owner_idx):
+                return False
+            elif wanted == "opponent" and target_owner != (1 - int(owner_idx)):
+                return False
+            elif wanted not in {"me", "opponent"}:
+                try:
+                    if target_owner != int(payload_target_owner):
+                        return False
+                except (TypeError, ValueError):
+                    return False
 
         owner_rule = _norm(str(condition.get("event_card_owner", "")))
         if owner_rule:
@@ -4531,6 +4826,10 @@ class RuntimeEffectsMixin:
         if hand_size_lte is not None:
             if len(ctx.engine.state.players[owner_idx].hand) > int(hand_size_lte):
                 return False
+        hand_size_equals_opponent = condition.get("controller_hand_size_equals_opponent")
+        if hand_size_equals_opponent:
+            if len(ctx.engine.state.players[owner_idx].hand) != len(ctx.engine.state.players[1 - owner_idx].hand):
+                return False
         free_artifact_slots_gte = condition.get("controller_free_artifact_slots_gte")
         if free_artifact_slots_gte is not None:
             player = ctx.engine.state.players[owner_idx]
@@ -4555,6 +4854,17 @@ class RuntimeEffectsMixin:
                 for uid in ctx.engine.all_saints_on_field(owner_idx)
             }
             if len(names) < int(distinct_saints_gte):
+                return False
+        distinct_cards_cfg = condition.get("controller_has_distinct_cards_gte")
+        if isinstance(distinct_cards_cfg, dict):
+            min_count = int(distinct_cards_cfg.get("min_count", 1) or 1)
+            matches = self._collect_cards_for_requirement(ctx.engine, owner_idx, dict(distinct_cards_cfg))
+            names = {
+                _norm(ctx.engine.state.instances[uid].definition.name)
+                for uid in matches
+                if uid in ctx.engine.state.instances
+            }
+            if len(names) < min_count:
                 return False
         selected_option = _norm(str(ctx.engine.state.flags.get("_runtime_selected_option", "")))
         selected_option_in = condition.get("selected_option_in")
@@ -4718,6 +5028,11 @@ class RuntimeEffectsMixin:
                 name_contains=str(card_filter.get("name_contains")) if card_filter.get("name_contains") is not None else None,
                 name_not_contains=(
                     str(card_filter.get("name_not_contains")) if card_filter.get("name_not_contains") is not None else None
+                ),
+                name_not_equals_stored=(
+                    str(card_filter.get("name_not_equals_stored"))
+                    if card_filter.get("name_not_equals_stored") is not None
+                    else None
                 ),
                 card_type_in=[str(v) for v in list(card_filter.get("card_type_in", []) or [])],
                 crosses_gte=crosses_gte,

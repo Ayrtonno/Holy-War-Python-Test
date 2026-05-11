@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+CARD_NAME = "Eco dei Nomi Immortali"
+
+HAS_1 = {"controller_has_cards": {"zones": ["hand"], "owner": "me", "card_filter": {"name_contains": "ba xian"}, "min_count": 1}}
+HAS_2 = {"controller_has_cards": {"zones": ["hand"], "owner": "me", "card_filter": {"name_contains": "ba xian"}, "min_count": 2}}
+HAS_3 = {"controller_has_cards": {"zones": ["hand"], "owner": "me", "card_filter": {"name_contains": "ba xian"}, "min_count": 3}}
+
+SCRIPT = {
+    "on_play_mode": "scripted",
+    "on_enter_mode": "auto",
+    "on_activate_mode": "auto",
+    "play_targeting": "guided",
+    "triggered_effects": [],
+    "on_play_actions": [
+        {"condition": HAS_1, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
+        {"condition": HAS_2, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
+        {"condition": HAS_3, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
+        {
+            "target": {
+                "type": "selected_target",
+                "zone": "hand",
+                "owner": "me",
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+            "effect": {"action": "move_to_relicario"},
+        },
+        {"effect": {"action": "shuffle_deck", "target_player": "me"}},
+    ],
+}
