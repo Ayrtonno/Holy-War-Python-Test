@@ -15,6 +15,7 @@ from holywar.app_paths import appdata_dir
 from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
 from holywar.data.deck_builder import available_premade_decks, get_premade_label
+from holywar.effects.runtime import runtime_cards
 
 # This mixin class provides methods for managing the game flow in the GUI, including showing different screens (main menu, game screen, deck manager), handling the start of a new game, managing turn flow and AI actions, handling chain priority during card interactions, and providing options to save the game state and export logs. It interacts with the game engine to execute game actions based on user input and AI decisions, while also updating the GUI accordingly.
 class GUIGameFlowMixin:
@@ -458,6 +459,17 @@ class GUIGameFlowMixin:
             return
         self.engine.state.save(path)
         self.status_var.set(f"Partita salvata: {path}")
+
+    def reload_scripts(self) -> None:
+        try:
+            runtime_cards.clear_for_tests()
+            runtime_cards._bootstrap_from_cards_json()  # noqa: SLF001
+            runtime_cards._bootstrap_from_script_files()  # noqa: SLF001
+            self.status_var.set("Script ricaricati.")
+            if self.engine is not None:
+                self.refresh()
+        except Exception as exc:
+            messagebox.showerror("Reload Scripts", f"Errore durante il reload degli script:\n{exc}")
 
     def _replay_dir(self) -> Path:
         out = appdata_dir() / "replays"

@@ -71,7 +71,7 @@
     "crosses": "8",
     "faith": 8,
     "strength": null,
-    "effect_text": "Ogni volta che giochi una Benedizione o una Maledizione, aggiungi 1 Segnalino su questa carta. Puoi rimuovere 3 Segnalini da questa carta: cerca nel tuo reliquiario una Benedizione o Maledizione, rivelala e aggiungila alla tua mano. Poi mischia il reliquiario.",
+    "effect_text": "Ogni volta che viene giocata una Benedizione o una Maledizione, aggiungi 1 Segnalino su questa carta. Puoi rimuovere 3 Segnalini da questa carta: cerca nel tuo reliquiario una Benedizione o Maledizione, rivelala e aggiungila alla tua mano. Poi mischia il reliquiario.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -159,7 +159,7 @@
     "crosses": "10",
     "faith": 30,
     "strength": 0,
-    "effect_text": "Per giocare questa carta, devi scomunicare dal tuo cimitero una copia di \"Giorno 1\", \"Giorno 2\", \"Giorno 3\", \"Giorno 4\", \"Giorno 5\", \"Giorno 6\" e \"Giorno 7\". Questa carta non può essere bersagliata da effetti.",
+    "effect_text": "Per giocare questa carta, devi scomunicare dal terreno o cimitero una copia di \"Giorno 1\", \"Giorno 2\", \"Giorno 3\", \"Giorno 4\", \"Giorno 5\", \"Giorno 6\" e \"Giorno 7\". Finche questa carta è sul terreno non può essere bersagliata da effetti di carte del tuo avversario.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -225,18 +225,18 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Puoi giocare una carta Artefatto dalla tua mano pagando metà del suo costo di Ispirazione (arrotondato per eccesso).",
+    "effect_text": "Scegli una carta Artefatto nel tuo reliquiario e posizionala in campo pagando meta della sua Ispirazione.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
   },
   {
     "name": "Giorno 2: Cielo Terrestre",
-    "card_type": "Benedizione",
+    "card_type": "Artefatto",
     "crosses": "5",
-    "faith": null,
+    "faith": 5,
     "strength": null,
-    "effect_text": "Nessun Santo può attaccare in questo turno.",
+    "effect_text": "Finche questa carta e presente sul terreno, dimezza il Peccato che ricevi per attacchi diretti o per morte di Santi.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -258,7 +258,7 @@
     "crosses": "4",
     "faith": null,
     "strength": null,
-    "effect_text": "Guarda le prime 3 carte del tuo reliquiario e rimettile in cima nello stesso ordine. Poi puoi mischiare il reliquiario.",
+    "effect_text": "Guarda le prime 3 carte del tuo reliquiario. Pesca ogni carta con 'Giorno' nel suo nome.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -268,8 +268,8 @@
     "card_type": "Santo",
     "crosses": "3",
     "faith": 6,
-    "strength": 2,
-    "effect_text": "Questo Santo può attaccare solo se la tua Ispirazione rimanente è superiore a 2.",
+    "strength": 9,
+    "effect_text": "Quando questo Santo attacca, dopo il calcolo dei danni, aumenta la sua Fede di +2 e la sua Forza di +3.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -279,19 +279,19 @@
     "card_type": "Santo",
     "crosses": "3",
     "faith": 3,
-    "strength": 3,
-    "effect_text": "Questo Santo può attaccare solo se la tua Ispirazione rimanente è inferiore a 5.",
+    "strength": 6,
+    "effect_text": "Quando questo Santo attacca, dopo il calcolo dei danni, aumenta la sua Fede di +3 e la sua Forza di +2.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
   },
   {
     "name": "Giorno 7: Riposo",
-    "card_type": "Maledizione",
-    "crosses": "5",
-    "faith": null,
+    "card_type": "Artefatto",
+    "crosses": "7",
+    "faith": 7,
     "strength": null,
-    "effect_text": "Scegli un Santo avversario. Quel Santo non può attaccare durante il prossimo turno dell'avversario.",
+    "effect_text": "Finche questa carta e sul terreno, per ogni carta 'Giorno' giocata, rimuovi 1 peccato da te stesso e infliggi 2 peccato al tuo avversario.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -302,7 +302,7 @@
     "crosses": "2",
     "faith": null,
     "strength": null,
-    "effect_text": "Puoi avere massimo 3 copie di \"Giorno Festivo\" nel tuo reliquiario. Fino a quando questa carta è sul campo, nessun giocatore può effettuare attacchi. Questo effetto termina quando un giocatore pesca una carta.",
+    "effect_text": "Scegli un Santo avversario. Rimuovi Peccato pari alla sua Forza.",
     "expansion": "CRI-1",
     "is_token": false,
     "aliases": []
@@ -3225,5 +3225,3 @@
     "aliases": []
   }
 ]
-
-

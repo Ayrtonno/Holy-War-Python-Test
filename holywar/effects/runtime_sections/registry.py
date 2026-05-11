@@ -199,6 +199,7 @@ class RuntimeRegistryMixin:
                     strength_lte=_to_int_or_none(strength_lte_raw),
                     drawn_this_turn_only=bool(filt.get("drawn_this_turn_only", False)),
                     top_n_from_zone=_to_int_or_none(top_n_raw),
+                    half_cost_lte_my_inspiration=bool(filt.get("half_cost_lte_my_inspiration", False)),
                 ),
                 zone=str(raw.get("zone", "field")),
                 zones=list(raw.get("zones", []) or []),

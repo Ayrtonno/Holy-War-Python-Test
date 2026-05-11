@@ -6,9 +6,19 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "play_targeting": "none",
+    "play_targeting": "guided",
     "triggered_effects": [],
     "on_play_actions": [
-        {"target": {"type": "source_card"}, "effect": {"action": "set_no_attacks_until_card_draw"}},
+        {
+            "target": {
+                "type": "selected_target",
+                "zone": "field",
+                "owner": "opponent",
+                "card_filter": {"card_type_in": ["santo"]},
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+            "effect": {"action": "remove_sin_equal_to_target_strength", "target_player": "me"},
+        },
     ],
 }

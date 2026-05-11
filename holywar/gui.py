@@ -149,7 +149,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         ttk.Button(actions, text="Menu", command=self.show_main_menu).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Nuova Partita", command=self.new_game).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Fine Turno", command=self.end_turn).pack(side="left", padx=4)
-        ttk.Button(actions, text="Salva", command=self.save_game).pack(side="left", padx=4)
+        ttk.Button(actions, text="Reload Scripts", command=self.reload_scripts).pack(side="left", padx=4)
         ttk.Button(actions, text="Salva Replay", command=self.save_replay).pack(side="left", padx=4)
         ttk.Button(actions, text="Stop Replay", command=self.stop_replay_playback).pack(side="left", padx=4)
         ttk.Button(actions, text="Esporta Log", command=self.export_log).pack(side="left", padx=4)
@@ -200,18 +200,18 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
 
         enemy_frame = ttk.LabelFrame(board, text="Campo Avversario")
         enemy_frame.pack(fill="x", pady=4)
-        self.enemy_attack = [ttk.Label(enemy_frame, text="-", width=24) for _ in range(3)]
-        self.enemy_defense = [ttk.Label(enemy_frame, text="-", width=24) for _ in range(3)]
-        self.enemy_artifacts = [ttk.Label(enemy_frame, text="-", width=24) for _ in range(4)]
-        self.enemy_building = ttk.Label(enemy_frame, text="-", width=24)
+        self.enemy_attack = [ttk.Label(enemy_frame, text="-", width=34) for _ in range(3)]
+        self.enemy_defense = [ttk.Label(enemy_frame, text="-", width=34) for _ in range(3)]
+        self.enemy_artifacts = [ttk.Label(enemy_frame, text="-", width=34) for _ in range(4)]
+        self.enemy_building = ttk.Label(enemy_frame, text="-", width=34)
         self._grid_slots(enemy_frame, self.enemy_attack, self.enemy_defense, self.enemy_artifacts, self.enemy_building)
 
         own_frame = ttk.LabelFrame(board, text="Il Tuo Campo")
         own_frame.pack(fill="x", pady=4)
-        self.own_attack = [tk.Button(own_frame, text="-", width=24) for _ in range(3)]
-        self.own_defense = [tk.Button(own_frame, text="-", width=24) for _ in range(3)]
-        self.own_artifacts = [tk.Button(own_frame, text="-", width=24) for _ in range(4)]
-        self.own_building = tk.Button(own_frame, text="-", width=24)
+        self.own_attack = [tk.Button(own_frame, text="-", width=34) for _ in range(3)]
+        self.own_defense = [tk.Button(own_frame, text="-", width=34) for _ in range(3)]
+        self.own_artifacts = [tk.Button(own_frame, text="-", width=34) for _ in range(4)]
+        self.own_building = tk.Button(own_frame, text="-", width=34)
         self._grid_slots(own_frame, self.own_attack, self.own_defense, self.own_artifacts, self.own_building)
 
         # Slot click bindings (right-click for actions, left-click for details).

@@ -124,6 +124,9 @@ class GUIGameViewMixin:
                     return int(tag.split(":", 1)[1])
                 except ValueError:
                     return 0
+        return 0
+
+    def _generic_counter_value(self, inst) -> int:
         for tag in list(inst.blessed):
             if not isinstance(tag, str) or not tag.startswith("campana_counter:"):
                 continue
@@ -532,10 +535,17 @@ class GUIGameViewMixin:
             strength = f" P:{self.engine.get_effective_strength(uid)}"
         else:
             strength = ""
-        counter_value = self._seal_counter_value(inst)
-        counter_txt = f" S:{counter_value}" if counter_value > 0 else ""
-        if self._is_altare_sigilli(uid):
-            name = f"[{counter_value}] {inst.definition.name}"
+        seal_counter = self._seal_counter_value(inst)
+        generic_counter = self._generic_counter_value(inst)
+        counter_txt = ""
+        if seal_counter > 0:
+            counter_txt += f" S:{seal_counter}"
+        if generic_counter > 0:
+            counter_txt += f" C:{generic_counter}"
+        if self._is_altare_sigilli(uid) and seal_counter > 0:
+            name = f"[{seal_counter}] {inst.definition.name}"
+        elif generic_counter > 0:
+            name = f"[{generic_counter}] {inst.definition.name}"
         else:
             name = inst.definition.name
         return f"{name}{faith}{strength}{counter_txt}"

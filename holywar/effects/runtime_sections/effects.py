@@ -1,29 +1,23 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, ClassVar
 import json
 from pathlib import Path
 
 from holywar.core import state
 from holywar.core import query_helpers as query_ops
 from holywar.core.state import MAX_HAND, CardInstance
-from holywar.effects.card_scripts_loader import iter_card_scripts
 from holywar.scripting_api import RuleEventContext
 from holywar.data.importer import load_cards_json
 from holywar.data.models import CardDefinition
 from holywar.effects.runtime import (
     _norm,
     _card_name_haystack,
-    _card_name_variants,
     _card_matches_name,
-    SUPPORTED_EFFECT_ACTIONS,
     EFFECT_ACTION_ALIASES,
-    SUPPORTED_CONDITION_KEYS,
-    TriggerSpec,
     CardFilterSpec,
     TargetSpec,
     EffectSpec,
-    TriggeredEffectSpec,
     ActionSpec,
     CardScript,
 )
@@ -35,7 +29,7 @@ if TYPE_CHECKING:
 class RuntimeEffectsMixin:
     """Target resolution, zone moves and low-level effect execution helpers."""
     if TYPE_CHECKING:
-        _temp_faith: dict[int, dict[str, list[tuple[str, int, str]]]]
+        _temp_faith: ClassVar[dict[int, dict[str, list[tuple[str, int, str]]]]]
 
         def get_script(self, card_name: str) -> CardScript | None: ...
         def resolve_play(
@@ -1283,18 +1277,7 @@ class RuntimeEffectsMixin:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
                     continue
-
-                base = int(inst.definition.strength or 0)
-                bonus = 0
-
-                for tag in list(inst.blessed) + list(inst.cursed):
-                    if isinstance(tag, str) and tag.startswith("buff_str:"):
-                        try:
-                            bonus += int(tag.split(":", 1)[1])
-                        except ValueError:
-                            pass
-
-                amount = max(0, base + bonus)
+                amount = max(0, int(engine.get_effective_strength(t_uid) or 0))
                 break
 
             player.sin = max(0, int(player.sin) - amount)
@@ -2866,6 +2849,22 @@ class RuntimeEffectsMixin:
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
             return
+        if action == "draw_matching_from_top_n":
+            top_n = max(1, int(effect.amount or 1))
+            target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            player = engine.state.players[target]
+            wanted = _norm(str(effect.card_name or effect.flag or "").strip())
+            if not wanted:
+                return
+
+            candidates = list(player.deck[-top_n:]) if player.deck else []
+            for uid in list(reversed(candidates)):
+                inst = engine.state.instances.get(uid)
+                if inst is None:
+                    continue
+                if wanted in _norm(inst.definition.name):
+                    self._move_uid_to_zone(engine, uid, "hand", target)
+            return
         if action == "reorder_top_n_of_deck":
             top_n = max(1, int(effect.amount or 1))
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
@@ -3813,6 +3812,35 @@ class RuntimeEffectsMixin:
                     preferred_slot_token=preferred_slot_token,
                 )
             return
+        if action == "summon_target_to_field_pay_half_inspiration":
+            payer_idx = self._resolve_player_scope(owner_idx, effect.target_player or "me")
+            payer = engine.state.players[payer_idx]
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                base_cost = max(0, int(inst.definition.faith or 0))
+                half_cost = (base_cost + 1) // 2
+                total_inspiration = int(payer.inspiration) + int(getattr(payer, "temporary_inspiration", 0))
+                if total_inspiration < half_cost:
+                    engine.state.log(
+                        f"{inst.definition.name}: Ispirazione insufficiente ({total_inspiration}/{half_cost}) per evocare pagando meta costo."
+                    )
+                    continue
+
+                temp = max(0, int(getattr(payer, "temporary_inspiration", 0)))
+                use_temp = min(temp, half_cost)
+                payer.temporary_inspiration = temp - use_temp
+                payer.inspiration = max(0, int(payer.inspiration) - (half_cost - use_temp))
+
+                self._apply_effect(
+                    engine,
+                    owner_idx,
+                    source_uid,
+                    [t_uid],
+                    EffectSpec(action="summon_target_to_field"),
+                )
+            return
         if action == "summon_generated_token_in_each_free_saint_slot":
             token_name = str(effect.card_name or "").strip()
             if not token_name:
@@ -4050,6 +4078,8 @@ class RuntimeEffectsMixin:
         if action == "win_the_game":
             winner = self._resolve_player_scope(owner_idx, effect.target_player or "me")
             if engine.state.winner is None:
+                loser = 1 - int(winner)
+                engine.state.players[loser].sin = max(100, int(engine.state.players[loser].sin))
                 engine.state.winner = int(winner)
                 engine.state.log(f"{engine.state.players[winner].name} vince il duello per effetto carta.")
             return

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unicodedata
 from typing import Any
 
+from holywar.core import query_helpers as query_ops
 from holywar.core.results import ActionResult
 from holywar.core.state import ATTACK_SLOTS, CardInstance
 from holywar.effects.runtime import runtime_cards
@@ -15,6 +16,15 @@ def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
+
+
+def _apply_sin_reduction_auras(engine: "GameEngine", receiver_idx: int, amount: int) -> int:
+    out = max(0, int(amount))
+    if out <= 0:
+        return 0
+    if query_ops.has_artifact(engine, receiver_idx, "Giorno 2: Cielo Terrestre"):
+        out //= 2
+    return out
 
 # Checks if there is an active "no attacks until draw" effect in the current game state, which can block all attacks until a player draws a card. This is used to enforce effects that prevent attacking for a turn or until a specific condition is met, and it cleans up any invalid sources of this effect from the runtime state.
 def _has_active_no_attack_until_draw(engine: "GameEngine") -> bool:
@@ -205,7 +215,8 @@ def resolve_direct_attack(
         return ActionResult(True, "Attacco annullato da effetto di scudo.")
     base_strength = max(0, attacker.definition.strength or 0)
     damage = engine.get_effective_strength(attacker_uid)
-    defender_player.sin += damage
+    sin_gain = _apply_sin_reduction_auras(engine, defender_idx, damage)
+    engine.gain_sin(defender_idx, sin_gain)
     engine._emit_event(
         "on_this_card_deals_damage",
         player_idx,
@@ -215,11 +226,11 @@ def resolve_direct_attack(
     )
     engine.state.log(
         f"{attacker_player.name} attacca con {attacker.definition.name} direttamente {defender_player.name} "
-        f"(Forza base {base_strength}, effettiva {damage}) (+{damage} Peccato)."
+        f"(Forza base {base_strength}, effettiva {damage}) (+{sin_gain} Peccato)."
     )
     apply_fiamma_primordiale_after_attack(engine, player_idx, defender_idx, attacker_uid)
     engine.check_win_conditions()
-    return ActionResult(True, f"Attacco diretto riuscito: +{damage} Peccato all'avversario.")
+    return ActionResult(True, f"Attacco diretto riuscito: +{sin_gain} Peccato all'avversario.")
 
 
 # Resolves a targeted combat, including barriers, lethal damage, and retaliation rules.

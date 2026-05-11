@@ -233,6 +233,15 @@ def _collect_requirement_cards(engine: "GameEngine", owner_idx: int, requirement
 def _free_play_condition_met(engine: "GameEngine", owner_idx: int, condition: dict | None) -> bool:
     if not isinstance(condition, dict) or not condition:
         return False
+    all_of = condition.get("all_of")
+    if isinstance(all_of, list):
+        return all(_free_play_condition_met(engine, owner_idx, dict(sub or {})) for sub in all_of if isinstance(sub, dict))
+    any_of = condition.get("any_of")
+    if isinstance(any_of, list) and any_of:
+        return any(_free_play_condition_met(engine, owner_idx, dict(sub or {})) for sub in any_of if isinstance(sub, dict))
+    not_node = condition.get("not")
+    if isinstance(not_node, dict):
+        return not _free_play_condition_met(engine, owner_idx, not_node)
     controller_has_cards = condition.get("controller_has_cards")
     if isinstance(controller_has_cards, dict):
         min_count = max(0, int(controller_has_cards.get("min_count", 1) or 1))

@@ -273,6 +273,7 @@ class CardFilterSpec:
     strength_lte: int | None = None
     drawn_this_turn_only: bool = False
     top_n_from_zone: int | None = None
+    half_cost_lte_my_inspiration: bool = False
 
 # The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 CARD_NAME = 'Giorno 4: Stelle'
 
@@ -11,7 +11,7 @@ SCRIPT = {
     "on_play_actions": [
         {
             "target": {"type": "source_card"},
-            "effect": {"action": "optional_draw_from_top_n_then_shuffle", "amount": 3, "target_player": "me"},
+            "effect": {"action": "draw_matching_from_top_n", "amount": 3, "card_name": "Giorno", "target_player": "me"},
         },
     ],
 }

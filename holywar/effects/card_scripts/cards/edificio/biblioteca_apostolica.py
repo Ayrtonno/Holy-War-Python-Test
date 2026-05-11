@@ -10,17 +10,15 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
-    "activate_once_per_turn": True,
     "play_targeting": "none",
     "activate_targeting": "guided",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_blessing_played", "frequency": "each_turn"},
-            "target": {"type": "source_card"},
-            "effect": {"action": "campana_add_counter"},
-        },
-        {
-            "trigger": {"event": "on_curse_played", "frequency": "each_turn"},
+            "trigger": {
+                "event": "on_card_played",
+                "frequency": "each_time",
+                "condition": {"event_card_type_in": ["benedizione", "maledizione"]},
+            },
             "target": {"type": "source_card"},
             "effect": {"action": "campana_add_counter"},
         },

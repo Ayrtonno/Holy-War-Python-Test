@@ -1009,6 +1009,13 @@ class RuntimeResolutionMixin:
                 drawn = engine.state.flags.get("cards_drawn_this_turn", {})
                 if uid not in set(drawn.get(str(owner_idx), [])):
                     continue
+            if target.card_filter.half_cost_lte_my_inspiration:
+                total_inspiration = int(engine.state.players[owner_idx].inspiration) + int(
+                    getattr(engine.state.players[owner_idx], "temporary_inspiration", 0)
+                )
+                half_cost = (max(0, int(inst.definition.faith or 0)) + 1) // 2
+                if total_inspiration < half_cost:
+                    continue
             source_inst = engine.state.instances.get(source_uid) if source_uid else None
             source_type = _norm(source_inst.definition.card_type) if source_inst is not None else ""
             if source_type:

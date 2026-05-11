@@ -17,11 +17,31 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "play_targeting": "none",
+    "protection_rules": [
+        {
+            "event": "target_by_effect",
+            "source_owner": "enemy",
+            "target_owner": "friendly",
+            "target_names": ["Custode della Creazione"],
+        }
+    ],
     "play_requirements": {
+        "can_play_without_inspiration_cost_if": {
+            "all_of": [
+                {
+                    "controller_has_cards": {
+                        "zones": ["field", "graveyard"],
+                        "owner": "me",
+                        "card_filter": {"name_equals": name},
+                    }
+                }
+                for name in REQUIRED_DAYS
+            ]
+        },
         "all_of": [
             {
                 "controller_has_cards": {
-                    "zone": "graveyard",
+                    "zones": ["field", "graveyard"],
                     "owner": "me",
                     "card_filter": {"name_equals": name},
                 }
@@ -34,7 +54,7 @@ SCRIPT = {
         {
             "target": {
                 "type": "cards_controlled_by_owner",
-                "zone": "graveyard",
+                "zones": ["field", "graveyard"],
                 "owner": "me",
                 "card_filter": {"name_equals": name},
                 "max_targets": 1,

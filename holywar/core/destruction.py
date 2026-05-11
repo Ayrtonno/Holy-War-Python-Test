@@ -3,6 +3,7 @@ from __future__ import annotations
 import unicodedata
 from typing import TYPE_CHECKING
 
+from holywar.core import query_helpers as query_ops
 from holywar.core import zones as zone_ops
 from holywar.effects.runtime import runtime_cards
 
@@ -14,6 +15,15 @@ def _norm(text: str) -> str:
     value = unicodedata.normalize("NFKD", text)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.strip().lower()
+
+
+def _apply_sin_reduction_auras(engine: "GameEngine", receiver_idx: int, amount: int) -> int:
+    out = max(0, int(amount))
+    if out <= 0:
+        return 0
+    if query_ops.has_artifact(engine, receiver_idx, "Giorno 2: Cielo Terrestre"):
+        out //= 2
+    return out
 
 
 def _equipped_card_types(engine: "GameEngine", saint_uid: str) -> list[str]:
@@ -294,6 +304,7 @@ def destroy_saint_by_uid(
                 ):
                     sin_gain = 0
                     break
+        sin_gain = _apply_sin_reduction_auras(engine, sin_receiver_idx, sin_gain)
         engine.gain_sin(sin_receiver_idx, sin_gain)
         engine.state.log(
             f"{inst.definition.name} viene distrutto: {engine.state.players[sin_receiver_idx].name} guadagna {sin_gain} Peccato."

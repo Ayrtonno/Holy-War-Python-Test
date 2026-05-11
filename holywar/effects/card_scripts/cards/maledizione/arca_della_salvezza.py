@@ -18,7 +18,7 @@ SCRIPT = {
                 "min_targets": 2,
                 "max_targets": 2,
             },
-            "effect": {"action": "destroy_all_saints_except_selected", "min_targets": 2},
+            "effect": {"action": "destroy_all_saints_except_selected"},
         }
     ],
 }
