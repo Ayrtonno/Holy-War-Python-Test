@@ -1055,6 +1055,114 @@
           "qty": 1
         }
       ]
+    },
+    {
+      "id": "user_t1_-_8_immortali",
+      "religion": "Taoismo",
+      "name": "T1 - 8 Immortali",
+      "allow_over_45": true,
+      "cards": [
+        {
+          "name": "Altare delle Otto Reliquie",
+          "qty": 1
+        },
+        {
+          "name": "Banchetto dell'Immortalita",
+          "qty": 2
+        },
+        {
+          "name": "Borraccia di Li Tieguai",
+          "qty": 2
+        },
+        {
+          "name": "Cao Guojiu",
+          "qty": 1
+        },
+        {
+          "name": "Convocazione degli Otto",
+          "qty": 3
+        },
+        {
+          "name": "Eco dei Nomi Immortali",
+          "qty": 3
+        },
+        {
+          "name": "Giardino del Loto Inverso",
+          "qty": 1
+        },
+        {
+          "name": "Giudizio delle Otto Tracce",
+          "qty": 1
+        },
+        {
+          "name": "Han Xiangzi",
+          "qty": 2
+        },
+        {
+          "name": "He Xian'gu",
+          "qty": 2
+        },
+        {
+          "name": "Lan Caihe",
+          "qty": 2
+        },
+        {
+          "name": "Li Tieguai",
+          "qty": 3
+        },
+        {
+          "name": "Lu Dongbin",
+          "qty": 2
+        },
+        {
+          "name": "Padiglione degli Immortali",
+          "qty": 1
+        },
+        {
+          "name": "Passo delle Nubi Gemelle",
+          "qty": 2
+        },
+        {
+          "name": "Patto dei Reishi",
+          "qty": 2
+        },
+        {
+          "name": "Ponte delle Opposte Rive",
+          "qty": 2
+        },
+        {
+          "name": "Ponte tra Cielo e Polvere",
+          "qty": 2
+        },
+        {
+          "name": "Sigillo dei Mortali",
+          "qty": 2
+        },
+        {
+          "name": "Sigillo di Yin e Yang",
+          "qty": 1
+        },
+        {
+          "name": "Spada Purificante di Lu Dongbin",
+          "qty": 1
+        },
+        {
+          "name": "Tavoletta del Ritorno",
+          "qty": 2
+        },
+        {
+          "name": "Ventaglio degli Otto Venti",
+          "qty": 2
+        },
+        {
+          "name": "Zhang Guolao",
+          "qty": 2
+        },
+        {
+          "name": "Zhongli Quan",
+          "qty": 1
+        }
+      ]
     }
   ]
 }

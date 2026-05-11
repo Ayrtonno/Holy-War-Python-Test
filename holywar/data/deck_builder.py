@@ -17,6 +17,7 @@ CANONICAL_RELIGIONS = [
     "Egiziane",
     "Ph-DakGaph",
     "Ombre Maya",
+    "Taoismo"
 ]
 
 RELIGION_ALIASES = {
@@ -27,6 +28,7 @@ RELIGION_ALIASES = {
     "Ph-DakGaph": {"Ph-DakGaph", "PHD-1"},
     "Ombre Maya": {"Ombre Maya", "MAY-1"},
     "Neutre": {"Neutre", "NEU-1"},
+    "Taoismo": {"Taoismo", "TAO-1"},
 }
 
 TYPE_PRIORITY = {

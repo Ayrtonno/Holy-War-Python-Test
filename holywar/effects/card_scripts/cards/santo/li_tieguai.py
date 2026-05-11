@@ -25,7 +25,7 @@ SCRIPT = {
                 "condition": TRIGGER_BAXIAN_DESTROYED,
             },
             "target": {"type": "source_card"},
-            "effect": {"action": "decrease_strength", "amount": 1},
+            "effect": {"action": "decrease_strength", "amount": 2},
         },
         {
             "trigger": {
