@@ -7,7 +7,7 @@ HAS_OTHER_BAXIAN = {
         "zones": ["field"],
         "owner": "me",
         "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-        "min_count": 2,
+        "min_count": 1,
     }
 }
 
