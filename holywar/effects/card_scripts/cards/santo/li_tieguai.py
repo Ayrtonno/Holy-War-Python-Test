@@ -13,7 +13,7 @@ TRIGGER_BAXIAN_DESTROYED = {
 }
 
 SCRIPT = {
-    "on_play_mode": "scripted",
+    "on_play_mode": "auto",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "play_targeting": "none",

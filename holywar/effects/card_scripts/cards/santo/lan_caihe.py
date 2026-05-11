@@ -3,7 +3,7 @@ from __future__ import annotations
 CARD_NAME = "Lan Caihe"
 
 SCRIPT = {
-    "on_play_mode": "scripted",
+    "on_play_mode": "auto",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
     "activate_once_per_turn": True,
