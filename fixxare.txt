@@ -1,2 +1,1 @@
-Fixxare lu dongbin (senza un immortale sul terreno non è summonabile)
-Convocazione degli 8 (Pesca la carta selezionata ma me la duplica)
+Assicurati che ogni volta che ci sono effetti tipo "cerca", "seleziona", "summona", viene sempre chiesto il bersaglio e/o la zona.....
