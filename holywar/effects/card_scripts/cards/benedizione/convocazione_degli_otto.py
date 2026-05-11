@@ -27,7 +27,7 @@ SCRIPT = {
                 "min_targets": 1,
                 "max_targets": 1,
             },
-            "effect": {"action": "move_to_hand"},
+            "effect": {"action": "move_source_to_zone", "to_zone": "hand"},
         },
         {"effect": {"action": "shuffle_deck", "target_player": "me"}},
         {
