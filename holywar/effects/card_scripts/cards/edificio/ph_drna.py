@@ -3,6 +3,11 @@
 CARD_NAME = """Ph'drna"""
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
@@ -14,6 +19,7 @@ SCRIPT = {
     "on_play_actions": [],
     "on_activate_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "target": {"type": "source_card"},
             "effect": {
                 "action": "choose_option",
@@ -53,18 +59,31 @@ SCRIPT = {
                         },
                     },
                 ],
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "any",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
+            "activation_mode": "mandatory_auto",
             "target": {"type": "source_card"},
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "phdrna_activate_destroy_target_then_self"},
         },
     ],

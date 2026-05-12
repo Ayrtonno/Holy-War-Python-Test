@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import re
+
+ROOT = Path("holywar/effects/card_scripts/cards")
+REPORT = Path("docs/reports/script_policy_audit.json")
+ACTION_KEYS = ('"on_play_actions"', '"on_enter_actions"', '"on_activate_actions"', "'on_play_actions'", "'on_enter_actions'", "'on_activate_actions'")
+
+
+def _module_path_for_card(card_name: str) -> Path | None:
+    key = card_name.strip().lower()
+    for p in ROOT.rglob("*.py"):
+        txt = p.read_text(encoding="utf-8")
+        m = re.search(r'CARD_NAME\s*=\s*["\'](.+?)["\']', txt)
+        if m and m.group(1).strip().lower() == key:
+            return p
+    return None
+
+
+def _count_delta(s: str) -> int:
+    return s.count("{") - s.count("}")
+
+
+def patch_file(path: Path) -> bool:
+    src = path.read_text(encoding="utf-8")
+    lines = src.splitlines()
+    out: list[str] = []
+    changed = False
+    i = 0
+    in_actions = False
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if not in_actions and any(k in stripped for k in ACTION_KEYS) and stripped.endswith("["):
+            in_actions = True
+            out.append(line)
+            i += 1
+            continue
+        if in_actions and stripped == "],":
+            in_actions = False
+            out.append(line)
+            i += 1
+            continue
+        if not in_actions:
+            out.append(line)
+            i += 1
+            continue
+
+        if stripped.startswith("{"):
+            block = [line]
+            depth = _count_delta(line)
+            i += 1
+            while i < len(lines) and depth > 0:
+                block.append(lines[i])
+                depth += _count_delta(lines[i])
+                i += 1
+            txt = "\n".join(block)
+            if '"activation_mode"' in txt or "'activation_mode'" in txt:
+                out.extend(block)
+                continue
+            if (
+                '"effect"' not in txt and "'effect'" not in txt
+                and '"target"' not in txt and "'target'" not in txt
+                and '"condition"' not in txt and "'condition'" not in txt
+            ):
+                out.extend(block)
+                continue
+            if len(block) == 1 and "}" in block[0]:
+                ln = block[0]
+                idx = ln.find("{") + 1
+                quote = "'" if "'" in ln and '"' not in ln else '"'
+                ln2 = ln[:idx] + f" {quote}activation_mode{quote}: {quote}mandatory_auto{quote}," + ln[idx:]
+                out.append(ln2)
+                changed = True
+                continue
+            indent = re.match(r"^(\s*)", block[0]).group(1) + "    "
+            use_single = any("'" in bl and '"' not in bl for bl in block)
+            if use_single:
+                ins = f"{indent}'activation_mode': 'mandatory_auto',"
+            else:
+                ins = f'{indent}"activation_mode": "mandatory_auto",'
+            block = block[:1] + [ins] + block[1:]
+            out.extend(block)
+            changed = True
+            continue
+
+        out.append(line)
+        i += 1
+    if changed:
+        path.write_text("\n".join(out) + ("\n" if src.endswith("\n") else ""), encoding="utf-8")
+    return changed
+
+
+def main() -> None:
+    report = json.loads(REPORT.read_text(encoding="utf-8"))
+    cards = sorted({item["card"] for item in report if item.get("code") == "missing.activation_mode"})
+    changed = 0
+    for card in cards:
+        p = _module_path_for_card(card)
+        if p and patch_file(p):
+            changed += 1
+    print(f"cards={len(cards)} changed={changed}")
+
+
+if __name__ == "__main__":
+    main()
+

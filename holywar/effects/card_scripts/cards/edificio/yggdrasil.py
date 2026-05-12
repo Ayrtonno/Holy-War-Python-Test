@@ -16,6 +16,11 @@ SAINT_FILTER = {
 }
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "noop",
     "on_enter_mode": "scripted",
     "on_activate_mode": "scripted",
@@ -26,11 +31,15 @@ SCRIPT = {
     "on_play_actions": [],
     "on_enter_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "deck",
                 "owner": "me",
                 "card_filter": SEARCH_FILTER,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {
                 "action": "choose_targets",
@@ -39,6 +48,7 @@ SCRIPT = {
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "selected_target",
                 "zone": "deck",
@@ -46,12 +56,16 @@ SCRIPT = {
                 "card_filter": SEARCH_FILTER,
                 "min_targets": 0,
                 "max_targets": 1,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {
                 "action": "reveal_selected_target",
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "selected_target",
                 "zone": "deck",
@@ -59,22 +73,30 @@ SCRIPT = {
                 "card_filter": SEARCH_FILTER,
                 "min_targets": 0,
                 "max_targets": 1,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {
                 "action": "move_to_hand",
             },
         },
         {
-            "target": {"type": "source_card"},
+            "activation_mode": "mandatory_auto",
+            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
             "effect": {
                 "action": "shuffle_deck",
                 "target_player": "me",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
         },
     ],
     "on_activate_actions": [
         {
-            "target": {"type": "source_card"},
+            "activation_mode": "mandatory_auto",
+            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
             "effect": {
                 "action": "choose_option",
                 "choice_title": "Yggdrasil - Modalità",
@@ -112,15 +134,22 @@ SCRIPT = {
                         },
                     },
                 ],
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["buff"]},
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
                 "card_filter": SAINT_FILTER,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {
                 "action": "choose_targets",
@@ -129,6 +158,7 @@ SCRIPT = {
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["buff"]},
             "target": {
                 "type": "selected_target",
@@ -137,10 +167,14 @@ SCRIPT = {
                 "card_filter": SAINT_FILTER,
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "increase_faith", "amount": 2},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["buff"]},
             "target": {
                 "type": "selected_target",
@@ -149,16 +183,23 @@ SCRIPT = {
                 "card_filter": SAINT_FILTER,
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "increase_strength", "amount": 2},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["artifact"]},
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "graveyard",
                 "owner": "me",
                 "card_filter": ARTIFACT_FILTER,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {
                 "action": "choose_targets",
@@ -167,6 +208,7 @@ SCRIPT = {
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["artifact"]},
             "target": {
                 "type": "selected_target",
@@ -175,21 +217,34 @@ SCRIPT = {
                 "card_filter": ARTIFACT_FILTER,
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "move_to_hand"},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["draw"]},
-            "target": {"type": "source_card"},
+            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["warcry"]},
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
                 "card_filter": SAINT_FILTER,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "increase_strength", "amount": 1},
         },

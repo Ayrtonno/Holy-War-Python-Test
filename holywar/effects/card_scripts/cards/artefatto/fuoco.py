@@ -5,6 +5,11 @@ ELEMENT_ARTIFACTS = ["Aria", "Fuoco", "Terra", "Acqua"]
 CREATOR_NAME = "Dio, il Creatore"
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
@@ -15,6 +20,9 @@ SCRIPT = {
             "target": {
                 "type": "all_saints_on_field",
                 "card_filter": {"card_type_in": ["santo"], "crosses_gte": 4},
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "decrease_faith", "amount": 2},
         }
@@ -22,6 +30,7 @@ SCRIPT = {
     "on_play_actions": [],
     "on_activate_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "all_of": [
                     *[
@@ -52,8 +61,13 @@ SCRIPT = {
                 "card_filter": {"name_equals": CREATOR_NAME, "card_type_in": ["santo"]},
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "summon_named_card"},
+                "placement_policy": "prompt_slot_required",
+            "placement_policy": "prompt_slot_required",
         }
     ],
 }

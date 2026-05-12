@@ -305,6 +305,14 @@ class TargetSpec:
     min_targets: int | None = None
     max_targets: int | None = None
     max_targets_from: dict[str, Any] | None = None
+    # optional_resolve | required_to_activate | required_to_resolve
+    target_policy: str = "optional_resolve"
+    # prompt | auto | none
+    selection_mode: str = "prompt"
+    # abort_step | abort_action | noop
+    cancel_behavior: str = "abort_step"
+    # If None, runtime infers from target_policy.
+    allow_none: bool | None = None
 
 # The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
@@ -351,6 +359,10 @@ class EffectSpec:
     fallback_to_zone: str | None = None
     replace_occupied_artifact: bool = False
     replace_occupied_building: bool = False
+    # prompt_slot_required | auto_first_free | prompt_slot_optional
+    placement_policy: str | None = None
+    fixed_zone: str | None = None
+    fixed_slot: int | None = None
 
 # The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
@@ -365,6 +377,8 @@ class ActionSpec:
     target: TargetSpec
     effect: EffectSpec
     condition: dict[str, Any] = field(default_factory=dict)
+    # mandatory_auto | optional_prompt | optional_silent
+    activation_mode: str = "mandatory_auto"
 
 # The following classes define data structures for representing card scripts, triggered effects, action specifications, and other related concepts in the game. These classes use the `@dataclass` decorator to automatically generate initialization methods and other boilerplate code. They are used to represent the various properties and behaviors of cards and effects in a structured way that can be easily manipulated by the runtime when processing card effects and game events.
 @dataclass(slots=True)
@@ -377,6 +391,12 @@ class CardScript:
     play_owner: str = "me"
     can_play_from_hand: bool = True
     play_targeting: str = "auto"
+    # Global defaults for this card script (can be overridden by per-step specs).
+    default_target_policy: str = "optional_resolve"
+    default_selection_mode: str = "prompt"
+    default_cancel_behavior: str = "abort_step"
+    default_placement_policy: str = "prompt_slot_required"
+    default_activation_mode: str = "mandatory_auto"
     play_requirements: dict[str, Any] = field(default_factory=dict)
     play_cost_fixed: int | None = None
     play_cost_reduction_if_controller_has_card_type_in_hand: list[str] = field(default_factory=list)
@@ -444,6 +464,8 @@ class CardScript:
     on_activate_actions: list[ActionSpec] = field(default_factory=list)
     faith_bonus_rules: list[dict[str, Any]] = field(default_factory=list)
     counted_bonuses: list[dict[str, Any]] = field(default_factory=list)
+    is_equip: bool = False
+    equip_rules: dict[str, Any] = field(default_factory=dict)
 
 
 from holywar.effects.runtime_sections import RuntimeRegistryMixin, RuntimeResolutionMixin, RuntimeEffectsMixin

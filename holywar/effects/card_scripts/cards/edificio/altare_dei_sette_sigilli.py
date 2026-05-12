@@ -3,6 +3,11 @@
 CARD_NAME = """Altare dei Sette Sigilli"""
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
@@ -16,6 +21,9 @@ SCRIPT = {
                 "condition": {"event_card_owner": "me"},
             },
             "target": {"type": "source_card"},
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "add_seal_counter", "amount": 1},
         },
         {
@@ -30,11 +38,17 @@ SCRIPT = {
                 },
             },
             "target": {"type": "source_card"},
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "add_seal_counter", "amount": 1},
         },
         {
             "trigger": {"event": "on_this_card_leaves_field", "frequency": "each_time"},
             "target": {"type": "source_card"},
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "remove_seal_counter", "amount": 999},
         },
     ],

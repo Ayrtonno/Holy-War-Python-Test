@@ -3,6 +3,11 @@ from __future__ import annotations
 CARD_NAME = "Veggente dell'Apocalisse"
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "scripted",
     "on_activate_mode": "scripted",
@@ -13,6 +18,7 @@ SCRIPT = {
     "on_play_actions": [],
     "on_enter_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "controller_has_cards": {
                     "owner": "me",
@@ -26,10 +32,14 @@ SCRIPT = {
                 "zone": "deck",
                 "owner": "me",
                 "card_filter": {"name_contains": "Sigillo"},
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "choose_targets", "min_targets": 0, "max_targets": 1},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "all_of": [
                     {
@@ -50,17 +60,27 @@ SCRIPT = {
                 "card_filter": {"name_contains": "Sigillo"},
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "move_to_hand"},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {"selected_target_exists": True},
             "target": {"type": "source_card"},
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },
     ],
     "on_activate_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "target": {"type": "source_card"},
             "effect": {
                 "action": "choose_option",
@@ -83,9 +103,13 @@ SCRIPT = {
                         },
                     },
                 ],
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "all_of": [
                     {"selected_option_in": ["add"]},
@@ -98,10 +122,14 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {"script_is_altare_sigilli": True},
                 "max_targets": 1,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "add_seal_counter", "amount": 1},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "all_of": [
                     {"selected_option_in": ["draw"]},
@@ -115,10 +143,14 @@ SCRIPT = {
                 "owner": "me",
                 "card_filter": {"script_is_altare_sigilli": True},
                 "max_targets": 1,
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "remove_seal_counter", "amount": 3},
         },
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "all_of": [
                     {"selected_option_in": ["draw"]},
@@ -127,6 +159,11 @@ SCRIPT = {
                 ]
             },
             "target": {"type": "source_card"},
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"},
         },
     ],

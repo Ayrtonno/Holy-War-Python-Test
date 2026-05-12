@@ -3,6 +3,11 @@ from __future__ import annotations
 CARD_NAME = "Portatore delle Piaghe"
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
@@ -55,7 +60,8 @@ SCRIPT = {
     "on_play_actions": [],
     "on_activate_actions": [
         {
-            "target": {"type": "source_card"},
+            "activation_mode": "mandatory_auto",
+            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
             "effect": {
                 "action": "choose_and_activate_effect",
                 "target_player": "me",
@@ -69,6 +75,9 @@ SCRIPT = {
                         "card_type_in": ["benedizione", "maledizione"],
                     }
                 ],
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
         }
     ],

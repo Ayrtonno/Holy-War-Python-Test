@@ -11,24 +11,65 @@ HAS_3_DISTINCT = {
     }
 }
 
+SOURCE_TARGET = {
+    "type": "source_card",
+    "target_policy": "optional_resolve",
+    "selection_mode": "prompt",
+    "cancel_behavior": "abort_step",
+}
+
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "play_targeting": "none",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-            "target": {"type": "source_card"},
-            "effect": {"action": "choose_option", "choice_title": "Giardino", "choice_prompt": "Scegli effetto", "choice_options": [
-                {"label": "Rimuovi 4 Peccato", "value": "heal"},
-                {"label": "Infliggi 4 Peccato", "value": "hit"}
-            ]},
+            "trigger": {"event": "on_draw_phase_start", "frequency": "each_turn"},
+            "target": SOURCE_TARGET,
+            "effect": {
+                "action": "choose_option",
+                "choice_title": "Giardino",
+                "choice_prompt": "Scegli effetto",
+                "choice_options": [
+                    {"label": "Rimuovi 4 Peccato", "value": "heal"},
+                    {"label": "Infliggi 4 Peccato", "value": "hit"},
+                ],
+            },
         },
-        {"trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": {"all_of": [{"not": HAS_3_DISTINCT}, {"selected_option_in": ["heal"]}]}}, "target": {"type": "source_card"}, "effect": {"action": "remove_sin", "amount": 4, "target_player": "me"}},
-        {"trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": {"all_of": [{"not": HAS_3_DISTINCT}, {"selected_option_in": ["hit"]}]}}, "target": {"type": "source_card"}, "effect": {"action": "inflict_sin", "amount": 4, "target_player": "opponent"}},
-        {"trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT}, "target": {"type": "source_card"}, "effect": {"action": "remove_sin", "amount": 4, "target_player": "me"}},
-        {"trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT}, "target": {"type": "source_card"}, "effect": {"action": "inflict_sin", "amount": 4, "target_player": "opponent"}},
+        {
+            "trigger": {
+                "event": "on_draw_phase_start",
+                "frequency": "each_turn",
+                "condition": {"all_of": [{"not": HAS_3_DISTINCT}, {"selected_option_in": ["heal"]}]},
+            },
+            "target": SOURCE_TARGET,
+            "effect": {"action": "remove_sin", "amount": 4, "target_player": "me"},
+        },
+        {
+            "trigger": {
+                "event": "on_draw_phase_start",
+                "frequency": "each_turn",
+                "condition": {"all_of": [{"not": HAS_3_DISTINCT}, {"selected_option_in": ["hit"]}]},
+            },
+            "target": SOURCE_TARGET,
+            "effect": {"action": "inflict_sin", "amount": 4, "target_player": "opponent"},
+        },
+        {
+            "trigger": {"event": "on_draw_phase_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT},
+            "target": SOURCE_TARGET,
+            "effect": {"action": "remove_sin", "amount": 4, "target_player": "me"},
+        },
+        {
+            "trigger": {"event": "on_draw_phase_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT},
+            "target": SOURCE_TARGET,
+            "effect": {"action": "inflict_sin", "amount": 4, "target_player": "opponent"},
+        },
     ],
     "on_play_actions": [],
 }

@@ -3,6 +3,11 @@ from __future__ import annotations
 CARD_NAME = "Vaso della Corrente Mite"
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
@@ -13,16 +18,20 @@ SCRIPT = {
     "on_play_actions": [],
     "on_activate_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "selected_target",
                 "zone": "hand",
                 "owner": "me",
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "send_to_graveyard"},
         },
-        {"effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
-        {"effect": {"action": "mill_cards", "amount": 1, "target_player": "opponent"}},
+        { "activation_mode": "mandatory_auto","effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
+        { "activation_mode": "mandatory_auto","effect": {"action": "mill_cards", "amount": 1, "target_player": "opponent"}},
     ],
 }

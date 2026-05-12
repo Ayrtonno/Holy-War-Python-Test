@@ -753,7 +753,8 @@ class RuntimeResolutionMixin:
                     # Trigger-side choose_option needs an explicit follow-up pass:
                     # once the choice is confirmed, apply sibling triggers on the
                     # same source/event whose conditions depend on selected_option_in.
-                    if effect_action == "choose_option" and choice_ready_before:
+                    choice_ready_after = bool(ctx.engine.state.flags.get("_runtime_choice_ready"))
+                    if effect_action == "choose_option" and choice_ready_after:
                         selected_option = str(ctx.engine.state.flags.get("_runtime_selected_option", "")).strip()
                         if selected_option:
                             for follow_te in script.triggered_effects:

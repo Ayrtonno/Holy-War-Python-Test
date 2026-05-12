@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import re
+import unicodedata
+
+ROOT = Path("holywar/effects/card_scripts/cards")
+REPORT = Path("docs/reports/script_policy_audit.json")
+SUMMON_ACTIONS = {
+    "summon_target_to_field",
+    "summon_target_to_field_pay_half_inspiration",
+    "summon_card_from_hand",
+    "summon_named_card",
+    "summon_named_card_from_flag",
+    "summon_generated_token",
+    "summon_generated_token_in_each_free_saint_slot",
+    "summon_stored_card_to_field",
+    "choose_targets_and_summon_to_field",
+}
+
+
+def _module_path_for_card(card_name: str) -> Path | None:
+    def norm(v: str) -> str:
+        s = unicodedata.normalize("NFKD", v or "")
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+        return s.strip().lower()
+    key = norm(card_name)
+    for p in ROOT.rglob("*.py"):
+        txt = p.read_text(encoding="utf-8")
+        m = re.search(r'CARD_NAME\s*=\s*["\'](.+?)["\']', txt)
+        if m and norm(m.group(1)) == key:
+            return p
+    return None
+
+
+def _count_delta(s: str) -> int:
+    return s.count("{") - s.count("}")
+
+
+def patch_file(path: Path) -> bool:
+    src = path.read_text(encoding="utf-8")
+    lines = src.splitlines()
+    out: list[str] = []
+    changed = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if not re.search(r"""["']effect["']\s*:\s*\{""", stripped):
+            out.append(line)
+            i += 1
+            continue
+
+        block = [line]
+        depth = _count_delta(line)
+        i += 1
+        while i < len(lines) and depth > 0:
+            block.append(lines[i])
+            depth += _count_delta(lines[i])
+            i += 1
+        block_txt = "\n".join(block)
+        if '"placement_policy"' in block_txt or "'placement_policy'" in block_txt:
+            out.extend(block)
+            continue
+        if not any((f'"action": "{a}"' in block_txt or f"'action': '{a}'" in block_txt) for a in SUMMON_ACTIONS):
+            out.extend(block)
+            continue
+
+        # one-line dict
+        if len(block) == 1 and "}" in block[0]:
+            ln = block[0]
+            idx = ln.rfind("}")
+            quote = "'" if "'effect': {" in ln or "'action':" in ln else '"'
+            ln2 = ln[:idx] + f", {quote}placement_policy{quote}: {quote}prompt_slot_required{quote}" + ln[idx:]
+            out.append(ln2)
+            changed = True
+            continue
+
+        # multi-line dict: insert before closing brace
+        close_idx = len(block) - 1
+        indent = re.match(r"^(\s*)", block[0]).group(1) + "    "
+        use_single = any("'" in bl and '"' not in bl for bl in block)
+        if use_single:
+            ins = f"{indent}'placement_policy': 'prompt_slot_required',"
+        else:
+            ins = f'{indent}"placement_policy": "prompt_slot_required",'
+        block = block[:close_idx] + [ins] + block[close_idx:]
+        out.extend(block)
+        changed = True
+    if changed:
+        path.write_text("\n".join(out) + ("\n" if src.endswith("\n") else ""), encoding="utf-8")
+    return changed
+
+
+def main() -> None:
+    report = json.loads(REPORT.read_text(encoding="utf-8"))
+    cards = sorted({item["card"] for item in report if item.get("code") == "missing.placement_policy"})
+    changed = 0
+    for card in cards:
+        p = _module_path_for_card(card)
+        if p and patch_file(p):
+            changed += 1
+    print(f"cards={len(cards)} changed={changed}")
+
+
+if __name__ == "__main__":
+    main()

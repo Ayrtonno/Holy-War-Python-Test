@@ -3,6 +3,11 @@
 CARD_NAME = 'Ultima Offerta'
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
@@ -10,6 +15,7 @@ SCRIPT = {
     "triggered_effects": [],
     "on_play_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "selected_target",
                 "zone": "hand",
@@ -17,16 +23,24 @@ SCRIPT = {
                 "card_filter": {"card_type_in": ["santo"]},
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "store_target_strength", "flag": "ultima_offerta_discarded_strength"},
         },
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "selected_target",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "send_to_graveyard"},
         },
         {
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "selected_target",
                 "zone": "field",
@@ -34,6 +48,9 @@ SCRIPT = {
                 "card_filter": {"card_type_in": ["santo", "token"]},
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "increase_faith_from_flag", "flag": "ultima_offerta_discarded_strength"},
         },

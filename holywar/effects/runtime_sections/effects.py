@@ -1466,8 +1466,6 @@ class RuntimeEffectsMixin:
                     if open_slots:
                         chosen_token = ""
                         chooser = getattr(engine, "choose_summon_slot", None)
-                        if not callable(chooser):
-                            chooser = getattr(engine, "choose_auto_play_slot_from_draw", None)
                         if callable(chooser):
                             try:
                                 chosen_token = str(chooser(board_owner, t_uid, open_slots) or "").strip().lower()
@@ -1480,12 +1478,6 @@ class RuntimeEffectsMixin:
                             elif chosen_token.startswith("d"):
                                 zone = "defense"
                                 slot = int(chosen_token[1:]) - 1
-                        if slot is None:
-                            slot = engine._first_open(board_player.attack)
-                            zone = "attack"
-                            if slot is None:
-                                slot = engine._first_open(board_player.defense)
-                                zone = "defense"
                     if slot is not None and engine.place_card_from_uid(board_owner, t_uid, zone, slot):
                         placed = True
 

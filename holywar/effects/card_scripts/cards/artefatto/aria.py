@@ -5,6 +5,11 @@ ELEMENT_ARTIFACTS = ["Aria", "Fuoco", "Terra", "Acqua"]
 CREATOR_NAME = "Dio, il Creatore"
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "scripted",
@@ -13,12 +18,18 @@ SCRIPT = {
         {
             "trigger": {"event": "on_main_phase_start", "frequency": "each_turn"},
             "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             "effect": {"action": "add_inspiration", "amount": 1, "target_player": "me"}
         }
     ],
     "on_play_actions": [],
     "on_activate_actions": [
         {
+            "activation_mode": "mandatory_auto",
             "condition": {
                 "all_of": [
                     *[
@@ -49,8 +60,13 @@ SCRIPT = {
                 "card_filter": {"name_equals": CREATOR_NAME, "card_type_in": ["santo"]},
                 "min_targets": 1,
                 "max_targets": 1,
+                "target_policy": "required_to_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
             },
             "effect": {"action": "summon_named_card"},
+                "placement_policy": "prompt_slot_required",
+            "placement_policy": "prompt_slot_required",
         }
     ],
 }

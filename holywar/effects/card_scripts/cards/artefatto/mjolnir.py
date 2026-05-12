@@ -3,6 +3,11 @@
 CARD_NAME = """Mjolnir"""
 
 SCRIPT = {
+    "default_selection_mode": "prompt",
+    "default_cancel_behavior": "abort_step",
+    "default_target_policy": "optional_resolve",
+    "default_placement_policy": "prompt_slot_required",
+    "default_activation_mode": "mandatory_auto",
     "on_play_mode": "noop",
     "play_requirements": {
         "controller_has_cards": {

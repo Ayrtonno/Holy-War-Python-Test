@@ -92,6 +92,11 @@ class RuntimeRegistryMixin:
             if value is None:
                 return None
             return int(value)
+        default_target_policy = str(spec.get("default_target_policy", "optional_resolve"))
+        default_selection_mode = str(spec.get("default_selection_mode", "prompt"))
+        default_cancel_behavior = str(spec.get("default_cancel_behavior", "abort_step"))
+        default_placement_policy = str(spec.get("default_placement_policy", "prompt_slot_required"))
+        default_activation_mode = str(spec.get("default_activation_mode", "mandatory_auto"))
 
         # This function returns a template dictionary for player-specific flags in the runtime state. The template includes default values for various flags that indicate the player's current state in the game, such as whether they can play cards, activate effects, attack, reposition saints, and counts of saints on the field and in attack/defense positions. This template is used to initialize the player-specific state in the runtime state dictionary when ensuring that it exists in the game engine's state flags.
         def _parse_effect(raw: dict[str, Any]) -> EffectSpec:
@@ -169,6 +174,13 @@ class RuntimeRegistryMixin:
                 ),
                 replace_occupied_artifact=bool(raw.get("replace_occupied_artifact", False)),
                 replace_occupied_building=bool(raw.get("replace_occupied_building", False)),
+                placement_policy=(
+                    str(raw.get("placement_policy"))
+                    if raw.get("placement_policy") is not None
+                    else default_placement_policy
+                ),
+                fixed_zone=(str(raw.get("fixed_zone")) if raw.get("fixed_zone") is not None else None),
+                fixed_slot=_to_int_or_none(raw.get("fixed_slot")),
             )
 
         # This function parses a raw target specification from a dictionary and converts it into a `TargetSpec` data class instance. It handles various fields that may be present in the raw target specification, such as card filters, zone specifications, owner specifications, and target limits. The function also processes nested structures for card filters and ensures that all relevant fields are properly converted to the expected types. The resulting `TargetSpec` instance can then be used in the construction of card scripts to define the targeting behavior of effects and actions.
@@ -208,6 +220,10 @@ class RuntimeRegistryMixin:
                 min_targets=_to_int_or_none(target_min_raw),
                 max_targets=_to_int_or_none(target_max_raw),
                 max_targets_from=(dict(raw["max_targets_from"]) if raw.get("max_targets_from") is not None else None),
+                target_policy=str(raw.get("target_policy", default_target_policy)),
+                selection_mode=str(raw.get("selection_mode", default_selection_mode)),
+                cancel_behavior=str(raw.get("cancel_behavior", default_cancel_behavior)),
+                allow_none=(bool(raw.get("allow_none")) if raw.get("allow_none") is not None else None),
             )
 
         # This block of code parses the card script specification from the provided dictionary and constructs a `CardScript` instance with all the relevant properties. It handles the parsing of triggered effects, on-play actions, on-enter actions, and on-activate actions, converting them into their respective data class instances. The method then registers the constructed `CardScript` in the registry under the normalized card name, allowing it to be accessed and utilized during gameplay.
@@ -238,18 +254,37 @@ class RuntimeRegistryMixin:
         for a in spec.get("on_play_actions", []):
             target = _parse_target(a.get("target", {}) or {})
             effect = _parse_effect(a.get("effect", {}) or {})
-            on_play_actions.append(ActionSpec(target=target, effect=effect, condition=dict(a.get("condition", {}) or {})))
+            on_play_actions.append(
+                ActionSpec(
+                    target=target,
+                    effect=effect,
+                    condition=dict(a.get("condition", {}) or {}),
+                    activation_mode=str(a.get("activation_mode", default_activation_mode)),
+                )
+            )
         on_enter_actions: list[ActionSpec] = []
         for a in spec.get("on_enter_actions", []):
             target = _parse_target(a.get("target", {}) or {})
             effect = _parse_effect(a.get("effect", {}) or {})
-            on_enter_actions.append(ActionSpec(target=target, effect=effect, condition=dict(a.get("condition", {}) or {})))
+            on_enter_actions.append(
+                ActionSpec(
+                    target=target,
+                    effect=effect,
+                    condition=dict(a.get("condition", {}) or {}),
+                    activation_mode=str(a.get("activation_mode", default_activation_mode)),
+                )
+            )
         on_activate_actions: list[ActionSpec] = []
         for a in spec.get("on_activate_actions", []):
             target = _parse_target(a.get("target", {}) or {})
             effect = _parse_effect(a.get("effect", {}) or {})
             on_activate_actions.append(
-                ActionSpec(target=target, effect=effect, condition=dict(a.get("condition", {}) or {}))
+                ActionSpec(
+                    target=target,
+                    effect=effect,
+                    condition=dict(a.get("condition", {}) or {}),
+                    activation_mode=str(a.get("activation_mode", default_activation_mode)),
+                )
             )
 
         # After parsing all the relevant properties from the specification dictionary, the method constructs a `CardScript` instance with the parsed triggered effects and actions. It also sets various properties of the `CardScript` based on the values in the specification, such as play modes, targeting modes, attack properties, and cost modifications. Finally, it registers the constructed `CardScript` in the registry under the normalized card name, making it available for use during gameplay.
@@ -263,6 +298,11 @@ class RuntimeRegistryMixin:
                 play_owner=str(spec.get("play_owner", "me")),
                 can_play_from_hand=bool(spec.get("can_play_from_hand", True)),
                 play_targeting=str(spec.get("play_targeting", "auto")),
+                default_target_policy=default_target_policy,
+                default_selection_mode=default_selection_mode,
+                default_cancel_behavior=default_cancel_behavior,
+                default_placement_policy=default_placement_policy,
+                default_activation_mode=default_activation_mode,
                 activate_targeting=str(spec.get("activate_targeting", "auto")),
                 attack_targeting=str(spec.get("attack_targeting", "auto")),
                 can_activate_by_any_player=bool(spec.get("can_activate_by_any_player", False)),
@@ -429,6 +469,8 @@ class RuntimeRegistryMixin:
                 on_activate_actions=on_activate_actions,
                 faith_bonus_rules=[dict(v) for v in list(spec.get("faith_bonus_rules", []) or []) if isinstance(v, dict)],
                 counted_bonuses=[dict(v) for v in list(spec.get("counted_bonuses", []) or []) if isinstance(v, dict)],
+                is_equip=bool(spec.get("is_equip", False)),
+                equip_rules=dict(spec.get("equip_rules", {}) or {}),
             )
         )
 
