@@ -1465,7 +1465,9 @@ class RuntimeEffectsMixin:
                     zone = "attack"
                     if open_slots:
                         chosen_token = ""
-                        chooser = getattr(engine, "choose_auto_play_slot_from_draw", None)
+                        chooser = getattr(engine, "choose_summon_slot", None)
+                        if not callable(chooser):
+                            chooser = getattr(engine, "choose_auto_play_slot_from_draw", None)
                         if callable(chooser):
                             try:
                                 chosen_token = str(chooser(board_owner, t_uid, open_slots) or "").strip().lower()
@@ -2833,7 +2835,7 @@ class RuntimeEffectsMixin:
             flag_name = str(effect.flag or "").strip()
             if not flag_name:
                 return
-            req = dict(effect.requirement or {})
+            req = dict(getattr(effect, "requirement", None) or {})
             matches = self._collect_cards_for_requirement(engine, owner_idx, req)
             seen: set[str] = set()
             for uid in matches:

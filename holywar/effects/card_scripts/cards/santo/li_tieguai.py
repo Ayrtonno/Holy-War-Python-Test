@@ -4,6 +4,7 @@ CARD_NAME = "Li Tieguai"
 
 TRIGGER_BAXIAN_DESTROYED = {
     "all_of": [
+        {"source_on_field": True},
         {"event_card_owner": "me"},
         {"event_card_type_in": ["santo", "token"]},
         {"event_card_name_contains": "ba xian"},

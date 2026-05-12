@@ -27,7 +27,17 @@ SCRIPT = {
         {"condition": {"selected_option_in": ["draw"]}, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
         {
             "condition": {"selected_option_in": ["buff"]},
-            "target": {"type": "selected_target", "zone": "field", "owner": "me", "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]}, "min_targets": 1, "max_targets": 1},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+            },
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "condition": {"selected_option_in": ["buff"]},
+            "target": {"type": "selected_target"},
             "effect": {"action": "increase_strength", "amount": 4},
         },
         {

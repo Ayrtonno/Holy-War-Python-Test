@@ -6,7 +6,7 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "play_targeting": "guided",
+    "play_targeting": "auto",
     "triggered_effects": [],
     "on_play_actions": [
         {
@@ -32,22 +32,12 @@ SCRIPT = {
         {
             "target": {
                 "type": "selected_targets",
-                "zone": "field",
-                "owner": "opponent",
-                "card_filter": {"card_type_in": ["santo", "token", "artefatto", "edificio"]},
-                "min_targets": 0,
-                "max_targets": 8,
             },
             "effect": {"action": "store_target_count", "flag": "gd8_destroyed_count"},
         },
         {
             "target": {
                 "type": "selected_targets",
-                "zone": "field",
-                "owner": "opponent",
-                "card_filter": {"card_type_in": ["santo", "token", "artefatto", "edificio"]},
-                "min_targets": 0,
-                "max_targets": 8,
             },
             "effect": {"action": "destroy_card"},
         },

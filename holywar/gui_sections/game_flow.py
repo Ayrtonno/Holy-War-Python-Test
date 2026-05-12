@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import random
 import copy
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -16,6 +18,8 @@ from holywar.core.engine import GameEngine
 from holywar.core.state import GameState
 from holywar.data.deck_builder import available_premade_decks, get_premade_label
 from holywar.effects.runtime import runtime_cards
+
+RELOAD_RESTORE_ENV = "HOLYWAR_RELOAD_RESTORE_PATH"
 
 # This mixin class provides methods for managing the game flow in the GUI, including showing different screens (main menu, game screen, deck manager), handling the start of a new game, managing turn flow and AI actions, handling chain priority during card interactions, and providing options to save the game state and export logs. It interacts with the game engine to execute game actions based on user input and AI decisions, while also updating the GUI accordingly.
 class GUIGameFlowMixin:
@@ -100,6 +104,7 @@ class GUIGameFlowMixin:
         self.engine.choose_battle_survival_from_graveyard = self._choose_battle_survival_from_graveyard
         self.engine.choose_auto_play_drawn_card = self._choose_auto_play_drawn_card
         self.engine.choose_auto_play_slot_from_draw = self._choose_auto_play_slot_from_draw
+        self.engine.choose_summon_slot = self._choose_summon_slot
         self.rng = random.Random(self.seed)
         self.last_log_idx = 0
         self.turn_started = False
@@ -334,6 +339,54 @@ class GUIGameFlowMixin:
         # Keep deterministic placement by choosing the first valid slot.
         return str(slot_tokens[0]).strip().lower()
 
+    def _choose_summon_slot(
+        self,
+        player_idx: int,
+        source_uid: str,
+        slot_tokens: list[str],
+    ) -> str | None:
+        if self.engine is None:
+            return slot_tokens[0] if slot_tokens else None
+        if not slot_tokens:
+            return None
+        if self._is_ai_player(player_idx):
+            return str(slot_tokens[0]).strip().lower()
+
+        own_idx = self.current_human_idx()
+        if own_idx is None:
+            own_idx = player_idx
+
+        choices: list[tuple[str, str]] = []
+        for token in slot_tokens:
+            base = str(token or "").strip().lower()
+            if not base:
+                continue
+            side_prefix = "TUO" if player_idx == own_idx else "AVVERSARIO"
+            if base.startswith("a") and len(base) == 2 and base[1].isdigit():
+                label = f"{side_prefix} | Attacco {base[1]}"
+            elif base.startswith("d") and len(base) == 2 and base[1].isdigit():
+                label = f"{side_prefix} | Difesa {base[1]}"
+            else:
+                label = f"{side_prefix} | {base.upper()}"
+            choices.append((label, base))
+        if not choices:
+            return None
+
+        canceled, selected = self._open_board_target_picker(
+            title="Scegli locazione evocazione",
+            prompt="Seleziona dove evocare la carta.",
+            choices=choices,
+            allow_multi=False,
+            min_targets=1,
+            max_targets=1,
+            allow_none=False,
+            allow_manual=False,
+            card_uid=source_uid,
+        )
+        if canceled or not selected:
+            return None
+        return str(selected).strip().lower()
+
     def _choose_auto_play_drawn_card(
         self,
         player_idx: int,
@@ -462,14 +515,108 @@ class GUIGameFlowMixin:
 
     def reload_scripts(self) -> None:
         try:
+            do_restart = messagebox.askyesno(
+                "Reload Completo",
+                "Verrà riavviata l'app per ricaricare TUTTO il codice (GUI, engine, script carte).\n"
+                "La partita corrente verrà salvata e ripristinata automaticamente al riavvio.\n\n"
+                "Continuare?",
+            )
+            if not do_restart:
+                return
+
+            # Keep a best-effort script reload before restart so any bootstrap errors
+            # are surfaced immediately to the user.
             runtime_cards.clear_for_tests()
             runtime_cards._bootstrap_from_cards_json()  # noqa: SLF001
             runtime_cards._bootstrap_from_script_files()  # noqa: SLF001
-            self.status_var.set("Script ricaricati.")
+
+            restore_payload: dict[str, Any] = {
+                "gui": {
+                    "mode": str(self.mode_var.get() or "ai"),
+                    "p1_name": str(self.p1_name_var.get() or ""),
+                    "p2_name": str(self.p2_name_var.get() or ""),
+                    "p1_rel": str(self.p1_rel_var.get() or ""),
+                    "p2_rel": str(self.p2_rel_var.get() or ""),
+                    "p1_deck": str(self.p1_deck_var.get() or ""),
+                    "p2_deck": str(self.p2_deck_var.get() or ""),
+                    "chain_enabled": bool(self.chain_enabled.get()),
+                }
+            }
             if self.engine is not None:
-                self.refresh()
+                restore_payload["state"] = self.engine.state.to_dict()
+
+            restore_dir = appdata_dir() / "temp"
+            restore_dir.mkdir(parents=True, exist_ok=True)
+            restore_path = restore_dir / "reload_restore_state.json"
+            restore_path.write_text(json.dumps(restore_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.environ[RELOAD_RESTORE_ENV] = str(restore_path)
+
+            self.status_var.set("Riavvio in corso...")
+            self.update_idletasks()
+
+            if getattr(sys, "frozen", False):
+                os.execv(sys.executable, [sys.executable, *sys.argv[1:]])
+
+            # Always relaunch as module to guarantee package imports
+            # (running a package file directly can break "import holywar").
+            relaunch_args = [sys.executable, "-m", "holywar.gui", *sys.argv[1:]]
+            os.execv(sys.executable, relaunch_args)
         except Exception as exc:
             messagebox.showerror("Reload Scripts", f"Errore durante il reload degli script:\n{exc}")
+
+    def restore_after_full_reload(self, restore_path: str) -> None:
+        path = Path(str(restore_path or "").strip())
+        if not str(path):
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return
+
+        try:
+            gui = dict(payload.get("gui", {}) or {})
+            self.mode_var.set(str(gui.get("mode", self.mode_var.get() or "ai")))
+            self.p1_name_var.set(str(gui.get("p1_name", self.p1_name_var.get() or "")))
+            self.p2_name_var.set(str(gui.get("p2_name", self.p2_name_var.get() or "")))
+            self.p1_rel_var.set(str(gui.get("p1_rel", self.p1_rel_var.get() or "")))
+            self.p2_rel_var.set(str(gui.get("p2_rel", self.p2_rel_var.get() or "")))
+            self.update_premade_options()
+            self.p1_deck_var.set(str(gui.get("p1_deck", self.p1_deck_var.get() or "")))
+            self.p2_deck_var.set(str(gui.get("p2_deck", self.p2_deck_var.get() or "")))
+            self.chain_enabled.set(bool(gui.get("chain_enabled", self.chain_enabled.get())))
+
+            state_payload = payload.get("state")
+            if isinstance(state_payload, dict) and state_payload:
+                self.engine = GameEngine(GameState.from_dict(state_payload), seed=self.seed)
+                self.engine.choose_battle_survival_from_graveyard = self._choose_battle_survival_from_graveyard
+                self.engine.choose_auto_play_drawn_card = self._choose_auto_play_drawn_card
+                self.engine.choose_auto_play_slot_from_draw = self._choose_auto_play_slot_from_draw
+                self.engine.choose_summon_slot = self._choose_summon_slot
+                self.last_log_idx = 0
+                self.turn_started = self.engine.state.phase != "setup"
+                self.ai_running = False
+                self.chain_active = False
+                self.chain_pass_count = 0
+                self._replay_playback = False
+                self._replay_loaded_snapshots = []
+                self._replay_loaded_name = ""
+                self._replay_index = 0
+                self._replay_snapshots = []
+                self._replay_last_signature = ""
+                self.status_var.set("Partita ripristinata dopo reload completo.")
+                self.show_game_screen()
+                self.refresh()
+            else:
+                self.status_var.set("Reload completo eseguito.")
+        finally:
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _replay_dir(self) -> Path:
         out = appdata_dir() / "replays"

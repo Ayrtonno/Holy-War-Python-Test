@@ -2,6 +2,8 @@ from __future__ import annotations
 
 CARD_NAME = "Zhongli Quan"
 
+# Zhongli Quan counts itself for this check while resolving its own play effect.
+# Therefore we only need to verify the other 7 Ba Xian names across hand/field/graveyard.
 ALL_8_NAMES_PRESENT = {
     "all_of": [
         {"controller_has_cards": {"zones": ["hand", "field", "graveyard"], "owner": "me", "card_filter": {"name_equals": "Lu Dongbin"}, "min_count": 1}},
@@ -11,7 +13,6 @@ ALL_8_NAMES_PRESENT = {
         {"controller_has_cards": {"zones": ["hand", "field", "graveyard"], "owner": "me", "card_filter": {"name_equals": "Lan Caihe"}, "min_count": 1}},
         {"controller_has_cards": {"zones": ["hand", "field", "graveyard"], "owner": "me", "card_filter": {"name_equals": "Zhang Guolao"}, "min_count": 1}},
         {"controller_has_cards": {"zones": ["hand", "field", "graveyard"], "owner": "me", "card_filter": {"name_equals": "Cao Guojiu"}, "min_count": 1}},
-        {"controller_has_cards": {"zones": ["hand", "field", "graveyard"], "owner": "me", "card_filter": {"name_equals": "Zhongli Quan"}, "min_count": 1}},
     ]
 }
 

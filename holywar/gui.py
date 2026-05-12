@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import random
 import traceback
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -15,6 +16,7 @@ from holywar.data.deck_builder import (
 )
 from holywar.app_paths import appdata_dir
 from holywar.gui_sections import GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGameFlowMixin, GUIGameViewMixin, GUIGameActionsMixin
+from holywar.gui_sections.game_flow import RELOAD_RESTORE_ENV
 
 # This module defines the `HolyWarGUI` class, which is the main graphical user interface for the Holy War game. It uses the Tkinter library to create a windowed application that allows players to interact with the game visually. The GUI includes features for starting new games, managing decks, displaying the game state, and handling player actions. The class also includes methods for building the user interface, updating the display based on the game state, and responding to user input. Additionally, there are functions for building a command-line argument parser and running the main application loop.
 class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGameFlowMixin, GUIGameViewMixin, GUIGameActionsMixin, tk.Tk):
@@ -309,6 +311,9 @@ def main() -> None:
             register_premades_from_json(args.premades_json)
         cards = ensure_cards(args)
         app = HolyWarGUI(cards, seed=args.seed, ai_delay=args.ai_delay)
+        restore_path = os.environ.pop(RELOAD_RESTORE_ENV, "").strip()
+        if restore_path:
+            app.restore_after_full_reload(restore_path)
         app.mainloop()
     except Exception as exc:
         try:

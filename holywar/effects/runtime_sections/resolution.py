@@ -388,6 +388,8 @@ class RuntimeResolutionMixin:
         if isinstance(enter_stack, list):
             enter_stack.append(uid)
         previous_source = flags.get("_runtime_effect_source")
+        previous_runtime_source_card = flags.get("_runtime_source_card")
+        previous_selected_target = flags.get("_runtime_selected_target")
         flags["_runtime_effect_source"] = uid
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = ""
@@ -421,8 +423,14 @@ class RuntimeResolutionMixin:
             else:
                 flags["_runtime_effect_source"] = previous_source
             if not flags.get("_runtime_waiting_for_reveal"):
-                flags.pop("_runtime_source_card", None)
-                flags.pop("_runtime_selected_target", None)
+                if previous_runtime_source_card is None:
+                    flags.pop("_runtime_source_card", None)
+                else:
+                    flags["_runtime_source_card"] = previous_runtime_source_card
+                if previous_selected_target is None:
+                    flags.pop("_runtime_selected_target", None)
+                else:
+                    flags["_runtime_selected_target"] = previous_selected_target
 
     # The following methods implement the logic for resolving card effects and managing triggers during gameplay. They interact with the game engine's state and rules API to determine when effects can be activated, to execute the effects of playing or activating cards, and to handle triggered effects based on game events. The methods also manage pending effects that require player input, allowing for complex interactions and timing during the resolution of card effects.
     def resolve_activate(self, engine: GameEngine, player_idx: int, uid: str, target: str | None) -> object:
@@ -733,12 +741,36 @@ class RuntimeResolutionMixin:
                 ctx.engine.state.flags["_runtime_event_name"] = str(ctx.event)
                 ctx.engine.state.flags["_runtime_source_card"] = _source
                 try:
+                    effect_action = _norm(_te.effect.action)
+                    choice_ready_before = bool(ctx.engine.state.flags.get("_runtime_choice_ready"))
                     targets = self._resolve_targets(ctx.engine, _owner, _te.target)
                     self._log_script_action(ctx.engine, _source, _te.effect, targets)
                     if not targets:
                         self._apply_effect(ctx.engine, _owner, _source, [], _te.effect)
-                        return
-                    self._apply_effect(ctx.engine, _owner, _source, targets, _te.effect)
+                    else:
+                        self._apply_effect(ctx.engine, _owner, _source, targets, _te.effect)
+
+                    # Trigger-side choose_option needs an explicit follow-up pass:
+                    # once the choice is confirmed, apply sibling triggers on the
+                    # same source/event whose conditions depend on selected_option_in.
+                    if effect_action == "choose_option" and choice_ready_before:
+                        selected_option = str(ctx.engine.state.flags.get("_runtime_selected_option", "")).strip()
+                        if selected_option:
+                            for follow_te in script.triggered_effects:
+                                if follow_te is _te:
+                                    continue
+                                if follow_te.trigger.event != _event_name:
+                                    continue
+                                if _norm(follow_te.effect.action) == "choose_option":
+                                    continue
+                                if not self._event_matches(ctx, _owner, follow_te.trigger.condition):
+                                    continue
+                                follow_targets = self._resolve_targets(ctx.engine, _owner, follow_te.target)
+                                self._log_script_action(ctx.engine, _source, follow_te.effect, follow_targets)
+                                if not follow_targets:
+                                    self._apply_effect(ctx.engine, _owner, _source, [], follow_te.effect)
+                                else:
+                                    self._apply_effect(ctx.engine, _owner, _source, follow_targets, follow_te.effect)
                 finally:
                     ctx.engine.state.flags.pop("_runtime_event_card", None)
                     ctx.engine.state.flags.pop("_runtime_event_source", None)
@@ -1111,8 +1143,11 @@ class RuntimeResolutionMixin:
                 resolved = self._resolve_targets(engine, owner_idx, action.target)
                 if len(resolved) < required_min:
                     return (False, missing_selection_message)
+            # Manual-target actions can be fully conditional. If none of them is
+            # applicable after condition evaluation, the play/activation must still
+            # be considered valid and continue with the remaining actions.
             if manual_actions_present and not manual_actions_applicable and not has_choose_option_step:
-                return (False, empty_pool_message)
+                return (True, None)
             return (True, None)
         finally:
             if previous_source is None:

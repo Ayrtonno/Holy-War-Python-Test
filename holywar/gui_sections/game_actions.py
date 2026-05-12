@@ -64,6 +64,7 @@ class GUIGameActionsMixin:
     # Determines if the card with the given UID requires a target for its play action, based on its targeting mode and the presence of target specifications in its script, which affects whether the player will be prompted to select targets when playing the card.
     def _card_requires_target(self, uid: str) -> bool:
         mode = self._play_targeting_mode(uid)
+        target = self._first_play_target_spec(uid)
 
         if mode in {
             "own_saint",
@@ -72,12 +73,15 @@ class GUIGameActionsMixin:
             "manual",
             "multi",
             "monsone",
-            "guided",
         }:
             return True
 
+        # Guided cards should require manual selection only when there is at least
+        # one active play target spec after condition evaluation.
+        if mode == "guided":
+            return target is not None
+
         if mode in {"none", "", None, "auto"}:
-            target = self._first_play_target_spec(uid)
             return target is not None
 
         return False
@@ -757,7 +761,20 @@ class GUIGameActionsMixin:
 
             if not candidates:
                 if allow_none:
-                    picked_parts.append(f"{action_idx}=")
+                    canceled, selected = self._open_board_target_picker(
+                        title="Selezione Bersaglio",
+                        prompt="Nessun bersaglio valido disponibile. Conferma se vuoi procedere senza bersaglio.",
+                        choices=[],
+                        allow_multi=multi,
+                        min_targets=min_targets,
+                        max_targets=max_targets,
+                        allow_none=True,
+                        allow_manual=False,
+                        card_uid=uid,
+                    )
+                    if canceled:
+                        return (True, None)
+                    picked_parts.append(f"{action_idx}={selected or ''}")
                     continue
                 messagebox.showwarning("Selezione Bersaglio", "Nessun bersaglio valido disponibile per questa parte dell'effetto.")
                 return (True, None)
@@ -847,7 +864,20 @@ class GUIGameActionsMixin:
                 self.play_uid(uid, selected)
                 return
             if allow_none:
-                self.play_uid(uid, None)
+                canceled, selected = self._open_board_target_picker(
+                    title="Selezione Bersaglio",
+                    prompt="Nessun bersaglio valido disponibile. Conferma se vuoi procedere senza bersaglio.",
+                    choices=[],
+                    allow_multi=multi,
+                    min_targets=min_targets,
+                    max_targets=max_targets,
+                    allow_none=True,
+                    allow_manual=False,
+                    card_uid=uid,
+                )
+                if canceled:
+                    return
+                self.play_uid(uid, selected)
                 return
             messagebox.showwarning("Selezione Bersaglio", "Nessun bersaglio valido disponibile per questa carta.")
             return

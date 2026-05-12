@@ -17,7 +17,7 @@ SCRIPT = {
     "on_activate_mode": "scripted",
     "activate_once_per_turn": True,
     "play_targeting": "none",
-    "activate_targeting": "guided",
+    "activate_targeting": "none",
     "triggered_effects": [
         {
             "trigger": {"event": "on_card_sent_to_graveyard", "frequency": "each_time", "condition": BAXIAN_DESTROYED},
@@ -27,10 +27,49 @@ SCRIPT = {
     ],
     "on_play_actions": [],
     "on_activate_actions": [
-        {"effect": {"action": "choose_option", "choice_title": "Borraccia", "choice_prompt": "Scegli l'effetto.", "choice_options": [
-            {"label": "Rimuovi 2: aggiungi alla mano", "value": "hand"},
-            {"label": "Rimuovi 5: evoca", "value": "summon"}
-        ]}},
+        {
+            "effect": {
+                "action": "choose_option",
+                "choice_title": "Borraccia",
+                "choice_prompt": "Scegli l'effetto.",
+                "choice_options": [
+                    {
+                        "label": "Rimuovi 2: aggiungi alla mano",
+                        "value": "hand",
+                        "condition": {
+                            "all_of": [
+                                {"source_counter_gte": 2},
+                                {
+                                    "controller_has_cards": {
+                                        "zone": "graveyard",
+                                        "owner": "me",
+                                        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                                        "min_count": 1,
+                                    }
+                                },
+                            ]
+                        },
+                    },
+                    {
+                        "label": "Rimuovi 5: evoca",
+                        "value": "summon",
+                        "condition": {
+                            "all_of": [
+                                {"source_counter_gte": 5},
+                                {
+                                    "controller_has_cards": {
+                                        "zone": "graveyard",
+                                        "owner": "me",
+                                        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                                        "min_count": 1,
+                                    }
+                                },
+                            ]
+                        },
+                    },
+                ],
+            }
+        },
         {
             "condition": {"all_of": [{"selected_option_in": ["hand"]}, {"source_counter_gte": 2}]},
             "target": {"type": "source_card"},

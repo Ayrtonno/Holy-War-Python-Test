@@ -14,7 +14,11 @@ SCRIPT = {
                 "type": "selected_target",
                 "zone": "hand",
                 "owner": "me",
-                "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                "card_filter": {
+                    "name_contains": "ba xian",
+                    "card_type_in": ["santo", "token"],
+                    "half_cost_lte_my_inspiration": True,
+                },
                 "min_targets": 1,
                 "max_targets": 1,
             },

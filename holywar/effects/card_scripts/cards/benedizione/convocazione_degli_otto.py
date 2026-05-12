@@ -15,10 +15,11 @@ SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "play_targeting": "guided",
+    "play_targeting": "auto",
     "triggered_effects": [],
     "on_play_actions": [
         {
+            "condition": {"not": HAS_BAXIAN_FIELD},
             "target": {
                 "type": "selected_target",
                 "zone": "deck",
@@ -27,12 +28,13 @@ SCRIPT = {
                 "min_targets": 1,
                 "max_targets": 1,
             },
-            "effect": {"action": "move_source_to_zone", "to_zone": "hand"},
+            "effect": {"action": "move_to_hand"},
         },
-        {"effect": {"action": "shuffle_deck", "target_player": "me"}},
+        {"condition": {"not": HAS_BAXIAN_FIELD}, "effect": {"action": "shuffle_deck", "target_player": "me"}},
         {
             "condition": HAS_BAXIAN_FIELD,
             "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"},
         },
+        {"target": {"type": "source_card"}, "effect": {"action": "move_source_to_zone", "to_zone": "graveyard"}},
     ],
 }

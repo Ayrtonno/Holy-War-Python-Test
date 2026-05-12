@@ -166,6 +166,15 @@ class GUITargetingMixin:
             raw_target = raw_action.get("target", {}) or {}
             t = action_spec.target
             ttype = str(t.type or "").strip().lower()
+            # selected_target(s) immediately following a choose_targets step are
+            # consumer steps of an already collected choice, not new manual prompts.
+            if i > 0:
+                prev_effect_action = str(script.on_play_actions[i - 1].effect.action or "").strip().lower()
+                if ttype in {"selected_target", "selected_targets"} and prev_effect_action in {
+                    "choose_targets",
+                    "choose_targets_and_summon_to_field",
+                }:
+                    continue
             requires_manual = any(
                 key in raw_target
                 for key in ("zone", "zones", "card_filter", "min_targets", "max_targets", "max_targets_from", "owner")

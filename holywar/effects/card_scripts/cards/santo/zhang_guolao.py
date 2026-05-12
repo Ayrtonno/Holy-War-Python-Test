@@ -11,35 +11,50 @@ HAS_3_BAXIAN_FIELD = {
     }
 }
 
+HAS_BAXIAN_GRAVE = {
+    "controller_has_cards": {
+        "zones": ["graveyard"],
+        "owner": "me",
+        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+        "min_count": 1,
+    }
+}
+
 SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
-    "play_targeting": "guided",
+    "play_targeting": "auto",
     "triggered_effects": [],
     "on_play_actions": [
         {
-            "condition": HAS_3_BAXIAN_FIELD,
+            "condition": {"all_of": [HAS_3_BAXIAN_FIELD, HAS_BAXIAN_GRAVE]},
             "target": {
-                "type": "selected_target",
+                "type": "cards_controlled_by_owner",
                 "zone": "graveyard",
                 "owner": "me",
                 "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-                "min_targets": 1,
-                "max_targets": 1,
             },
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "condition": {"all_of": [HAS_3_BAXIAN_FIELD, HAS_BAXIAN_GRAVE, {"selected_target_exists": True}]},
+            "target": {"type": "selected_target"},
             "effect": {"action": "summon_target_to_field"},
         },
         {
-            "condition": {"not": HAS_3_BAXIAN_FIELD},
+            "condition": {"all_of": [{"not": HAS_3_BAXIAN_FIELD}, HAS_BAXIAN_GRAVE]},
             "target": {
-                "type": "selected_target",
+                "type": "cards_controlled_by_owner",
                 "zone": "graveyard",
                 "owner": "me",
                 "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-                "min_targets": 1,
-                "max_targets": 1,
             },
+            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+        },
+        {
+            "condition": {"all_of": [{"not": HAS_3_BAXIAN_FIELD}, HAS_BAXIAN_GRAVE, {"selected_target_exists": True}]},
+            "target": {"type": "selected_target"},
             "effect": {"action": "move_to_hand"},
         },
     ],
