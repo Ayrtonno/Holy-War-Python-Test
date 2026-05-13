@@ -584,8 +584,20 @@ class RuntimeResolutionMixin:
                 trigger_to_zone_if = str(flags.get("_runtime_trigger_to_zone_if", "")).strip() or None
                 trigger_amount_raw = str(flags.get("_runtime_trigger_amount", "")).strip()
                 trigger_shuffle_after_raw = str(flags.get("_runtime_trigger_shuffle_after", "")).strip().lower()
+                trigger_event_name = str(flags.get("_runtime_trigger_event_name", "")).strip()
+                trigger_choice_title = str(flags.get("_runtime_trigger_choice_title", "")).strip() or None
+                trigger_choice_prompt = str(flags.get("_runtime_trigger_choice_prompt", "")).strip() or None
+                trigger_choice_options_raw = str(flags.get("_runtime_trigger_choice_options", "")).strip()
                 trigger_amount = int(trigger_amount_raw) if trigger_amount_raw else 0
                 trigger_shuffle_after = trigger_shuffle_after_raw in {"1", "true", "yes", "y"}
+                trigger_choice_options: list[dict[str, Any]] = []
+                if trigger_choice_options_raw:
+                    try:
+                        parsed = json.loads(trigger_choice_options_raw)
+                        if isinstance(parsed, list):
+                            trigger_choice_options = [dict(v) for v in parsed if isinstance(v, dict)]
+                    except Exception:
+                        trigger_choice_options = []
                 if action_name:
                     self._apply_effect(
                         engine,
@@ -601,8 +613,36 @@ class RuntimeResolutionMixin:
                             to_zone_if=trigger_to_zone_if,
                             amount=trigger_amount,
                             shuffle_after=trigger_shuffle_after,
+                            choice_title=trigger_choice_title,
+                            choice_prompt=trigger_choice_prompt,
+                            choice_options=trigger_choice_options,
                         ),
                     )
+                    # Generic trigger-side choose_option follow-up:
+                    # after choice resolution, execute sibling triggered effects
+                    # on the same source/event whose conditions now match.
+                    if _norm(action_name) == "choose_option":
+                        selected_option = str(flags.get("_runtime_selected_option", "")).strip()
+                        if selected_option and trigger_event_name:
+                            follow_ctx = RuleEventContext(
+                                engine=engine,
+                                event=trigger_event_name,
+                                player_idx=owner_idx,
+                                payload={"card": source_uid},
+                            )
+                            for follow_te in script.triggered_effects:
+                                if _norm(follow_te.trigger.event) != _norm(trigger_event_name):
+                                    continue
+                                if _norm(follow_te.effect.action) == "choose_option":
+                                    continue
+                                if not self._event_matches(follow_ctx, owner_idx, follow_te.trigger.condition):
+                                    continue
+                                follow_targets = self._resolve_targets(engine, owner_idx, follow_te.target)
+                                self._log_script_action(engine, source_uid, follow_te.effect, follow_targets)
+                                if not follow_targets:
+                                    self._apply_effect(engine, owner_idx, source_uid, [], follow_te.effect)
+                                else:
+                                    self._apply_effect(engine, owner_idx, source_uid, follow_targets, follow_te.effect)
         finally:
             if previous_source is None:
                 flags.pop("_runtime_effect_source", None)
@@ -627,6 +667,10 @@ class RuntimeResolutionMixin:
                 flags.pop("_runtime_trigger_to_zone", None)
                 flags.pop("_runtime_trigger_to_zone_if", None)
                 flags.pop("_runtime_trigger_shuffle_after", None)
+                flags.pop("_runtime_trigger_event_name", None)
+                flags.pop("_runtime_trigger_choice_title", None)
+                flags.pop("_runtime_trigger_choice_prompt", None)
+                flags.pop("_runtime_trigger_choice_options", None)
                 flags.pop("_runtime_copied_play_card", None)
                 flags.pop("_runtime_force_manual_selected_target", None)
 

@@ -2097,6 +2097,17 @@ class RuntimeEffectsMixin:
             flags["_runtime_resume_same_action"] = True
             flags["_runtime_reveal_card"] = source_uid
             flags["_runtime_waiting_for_reveal"] = True
+            pending_mode = str(flags.get("_runtime_pending_mode", "")).strip().lower()
+            # Trigger-side choose_option needs an explicit trigger_action resume.
+            if pending_mode not in {"play", "enter", "activate"}:
+                flags["_runtime_resume_source"] = source_uid
+                flags["_runtime_resume_owner"] = str(owner_idx)
+                flags["_runtime_pending_mode"] = "trigger_action"
+                flags["_runtime_trigger_action"] = "choose_option"
+                flags["_runtime_trigger_event_name"] = str(flags.get("_runtime_event_name", "")).strip()
+                flags["_runtime_trigger_choice_title"] = str(effect.choice_title or "Scegli un'opzione")
+                flags["_runtime_trigger_choice_prompt"] = str(effect.choice_prompt or "Scegli una modalità.")
+                flags["_runtime_trigger_choice_options"] = json.dumps(valid_options, ensure_ascii=False)
             return
 
         if action == "choose_draw_amount_with_self_sin_cost":
