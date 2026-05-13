@@ -3613,7 +3613,7 @@
     "crosses": "4",
     "faith": 7,
     "strength": 5,
-    "effect_text": "Quando giochi questa carta, pesca 1 carta. Se la carta pescata e un Ba Xian, pesca 1 carta aggiuntiva, poi scarta 1 carta.",
+    "effect_text": "Quando questa carta entra in campo, pesca 1 carta. Se la carta pescata e un Ba Xian, pesca 1 carta aggiuntiva, poi scarta 1 carta.",
     "expansion": "TAO-1",
     "is_token": false,
     "aliases": [

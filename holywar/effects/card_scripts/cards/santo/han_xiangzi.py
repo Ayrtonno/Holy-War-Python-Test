@@ -3,12 +3,13 @@ from __future__ import annotations
 CARD_NAME = "Han Xiangzi"
 
 SCRIPT = {
-    "on_play_mode": "scripted",
-    "on_enter_mode": "auto",
+    "on_play_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
     "play_targeting": "none",
     "triggered_effects": [],
-    "on_play_actions": [
+    "on_play_actions": [],
+    "on_enter_actions": [
         {
             "effect": {
                 "action": "draw_cards_and_store_last_drawn",

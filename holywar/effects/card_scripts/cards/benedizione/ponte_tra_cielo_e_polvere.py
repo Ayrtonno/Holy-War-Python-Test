@@ -2,6 +2,17 @@ from __future__ import annotations
 
 CARD_NAME = "Ponte tra Cielo e Polvere"
 
+BAXIAN_NAMES = [
+    "Lu Dongbin",
+    "He Xian'gu",
+    "Li Tieguai",
+    "Han Xiangzi",
+    "Lan Caihe",
+    "Zhang Guolao",
+    "Cao Guojiu",
+    "Zhongli Quan",
+]
+
 SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
@@ -14,7 +25,7 @@ SCRIPT = {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",
                 "owner": "me",
-                "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
             },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
@@ -32,7 +43,7 @@ SCRIPT = {
                 "zone": "graveyard",
                 "owner": "me",
                 "card_filter": {
-                    "name_contains": "ba xian",
+                    "name_in": BAXIAN_NAMES,
                     "name_not_equals_stored": "ponte_sacrificed_baxian_name",
                     "card_type_in": ["santo", "token"],
                 },

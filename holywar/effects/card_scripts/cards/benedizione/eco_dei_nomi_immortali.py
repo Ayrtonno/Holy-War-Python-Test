@@ -2,11 +2,22 @@ from __future__ import annotations
 
 CARD_NAME = "Eco dei Nomi Immortali"
 
+BAXIAN_NAMES = [
+    "Lu Dongbin",
+    "He Xian'gu",
+    "Li Tieguai",
+    "Han Xiangzi",
+    "Lan Caihe",
+    "Zhang Guolao",
+    "Cao Guojiu",
+    "Zhongli Quan",
+]
+
 HAS_1 = {
     "controller_has_cards": {
         "zones": ["hand"],
         "owner": "me",
-        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+        "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
         "min_count": 1,
     }
 }
@@ -14,7 +25,7 @@ HAS_2 = {
     "controller_has_cards": {
         "zones": ["hand"],
         "owner": "me",
-        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+        "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
         "min_count": 2,
     }
 }
@@ -22,7 +33,7 @@ HAS_3 = {
     "controller_has_cards": {
         "zones": ["hand"],
         "owner": "me",
-        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+        "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
         "min_count": 3,
     }
 }
@@ -43,8 +54,6 @@ SCRIPT = {
                 "zone": "hand",
                 "owner": "me",
                 "card_filter": {"exclude_event_card": True},
-                "min_targets": 1,
-                "max_targets": 1,
             },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
