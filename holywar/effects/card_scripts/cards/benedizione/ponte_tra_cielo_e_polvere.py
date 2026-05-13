@@ -31,11 +31,14 @@ SCRIPT = {
         },
         {
             "target": {"type": "selected_target"},
-            "effect": {"action": "store_target_name", "flag": "ponte_sacrificed_baxian_name"},
+            "effect": {"action": "store_target_uid", "flag": "ponte_sacrificed_baxian_uid"},
         },
         {
             "target": {"type": "selected_target"},
-            "effect": {"action": "destroy_card"},
+            "effect": {"action": "store_target_name", "flag": "ponte_sacrificed_baxian_name"},
+        },
+        {
+            "effect": {"action": "destroy_stored_card", "stored": "ponte_sacrificed_baxian_uid"},
         },
         {
             "target": {
@@ -51,8 +54,22 @@ SCRIPT = {
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
-            "target": {"type": "selected_target"},
-            "effect": {"action": "summon_target_to_field"},
+            "target": {
+                "type": "selected_target",
+                "zone": "graveyard",
+                "owner": "me",
+                "card_filter": {
+                    "name_in": BAXIAN_NAMES,
+                    "name_not_equals_stored": "ponte_sacrificed_baxian_name",
+                    "card_type_in": ["santo", "token"],
+                },
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+            "effect": {"action": "store_target_uid", "flag": "ponte_grave_pick_uid"},
+        },
+        {
+            "effect": {"action": "summon_stored_card_to_field", "stored": "ponte_grave_pick_uid"},
         },
     ],
 }

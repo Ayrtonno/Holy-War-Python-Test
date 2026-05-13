@@ -1227,6 +1227,50 @@ class RuntimeEffectsMixin:
 
             self._move_uid_to_zone(engine, stored_uid, to_zone, owner_idx)
             return
+
+        if action == "destroy_stored_card":
+            store_name = str(effect.stored or "").strip()
+            if not store_name:
+                return
+
+            stored_uid = str(engine.state.flags.get(f"_runtime_store_{store_name}", "")).strip()
+            if not stored_uid or stored_uid not in engine.state.instances:
+                return
+
+            source_name = ""
+            if source_uid and source_uid in engine.state.instances:
+                source_name = str(engine.state.instances[source_uid].definition.name or "").strip()
+            inst = engine.state.instances.get(stored_uid)
+            if inst is None:
+                return
+            if _norm(source_name) == _norm("Ponte tra Cielo e Polvere"):
+                me_field_before = [
+                    engine.state.instances[uid].definition.name
+                    for uid in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense)
+                    if uid and uid in engine.state.instances
+                ]
+                engine.state.log(
+                    "[PONTE][DESTROY_STORED][BEFORE] "
+                    f"source_uid={source_uid} stored_uid={stored_uid} stored_name={inst.definition.name} "
+                    f"owner={inst.owner} my_field={me_field_before}"
+                )
+                ctype = _norm(inst.definition.card_type)
+                if ctype in {"santo", "token"}:
+                    engine.destroy_saint_by_uid(inst.owner, stored_uid, cause="effect", by_whom=str(source_uid or ""))
+                else:
+                    engine.destroy_any_card(inst.owner, stored_uid)
+                me_field_after = [
+                    engine.state.instances[uid].definition.name
+                    for uid in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense)
+                    if uid and uid in engine.state.instances
+                ]
+                engine.state.log(
+                    "[PONTE][DESTROY_STORED][AFTER] "
+                    f"source_uid={source_uid} stored_uid={stored_uid} my_field={me_field_after}"
+                )
+            else:
+                engine.destroy_any_card(inst.owner, stored_uid)
+            return
         
         if action == "summon_stored_card_to_field":
             store_name = str(effect.stored or "").strip()
@@ -1397,6 +1441,25 @@ class RuntimeEffectsMixin:
             return
         
         if action == "summon_target_to_field":
+            source_name_dbg = ""
+            if source_uid and source_uid in engine.state.instances:
+                source_name_dbg = str(engine.state.instances[source_uid].definition.name or "").strip()
+            is_ponte_flow = _norm(source_name_dbg) == _norm("Ponte tra Cielo e Polvere")
+            if is_ponte_flow:
+                chosen_names = [
+                    engine.state.instances[t_uid].definition.name
+                    for t_uid in targets
+                    if t_uid in engine.state.instances
+                ]
+                my_field_before = [
+                    engine.state.instances[uid].definition.name
+                    for uid in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense)
+                    if uid and uid in engine.state.instances
+                ]
+                engine.state.log(
+                    "[PONTE][SUMMON][BEFORE] "
+                    f"source_uid={source_uid} targets={targets} target_names={chosen_names} my_field={my_field_before}"
+                )
             for t_uid in targets:
                 inst = engine.state.instances.get(t_uid)
                 if inst is None:
@@ -1565,6 +1628,16 @@ class RuntimeEffectsMixin:
                 enter_msg = self.resolve_enter(engine, owner, t_uid)
                 if enter_msg:
                     engine.state.log(str(enter_msg))
+            if is_ponte_flow:
+                my_field_after = [
+                    engine.state.instances[uid].definition.name
+                    for uid in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense)
+                    if uid and uid in engine.state.instances
+                ]
+                engine.state.log(
+                    "[PONTE][SUMMON][AFTER] "
+                    f"source_uid={source_uid} my_field={my_field_after}"
+                )
             return
 
         if action == "return_to_hand":
@@ -2841,6 +2914,17 @@ class RuntimeEffectsMixin:
                 stored_name = str(inst.definition.name or "").strip()
                 break
             engine.state.flags[f"_runtime_store_{flag_name}"] = stored_name
+            return
+        if action == "store_target_uid":
+            flag_name = str(effect.flag or "").strip()
+            if not flag_name:
+                return
+            stored_uid = ""
+            for t_uid in targets:
+                if t_uid in engine.state.instances:
+                    stored_uid = str(t_uid).strip()
+                    break
+            engine.state.flags[f"_runtime_store_{flag_name}"] = stored_uid
             return
         if action == "store_distinct_count":
             flag_name = str(effect.flag or "").strip()

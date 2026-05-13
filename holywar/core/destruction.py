@@ -140,6 +140,20 @@ def destroy_saint_by_uid(
     if uid not in engine.state.instances:
         return
     inst = engine.state.instances[uid]
+    source_uid_dbg = str(engine.state.flags.get("_runtime_effect_source", "")).strip()
+    source_name_dbg = ""
+    if source_uid_dbg and source_uid_dbg in engine.state.instances:
+        source_name_dbg = str(engine.state.instances[source_uid_dbg].definition.name or "").strip()
+    field_before_dbg = [
+        engine.state.instances[c_uid].definition.name
+        for c_uid in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense)
+        if c_uid and c_uid in engine.state.instances
+    ]
+    engine.state.log(
+        "[DESTROY_TRACE][BEFORE] "
+        f"target_uid={uid} target_name={inst.definition.name} owner={owner_idx} cause={cause} by_whom={by_whom} "
+        f"source_uid={source_uid_dbg} source_name={source_name_dbg} field_owner_before={field_before_dbg}"
+    )
     board_owner_idx = engine._find_board_owner_of_uid(uid)
     if board_owner_idx is None:
         board_owner_idx = owner_idx
@@ -364,6 +378,16 @@ def destroy_saint_by_uid(
             source=by_whom,
         )
     engine._emit_event("on_saint_defeated_or_destroyed", owner_idx, saint=uid, controller=board_owner_idx, reason=cause)
+    field_after_dbg = [
+        engine.state.instances[c_uid].definition.name
+        for c_uid in (engine.state.players[owner_idx].attack + engine.state.players[owner_idx].defense)
+        if c_uid and c_uid in engine.state.instances
+    ]
+    engine.state.log(
+        "[DESTROY_TRACE][AFTER] "
+        f"target_uid={uid} target_name={inst.definition.name} owner={owner_idx} cause={cause} "
+        f"field_owner_after={field_after_dbg}"
+    )
 
 
 # Routes card destruction based on its type so callers can use one entry point.
