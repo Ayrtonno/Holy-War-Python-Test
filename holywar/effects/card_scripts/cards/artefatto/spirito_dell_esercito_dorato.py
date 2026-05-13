@@ -14,23 +14,27 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {"event": "on_my_turn_start", "frequency": "each_turn"},
-            "target": {"type": "none"},
+            "target": {
+                "type": "none",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "pay_sin_or_destroy_self", "amount": 5},
         }
     ],
     "on_activate_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "none"},
-            "effect": {
-                "action": "summon_token",
-                "card_name": "Spirito Vacuo",
+            "target": {
+                "type": "none",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
+            "effect": {
+                "action": "summon_token",
+                "card_name": "Spirito Vacuo",
             },
         }
     ],

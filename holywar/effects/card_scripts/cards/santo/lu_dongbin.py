@@ -7,7 +7,9 @@ HAS_OTHER_BAXIAN = {
         "zones": ["field"],
         "owner": "me",
         "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-        "min_count": 1,
+        # On-play resolves after Lu Dongbin enters the field, so min_count=2
+        # means "Lu Dongbin + at least one other Ba Xian".
+        "min_count": 2,
     }
 }
 
@@ -55,23 +57,23 @@ SCRIPT = {
                     {"selected_target_exists": True},
                 ]
             },
-            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "selected_target"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "selected_target",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "destroy_card"},
         },
         {
             "activation_mode": "mandatory_auto",
             "condition": {"not": HAS_OTHER_BAXIAN},
-            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "increase_strength", "amount": 2},
         },
     ],

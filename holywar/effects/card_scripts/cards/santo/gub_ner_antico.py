@@ -60,17 +60,23 @@ SCRIPT = {
     "on_enter_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "empty_saint_slots_controlled_by_owner",
+                "owner": "me",
                 "target_policy": "required_to_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+            },
             "effect": {
                 "action": "summon_generated_token",
                 "placement_policy": "prompt_slot_required",

@@ -29,9 +29,7 @@ SCRIPT = {
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
             },
-            "effect": {"action": "summon_target_to_field"},
-                "placement_policy": "prompt_slot_required",
-            "placement_policy": "prompt_slot_required",
+            "effect": {"action": "summon_target_to_field", "placement_policy": "prompt_slot_required"},
         }
     ],
 }

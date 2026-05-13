@@ -14,7 +14,7 @@ SCRIPT = {
     "play_targeting": "none",
     "triggered_effects": [],
     "on_play_actions": [
-        {"effect": {"action": "inflict_sin", "amount": 3, "target_player": "opponent"}},
-        {"effect": {"action": "inflict_sin", "amount": 1, "target_player": "me"}},
+        {"activation_mode": "mandatory_auto", "effect": {"action": "inflict_sin", "amount": 3, "target_player": "opponent"}},
+        {"activation_mode": "mandatory_auto", "effect": {"action": "inflict_sin", "amount": 1, "target_player": "me"}},
     ],
 }

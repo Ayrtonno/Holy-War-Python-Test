@@ -2,18 +2,30 @@ from __future__ import annotations
 
 CARD_NAME = "Han Xiangzi"
 
+BA_XIAN_NAMES = [
+    "Lu Dongbin",
+    "He Xian'gu",
+    "Li Tieguai",
+    "Han Xiangzi",
+    "Lan Caihe",
+    "Zhang Guolao",
+    "Cao Guojiu",
+    "Zhongli Quan",
+]
+
 SCRIPT = {
     "default_selection_mode": "prompt",
     "default_cancel_behavior": "abort_step",
     "default_target_policy": "optional_resolve",
     "default_placement_policy": "prompt_slot_required",
     "default_activation_mode": "mandatory_auto",
-    "on_play_mode": "scripted",
-    "on_enter_mode": "auto",
+    "on_play_mode": "auto",
+    "on_enter_mode": "scripted",
     "on_activate_mode": "auto",
     "play_targeting": "none",
     "triggered_effects": [],
-    "on_play_actions": [
+    "on_play_actions": [],
+    "on_enter_actions": [
         {
             "activation_mode": "mandatory_auto",
             "effect": {
@@ -25,12 +37,12 @@ SCRIPT = {
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "reveal_stored_card", "stored": "han_draw_1"},
         },
         {
@@ -38,7 +50,7 @@ SCRIPT = {
             "condition": {
                 "stored_card_matches": {
                     "stored": "han_draw_1",
-                    "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                    "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                 }
             },
             "effect": {
@@ -53,15 +65,15 @@ SCRIPT = {
             "condition": {
                 "stored_card_matches": {
                     "stored": "han_draw_1",
-                    "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                    "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                 }
             },
-            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "reveal_stored_card", "stored": "han_draw_2"},
         },
         {
@@ -69,7 +81,7 @@ SCRIPT = {
             "condition": {
                 "stored_card_matches": {
                     "stored": "han_draw_1",
-                    "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                    "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                 }
             },
             "target": {
@@ -90,7 +102,7 @@ SCRIPT = {
                     {
                         "stored_card_matches": {
                             "stored": "han_draw_1",
-                            "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                            "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                         }
                     },
                     {"selected_target_exists": True},

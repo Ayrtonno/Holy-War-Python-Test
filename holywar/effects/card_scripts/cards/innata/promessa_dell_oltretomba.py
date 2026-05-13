@@ -15,10 +15,12 @@ SCRIPT = {
     "on_play_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "activate_oltretomba_promise"},
         }
     ],

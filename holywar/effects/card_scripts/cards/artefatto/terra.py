@@ -62,9 +62,7 @@ SCRIPT = {
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
             },
-            "effect": {"action": "summon_named_card"},
-                "placement_policy": "prompt_slot_required",
-            "placement_policy": "prompt_slot_required",
+            "effect": {"action": "summon_named_card", "placement_policy": "prompt_slot_required"},
         }
     ],
 }

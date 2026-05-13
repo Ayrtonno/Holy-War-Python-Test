@@ -48,12 +48,12 @@ SCRIPT = {
         {
             "activation_mode": "mandatory_auto",
             "condition": {"selected_option_in": ["buff"]},
-            "target": { "target_policy": "optional_resolve", "selection_mode": "prompt", "cancel_behavior": "abort_step","type": "selected_target"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "selected_target",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "increase_strength", "amount": 4},
         },
         {

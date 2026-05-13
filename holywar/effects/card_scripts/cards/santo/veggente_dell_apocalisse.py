@@ -69,19 +69,24 @@ SCRIPT = {
         {
             "activation_mode": "mandatory_auto",
             "condition": {"selected_target_exists": True},
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },
     ],
     "on_activate_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+            },
             "effect": {
                 "action": "choose_option",
                 "choice_title": "Veggente dell'Apocalisse",
@@ -158,12 +163,12 @@ SCRIPT = {
                     {"controller_altare_sigilli_gte": 3},
                 ]
             },
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"},
         },
     ],

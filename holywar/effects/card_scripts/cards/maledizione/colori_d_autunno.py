@@ -68,15 +68,17 @@ SCRIPT = {
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+            },
             "effect": {
                 "action": "summon_named_card_from_flag",
                 "placement_policy": "prompt_slot_required",
                 "card_name": "Segno Del Passato",
                 "flag": "_colori_autunno_tree_count",
-                "target_policy": "optional_resolve",
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
             },
         },
     ],

@@ -16,10 +16,12 @@ SCRIPT = {
     "on_play_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "set_next_turn_draw_override", "amount": 2, "target_player": "opponent"},
         },
         {
@@ -39,18 +41,22 @@ SCRIPT = {
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "inflict_sin", "amount": 1, "target_player": "me"},
         },
     ],

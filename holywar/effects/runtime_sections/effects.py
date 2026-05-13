@@ -2294,6 +2294,74 @@ class RuntimeEffectsMixin:
             flags["_runtime_waiting_for_reveal"] = True
             return
 
+        if action == "giardino_loto_resolution":
+            flags = engine.state.flags
+            choice_source = str(flags.get("_runtime_choice_source", "")).strip()
+            choice_ready = bool(flags.get("_runtime_choice_ready"))
+            expected_choice_source = f"{source_uid}:giardino_loto_resolution:{owner_idx}:turn:{int(engine.state.turn_number)}"
+            engine.state.log(
+                f"[DEBUG Giardino] action enter choice_ready={choice_ready} choice_source='{choice_source}' expected='{expected_choice_source}'."
+            )
+
+            if choice_ready and choice_source == expected_choice_source:
+                selected = _norm(str(flags.get("_runtime_choice_selected", "")).strip())
+                for key in (
+                    "_runtime_choice_source",
+                    "_runtime_choice_ready",
+                    "_runtime_choice_selected",
+                    "_runtime_choice_values",
+                    "_runtime_choice_labels",
+                    "_runtime_choice_owner",
+                    "_runtime_choice_title",
+                    "_runtime_choice_prompt",
+                    "_runtime_choice_min_targets",
+                    "_runtime_choice_max_targets",
+                ):
+                    flags.pop(key, None)
+
+                if selected == "heal":
+                    target = self._resolve_player_scope(owner_idx, "me")
+                    amount = max(0, int(effect.amount or 4))
+                    before = int(engine.state.players[target].sin)
+                    engine.reduce_sin(target, amount)
+                    after = int(engine.state.players[target].sin)
+                    engine.state.log(
+                        f"[DEBUG Giardino] atomic heal target={target} amount={amount} sin_before={before} sin_after={after}."
+                    )
+                    return
+                if selected == "hit":
+                    target = self._resolve_player_scope(owner_idx, "opponent")
+                    amount = max(0, int(effect.amount or 4))
+                    before = int(engine.state.players[target].sin)
+                    engine.gain_sin(target, amount)
+                    after = int(engine.state.players[target].sin)
+                    engine.state.log(
+                        f"[DEBUG Giardino] atomic hit target={target} amount={amount} sin_before={before} sin_after={after}."
+                    )
+                    return
+                return
+
+            labels_map = {
+                "heal": "Rimuovi 4 Peccato",
+                "hit": "Infliggi 4 Peccato",
+            }
+            flags["_runtime_choice_source"] = expected_choice_source
+            flags["_runtime_choice_values"] = "heal;;hit"
+            flags["_runtime_choice_labels"] = json.dumps(labels_map, ensure_ascii=False)
+            flags["_runtime_choice_owner"] = str(owner_idx)
+            flags["_runtime_choice_title"] = "Giardino del Loto Inverso"
+            flags["_runtime_choice_prompt"] = "Scegli effetto."
+            flags["_runtime_choice_min_targets"] = "1"
+            flags["_runtime_choice_max_targets"] = "1"
+            flags["_runtime_choice_ready"] = False
+            flags["_runtime_resume_same_action"] = True
+            flags["_runtime_reveal_card"] = source_uid
+            flags["_runtime_waiting_for_reveal"] = True
+            engine.state.log(
+                f"[DEBUG Giardino] prompt armed reveal_card='{source_uid}' waiting_for_reveal=True."
+            )
+            return
+
         if action == "choose_targets":
             flags = engine.state.flags
             choice_source = str(flags.get("_runtime_choice_source", "")).strip()
@@ -3198,7 +3266,15 @@ class RuntimeEffectsMixin:
         if action == "inflict_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "opponent")
             amount = max(0, int(effect.amount))
+            before = int(engine.state.players[target].sin)
             engine.gain_sin(target, amount)
+            after = int(engine.state.players[target].sin)
+            source_inst = engine.state.instances.get(source_uid)
+            source_name = source_inst.definition.name if source_inst is not None else source_uid
+            if _norm(source_name) == _norm("Giardino del Loto Inverso"):
+                engine.state.log(
+                    f"[DEBUG Giardino] inflict_sin target={target} amount={amount} sin_before={before} sin_after={after}."
+                )
             if amount > 0:
                 engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}"] = amount
                 engine.state.flags[f"_runtime_last_inflicted_sin_by_{int(owner_idx)}_to_{int(target)}"] = amount
@@ -3343,7 +3419,16 @@ class RuntimeEffectsMixin:
             return
         if action == "remove_sin":
             target = self._resolve_player_scope(owner_idx, effect.target_player or "me")
-            engine.reduce_sin(target, max(0, int(effect.amount)))
+            amount = max(0, int(effect.amount))
+            before = int(engine.state.players[target].sin)
+            engine.reduce_sin(target, amount)
+            after = int(engine.state.players[target].sin)
+            source_inst = engine.state.instances.get(source_uid)
+            source_name = source_inst.definition.name if source_inst is not None else source_uid
+            if _norm(source_name) == _norm("Giardino del Loto Inverso"):
+                engine.state.log(
+                    f"[DEBUG Giardino] remove_sin target={target} amount={amount} sin_before={before} sin_after={after}."
+                )
             return
         if action == "remove_sin_from_flag":
             flag_name = str(effect.flag or "").strip()
@@ -4905,6 +4990,14 @@ class RuntimeEffectsMixin:
             filt = stored_card_matches.get("card_filter", {}) or {}
 
             name_haystack = _card_name_haystack(inst.definition)
+            name_equals = _norm(str(filt.get("name_equals", "")))
+            if name_equals and not _card_matches_name(inst.definition, name_equals):
+                return False
+
+            name_in = {_norm(str(v)) for v in list(filt.get("name_in", []) or []) if str(v).strip()}
+            if name_in and not any(_card_matches_name(inst.definition, v) for v in name_in):
+                return False
+
             name_contains = _norm(str(filt.get("name_contains", "")))
             if name_contains and name_contains not in name_haystack:
                 return False

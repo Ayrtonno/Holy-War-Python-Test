@@ -2,6 +2,17 @@ from __future__ import annotations
 
 CARD_NAME = "Zhongli Quan"
 
+BA_XIAN_NAMES = [
+    "Lu Dongbin",
+    "He Xian'gu",
+    "Li Tieguai",
+    "Han Xiangzi",
+    "Lan Caihe",
+    "Zhang Guolao",
+    "Cao Guojiu",
+    "Zhongli Quan",
+]
+
 # Zhongli Quan counts itself for this check while resolving its own play effect.
 # Therefore we only need to verify the other 7 Ba Xian names across hand/field/graveyard.
 ALL_8_NAMES_PRESENT = {
@@ -34,7 +45,7 @@ SCRIPT = {
                 "type": "selected_targets",
                 "zone": "graveyard",
                 "owner": "me",
-                "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                 "min_targets": 0,
                 "max_targets": 2,
                 "target_policy": "optional_resolve",

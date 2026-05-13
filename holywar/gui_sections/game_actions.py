@@ -354,6 +354,8 @@ class GUIGameActionsMixin:
 
                 elif zone == "graveyard":
                     for c_uid in player.graveyard:
+                        if c_uid == uid:
+                            continue
                         inst = engine.state.instances[c_uid]
                         if matches(inst) and c_uid not in seen:
                             out.append(c_uid)
@@ -361,6 +363,8 @@ class GUIGameActionsMixin:
 
                 elif zone == "excommunicated":
                     for c_uid in player.excommunicated:
+                        if c_uid == uid:
+                            continue
                         inst = engine.state.instances[c_uid]
                         if matches(inst) and c_uid not in seen:
                             out.append(c_uid)
@@ -376,6 +380,8 @@ class GUIGameActionsMixin:
 
                 elif zone == "hand":
                     for c_uid in player.hand:
+                        if c_uid == uid:
+                            continue
                         inst = engine.state.instances[c_uid]
                         if matches(inst) and c_uid not in seen:
                             out.append(c_uid)
@@ -383,6 +389,8 @@ class GUIGameActionsMixin:
 
                 elif zone in {"deck", "relicario"}:
                     for c_uid in player.deck:
+                        if c_uid == uid:
+                            continue
                         inst = engine.state.instances[c_uid]
                         if matches(inst) and c_uid not in seen:
                             out.append(c_uid)
@@ -500,24 +508,32 @@ class GUIGameActionsMixin:
 
                 elif zone == "graveyard":
                     for c_uid in player.graveyard:
+                        if c_uid == uid:
+                            continue
                         if matches(c_uid) and c_uid not in seen:
                             out.append(c_uid)
                             seen.add(c_uid)
 
                 elif zone == "excommunicated":
                     for c_uid in player.excommunicated:
+                        if c_uid == uid:
+                            continue
                         if matches(c_uid) and c_uid not in seen:
                             out.append(c_uid)
                             seen.add(c_uid)
 
                 elif zone == "hand":
                     for c_uid in player.hand:
+                        if c_uid == uid:
+                            continue
                         if matches(c_uid) and c_uid not in seen:
                             out.append(c_uid)
                             seen.add(c_uid)
 
                 elif zone in {"deck", "relicario"}:
                     for c_uid in player.deck:
+                        if c_uid == uid:
+                            continue
                         if matches(c_uid) and c_uid not in seen:
                             out.append(c_uid)
                             seen.add(c_uid)

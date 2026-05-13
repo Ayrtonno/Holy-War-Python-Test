@@ -30,43 +30,17 @@ SCRIPT = {
     "play_targeting": "none",
     "triggered_effects": [
         {
-            "trigger": {"event": "on_draw_phase_start", "frequency": "each_turn"},
+            "trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": {"not": HAS_3_DISTINCT}},
             "target": SOURCE_TARGET,
-            "effect": {
-                "action": "choose_option",
-                "choice_title": "Giardino",
-                "choice_prompt": "Scegli effetto",
-                "choice_options": [
-                    {"label": "Rimuovi 4 Peccato", "value": "heal"},
-                    {"label": "Infliggi 4 Peccato", "value": "hit"},
-                ],
-            },
+            "effect": {"action": "giardino_loto_resolution", "amount": 4},
         },
         {
-            "trigger": {
-                "event": "on_draw_phase_start",
-                "frequency": "each_turn",
-                "condition": {"all_of": [{"not": HAS_3_DISTINCT}, {"selected_option_in": ["heal"]}]},
-            },
+            "trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT},
             "target": SOURCE_TARGET,
             "effect": {"action": "remove_sin", "amount": 4, "target_player": "me"},
         },
         {
-            "trigger": {
-                "event": "on_draw_phase_start",
-                "frequency": "each_turn",
-                "condition": {"all_of": [{"not": HAS_3_DISTINCT}, {"selected_option_in": ["hit"]}]},
-            },
-            "target": SOURCE_TARGET,
-            "effect": {"action": "inflict_sin", "amount": 4, "target_player": "opponent"},
-        },
-        {
-            "trigger": {"event": "on_draw_phase_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT},
-            "target": SOURCE_TARGET,
-            "effect": {"action": "remove_sin", "amount": 4, "target_player": "me"},
-        },
-        {
-            "trigger": {"event": "on_draw_phase_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT},
+            "trigger": {"event": "on_my_turn_start", "frequency": "each_turn", "condition": HAS_3_DISTINCT},
             "target": SOURCE_TARGET,
             "effect": {"action": "inflict_sin", "amount": 4, "target_player": "opponent"},
         },

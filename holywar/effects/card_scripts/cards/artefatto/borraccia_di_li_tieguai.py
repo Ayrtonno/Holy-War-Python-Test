@@ -2,11 +2,22 @@ from __future__ import annotations
 
 CARD_NAME = "Borraccia di Li Tieguai"
 
+BA_XIAN_NAMES = [
+    "Lu Dongbin",
+    "He Xian'gu",
+    "Li Tieguai",
+    "Han Xiangzi",
+    "Lan Caihe",
+    "Zhang Guolao",
+    "Cao Guojiu",
+    "Zhongli Quan",
+]
+
 BAXIAN_DESTROYED = {
     "all_of": [
         {"event_card_owner": "me"},
         {"event_card_type_in": ["santo", "token"]},
-        {"event_card_name_contains": "ba xian"},
+        {"any_of": [{"event_card_name_is": n} for n in BA_XIAN_NAMES]},
         {"payload_from_zone_in": ["attack", "defense", "field"]},
     ]
 }
@@ -22,7 +33,7 @@ GRAVE_BAXIAN_TARGET = {
     "type": "selected_target",
     "zone": "graveyard",
     "owner": "me",
-    "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+    "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
     "min_targets": 1,
     "max_targets": 1,
     "target_policy": "required_to_resolve",
@@ -68,7 +79,7 @@ SCRIPT = {
                                     "controller_has_cards": {
                                         "zone": "graveyard",
                                         "owner": "me",
-                                        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                                        "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                                         "min_count": 1,
                                     }
                                 },
@@ -85,7 +96,7 @@ SCRIPT = {
                                     "controller_has_cards": {
                                         "zone": "graveyard",
                                         "owner": "me",
-                                        "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
+                                        "card_filter": {"name_in": BA_XIAN_NAMES, "card_type_in": ["santo", "token"]},
                                         "min_count": 1,
                                     }
                                 },
@@ -121,4 +132,3 @@ SCRIPT = {
         },
     ],
 }
-

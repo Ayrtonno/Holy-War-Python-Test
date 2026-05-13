@@ -513,6 +513,8 @@ class GameEngine:
             cause=cause,
             by_whom=by_whom,
         )
+        zone_ops.promote_defense_frontline(self, 0)
+        zone_ops.promote_defense_frontline(self, 1)
 
     # Starts the active player's turn and applies all start-of-turn effects.
     def start_turn(self) -> None:
@@ -625,17 +627,20 @@ class GameEngine:
             return ActionResult(True, f"L'attivazione di {inst.definition.name} e stata annullata.")
         card_type = _norm(inst.definition.card_type)
         is_piaga_blessing_or_curse = card_type in {"benedizione", "maledizione"} and "piaga" in _norm(inst.definition.name)
+        is_activate_once_per_turn = runtime_cards.is_activate_once_per_turn(inst.definition.name)
         if is_piaga_blessing_or_curse and not self.can_activate_once_per_turn(uid):
             return ActionResult(False, f"{inst.definition.name}: effetto non puo essere attivato piu di una volta per turno.")
-        if runtime_cards.is_activate_once_per_turn(inst.definition.name) and not self.can_activate_once_per_turn(uid):
+        if is_activate_once_per_turn and not self.can_activate_once_per_turn(uid):
             return ActionResult(True, f"{inst.definition.name}: abilita gia usata in questo turno.")
         can_activate, reason = runtime_cards.can_activate(self, player_idx, uid, target=target)
         if not can_activate:
             self.state.log(f"{src_name}: attivazione fallita. {reason or 'Nessun bersaglio valido disponibile per questa abilita.'}")
             return ActionResult(False, reason or "Nessun bersaglio valido disponibile per questa abilita.")
-        msg = resolve_activated_effect(self, player_idx, uid, target)
-        if is_piaga_blessing_or_curse:
+        # Consume once-per-turn lock as soon as activation is validated to
+        # prevent re-entry loops while a reveal/choice dialog is pending.
+        if is_piaga_blessing_or_curse or is_activate_once_per_turn:
             self.mark_activated_this_turn(uid)
+        msg = resolve_activated_effect(self, player_idx, uid, target)
         self._cleanup_zero_faith_saints()
         self.check_win_conditions()
         outcome = self._clean_effect_outcome(src_name, str(msg))
@@ -758,10 +763,14 @@ class GameEngine:
             token_to_white=token_to_white,
             from_zone_override=from_zone_override,
         )
+        zone_ops.promote_defense_frontline(self, 0)
+        zone_ops.promote_defense_frontline(self, 1)
 
     # Moves a card into the excommunication zone through the zone module.
     def excommunicate_card(self, owner_idx: int, uid: str, from_zone_override: str | None = None) -> None:
         zone_ops.excommunicate_card(self, owner_idx, uid, from_zone_override=from_zone_override)
+        zone_ops.promote_defense_frontline(self, 0)
+        zone_ops.promote_defense_frontline(self, 1)
 
     # Moves an absolved card from excommunication back into the graveyard.
     def absolve_card_to_graveyard(self, owner_idx: int, uid: str) -> None:
@@ -841,7 +850,11 @@ class GameEngine:
 
     # Returns a card from the board to hand while preserving ownership rules.
     def move_board_card_to_hand(self, owner_idx: int, uid: str) -> bool:
-        return zone_ops.move_board_card_to_hand(self, owner_idx, uid)
+        moved = zone_ops.move_board_card_to_hand(self, owner_idx, uid)
+        if moved:
+            zone_ops.promote_defense_frontline(self, 0)
+            zone_ops.promote_defense_frontline(self, 1)
+        return moved
 
     # Places a graveyard card on the bottom of the deck.
     def move_graveyard_card_to_deck_bottom(self, player_idx: int, uid: str) -> bool:
@@ -861,7 +874,11 @@ class GameEngine:
 
     # Places a card uid directly into a specific board zone and slot.
     def place_card_from_uid(self, player_idx: int, uid: str, zone: str, slot: int) -> bool:
-        return zone_ops.place_card_from_uid(self, player_idx, uid, zone, slot)
+        placed = zone_ops.place_card_from_uid(self, player_idx, uid, zone, slot)
+        if placed:
+            zone_ops.promote_defense_frontline(self, 0)
+            zone_ops.promote_defense_frontline(self, 1)
+        return placed
 
     # Returns the currently empty slot indexes for a board zone.
     def empty_slots(self, player_idx: int, zone: str) -> list[int]:

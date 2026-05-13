@@ -16,7 +16,12 @@ SCRIPT = {
     "on_enter_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+            },
             "effect": {
                 "action": "increase_source_stats_from_zone_count_div",
                 "target_player": "me",
@@ -24,9 +29,6 @@ SCRIPT = {
                 "threshold": 5,
                 "divisor": 5,
                 "amount": 2,
-                "target_policy": "optional_resolve",
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
             },
         }
     ],

@@ -16,7 +16,7 @@ SCRIPT = {
     "can_attack_multiple_targets_in_attack_per_turn": True,
     "triggered_effects": [],
     "on_play_actions": [
-        {"effect": {"action": "draw_cards", "amount": 0, "target_player": "me"}},
+        {"activation_mode": "mandatory_auto", "effect": {"action": "draw_cards", "amount": 0, "target_player": "me"}},
     ],
     "on_activate_actions": [
         {
@@ -35,10 +35,12 @@ SCRIPT = {
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "grant_extra_attack_this_turn"},
         },
     ],

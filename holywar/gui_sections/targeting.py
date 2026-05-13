@@ -157,6 +157,12 @@ class GUITargetingMixin:
             if "target" not in raw_action:
                 continue
             action_spec = script.on_play_actions[i]
+            effect_action = str(action_spec.effect.action or "").strip().lower()
+            # Only these actions require an explicit user target-picking step
+            # before play resolution. Other actions may have a target spec for
+            # internal counting/filtering and must not open a picker.
+            if effect_action not in {"choose_targets", "choose_targets_and_summon_to_field"}:
+                continue
             if action_spec.condition and not runtime_cards._eval_condition_node(  # noqa: SLF001
                 RuleEventContext(engine=self.engine, event="on_play", player_idx=owner_idx, payload={"card": uid}),
                 owner_idx,

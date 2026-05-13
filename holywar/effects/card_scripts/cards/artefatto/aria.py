@@ -17,12 +17,14 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {"event": "on_main_phase_start", "frequency": "each_turn"},
-            "target": {"type": "cards_controlled_by_owner", "zone": "field", "owner": "me"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "add_inspiration", "amount": 1, "target_player": "me"}
         }
     ],
@@ -64,9 +66,7 @@ SCRIPT = {
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
             },
-            "effect": {"action": "summon_named_card"},
-                "placement_policy": "prompt_slot_required",
-            "placement_policy": "prompt_slot_required",
+            "effect": {"action": "summon_named_card", "placement_policy": "prompt_slot_required"},
         }
     ],
 }

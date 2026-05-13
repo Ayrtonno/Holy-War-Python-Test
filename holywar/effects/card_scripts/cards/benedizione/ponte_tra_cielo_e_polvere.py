@@ -28,7 +28,7 @@ SCRIPT = {
                 "zone": "field",
                 "owner": "me",
                 "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-                "target_policy": "optional_resolve",
+                "target_policy": "required_to_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
             },
@@ -56,4 +56,3 @@ SCRIPT = {
         {"activation_mode": "mandatory_auto", "target": SELECTED_TARGET, "effect": {"action": "summon_target_to_field", "placement_policy": "prompt_slot_required"}},
     ],
 }
-

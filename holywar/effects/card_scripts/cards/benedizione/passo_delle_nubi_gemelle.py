@@ -32,8 +32,6 @@ SCRIPT = {
                 "cancel_behavior": "abort_step",
             },
             "effect": {"action": "summon_target_to_field_pay_half_inspiration", "target_player": "me", "placement_policy": "prompt_slot_required"},
-                "placement_policy": "prompt_slot_required",
-            "placement_policy": "prompt_slot_required",
         },
         { "activation_mode": "mandatory_auto","effect": {"action": "mill_cards", "amount": 1, "target_player": "opponent"}},
     ],

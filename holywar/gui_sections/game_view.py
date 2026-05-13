@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from holywar.core import query_helpers as query_ops
-from holywar.effects.runtime import runtime_cards
+from holywar.effects.runtime import _norm, runtime_cards
 
 # This mixin class provides methods for rendering the game board and hand, as well as handling user interactions related to these elements. It includes methods for updating the display of player resources, showing card details, and managing interactions with cards in the player's hand and on the board. The methods in this class are designed to work with the game engine's state to ensure that the GUI accurately reflects the current game situation and allows players to interact with their cards effectively.
 class GUIGameViewMixin:
@@ -247,6 +247,16 @@ class GUIGameViewMixin:
     # This method checks if there is a pending runtime reveal prompt that needs to be displayed to the player. It verifies the relevant flags in the game engine's state to determine if a reveal is waiting, retrieves the card instance to be revealed, and displays the appropriate prompt or information to the player. The method also handles any choices that may be associated with the reveal and updates the game state accordingly after the player interacts with the prompt.
     def _maybe_show_runtime_reveal(self) -> None:
         if self.engine is None or self._reveal_prompt_open or not self._ui_alive():
+            if self.engine is not None:
+                waiting_dbg = bool(self.engine.state.flags.get("_runtime_waiting_for_reveal"))
+                reveal_dbg = str(self.engine.state.flags.get("_runtime_reveal_card", "")).strip()
+                if waiting_dbg and reveal_dbg:
+                    inst_dbg = self.engine.state.instances.get(reveal_dbg)
+                    name_dbg = inst_dbg.definition.name if inst_dbg is not None else reveal_dbg
+                    if _norm(name_dbg) == _norm("Giardino del Loto Inverso"):
+                        self.engine.state.log(
+                            f"[DEBUG Giardino] reveal skipped guard open={self._reveal_prompt_open} ui_alive={self._ui_alive()}."
+                        )
             return
 
         flags = self.engine.state.flags
@@ -256,6 +266,12 @@ class GUIGameViewMixin:
         if not waiting or not reveal_uid:
             self._reveal_prompt_last_uid = ""
             return
+        inst_dbg = self.engine.state.instances.get(reveal_uid)
+        name_dbg = inst_dbg.definition.name if inst_dbg is not None else reveal_uid
+        if _norm(name_dbg) == _norm("Giardino del Loto Inverso"):
+            self.engine.state.log(
+                f"[DEBUG Giardino] reveal pending detected waiting={waiting} reveal_uid='{reveal_uid}' last_uid='{self._reveal_prompt_last_uid}'."
+            )
 
         if reveal_uid == self._reveal_prompt_last_uid:
             return
@@ -358,6 +374,44 @@ class GUIGameViewMixin:
                     labels_map = json.loads(labels_raw) if labels_raw else {}
                 except Exception:
                     labels_map = {}
+
+                if _norm(inst.definition.name) == _norm("Giardino del Loto Inverso"):
+                    title = str(flags.get("_runtime_choice_title", "Giardino del Loto Inverso")) or "Giardino del Loto Inverso"
+                    prompt = str(flags.get("_runtime_choice_prompt", "")).strip() or "Scegli effetto."
+                    normalized_values = {_norm(v): v for v in values}
+                    heal_value = normalized_values.get("heal", "heal")
+                    hit_value = normalized_values.get("hit", "hit")
+                    heal_label = str(labels_map.get(heal_value, "Rimuovi 4 Peccato"))
+                    hit_label = str(labels_map.get(hit_value, "Infliggi 4 Peccato"))
+                    giardino_choices: list[tuple[str, str]] = [
+                        (heal_label, heal_value),
+                        (hit_label, hit_value),
+                    ]
+                    canceled, selected = self._open_board_target_picker(
+                        title=title,
+                        prompt=prompt,
+                        choices=giardino_choices,
+                        allow_multi=False,
+                        min_targets=1,
+                        max_targets=1,
+                        allow_none=False,
+                        allow_manual=False,
+                        card_uid=reveal_uid,
+                    )
+                    flags["_runtime_choice_selected"] = "" if canceled else str(selected or "")
+                    flags["_runtime_choice_ready"] = bool(flags["_runtime_choice_selected"])
+                    self.engine.state.log(
+                        f"[DEBUG Giardino] dedicated dialog selected='{flags.get('_runtime_choice_selected')}'."
+                    )
+
+                    self._reveal_prompt_open = False
+                    flags["_runtime_waiting_for_reveal"] = False
+                    flags.pop("_runtime_reveal_card", None)
+                    runtime_cards.resume_pending_effect(self.engine)
+                    self._reveal_prompt_last_uid = ""
+                    if self._ui_alive():
+                        self.refresh()
+                    return
 
                 choices: list[tuple[str, str]] = []
                 for value in values:

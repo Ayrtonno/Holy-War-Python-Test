@@ -24,17 +24,17 @@ SCRIPT = {
                     ]
                 },
             },
-            "target": {"type": "event_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "event_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "excommunicate_card_no_sin"},
         },
     ],
     "on_play_actions": [
-        {"effect": {"action": "draw_cards", "amount": 0, "target_player": "me"}},
+        {"activation_mode": "mandatory_auto", "effect": {"action": "draw_cards", "amount": 0, "target_player": "me"}},
     ],
     "on_enter_actions": [
         {

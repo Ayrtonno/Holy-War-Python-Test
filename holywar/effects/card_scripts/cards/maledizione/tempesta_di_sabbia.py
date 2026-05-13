@@ -13,6 +13,7 @@ SCRIPT = {
     "on_activate_mode": "auto",
     "triggered_effects": [],
     "on_play_actions": [{
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "all_saints_on_field",
                 "card_filter": {

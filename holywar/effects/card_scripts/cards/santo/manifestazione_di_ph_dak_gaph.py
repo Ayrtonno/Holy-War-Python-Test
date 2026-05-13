@@ -24,12 +24,12 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {"event": "on_card_excommunicated", "frequency": "each_time"},
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "remove_sin", "amount": 2, "target_player": "me"},
         },
         {
@@ -38,12 +38,12 @@ SCRIPT = {
                 "frequency": "each_time",
                 "condition": {"event_card_owner": "opponent"},
             },
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "inflict_sin", "amount": 1, "target_player": "opponent"},
         },
         {
@@ -74,22 +74,22 @@ SCRIPT = {
         },
         {
             "trigger": {"event": "on_this_card_leaves_field", "frequency": "each_time"},
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "shuffle_deck", "target_player": "me"},
         },
         {
             "trigger": {"event": "on_this_card_leaves_field", "frequency": "each_time"},
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "shuffle_deck", "target_player": "opponent"},
         },
     ],
@@ -120,9 +120,7 @@ SCRIPT = {
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
             },
-            "effect": {"action": "summon_target_to_field"},
-                "placement_policy": "prompt_slot_required",
-            "placement_policy": "prompt_slot_required",
+            "effect": {"action": "summon_target_to_field", "placement_policy": "prompt_slot_required"},
         },
     ],
     "on_play_actions": [],

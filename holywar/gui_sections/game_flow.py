@@ -165,6 +165,12 @@ class GUIGameFlowMixin:
             # phase returns to setup and we must immediately start the next one.
             self.turn_started = self.engine.state.phase != "setup"
             self.refresh()
+            # Triggered effects can request reveal/choice during start_turn.
+            # Ensure human flow opens the runtime picker exactly like AI flow.
+            if bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                self._maybe_show_runtime_reveal()
+                if bool(self.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                    break
         if self.mode_var.get() == "ai" and self.engine and self.engine.state.active_player == 1 and not self.ai_running:
             self.start_ai_turn()
 

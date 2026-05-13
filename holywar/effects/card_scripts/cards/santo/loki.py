@@ -18,12 +18,12 @@ SCRIPT = {
     "on_activate_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "remove_from_board_no_sin"},
         },
         {
@@ -42,9 +42,7 @@ SCRIPT = {
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
             },
-            "effect": {"action": "summon_card_from_hand"},
-                "placement_policy": "prompt_slot_required",
-            "placement_policy": "prompt_slot_required",
+            "effect": {"action": "summon_card_from_hand", "placement_policy": "prompt_slot_required"},
         },
     ],
 }

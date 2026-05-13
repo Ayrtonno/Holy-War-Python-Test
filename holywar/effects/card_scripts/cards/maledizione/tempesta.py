@@ -13,6 +13,7 @@ SCRIPT = {
     "on_activate_mode": "auto",
     "triggered_effects": [],
     "on_play_actions": [{
+            "activation_mode": "mandatory_auto",
             "target": {
                 "type": "cards_controlled_by_owner",
                 "zone": "field",

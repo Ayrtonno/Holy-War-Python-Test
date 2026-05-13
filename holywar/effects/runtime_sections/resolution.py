@@ -708,11 +708,24 @@ class RuntimeResolutionMixin:
 
             # The handler function defined here is responsible for checking if the trigger conditions are met when the specified event occurs. It verifies if the source of the event is still on the field (if required by the trigger), checks if the event is happening during the correct player's turn, and evaluates any additional conditions specified in the trigger. If all conditions are met, it resolves the effect associated with the trigger. The handler also logs the trigger activation and manages runtime flags to keep track of the event context during resolution.
             def _handler(ctx: RuleEventContext, _te=te, _owner=owner_idx, _source=source_uid, _event_name=event_name):
+                source_inst_dbg = ctx.engine.state.instances.get(_source)
+                source_name_dbg = source_inst_dbg.definition.name if source_inst_dbg is not None else _source
+                is_giardino = _norm(source_name_dbg) == _norm("Giardino del Loto Inverso")
+                if is_giardino:
+                    ctx.engine.state.log(
+                        f"[DEBUG Giardino] handler enter event='{_event_name}' action='{_te.effect.action}' owner={_owner} ctx_player={ctx.player_idx}."
+                    )
                 if _event_name not in allow_source_off_field and not self._is_uid_on_field(ctx.engine, _source):
+                    if is_giardino:
+                        ctx.engine.state.log("[DEBUG Giardino] skip: source not on field.")
                     return
                 if _te.trigger.event in {"on_my_turn_start", "on_my_turn_end"} and ctx.player_idx != _owner:
+                    if is_giardino:
+                        ctx.engine.state.log("[DEBUG Giardino] skip: not my turn event owner.")
                     return
                 if _te.trigger.event in {"on_opponent_turn_start", "on_opponent_turn_end"} and ctx.player_idx != (1 - _owner):
+                    if is_giardino:
+                        ctx.engine.state.log("[DEBUG Giardino] skip: not opponent turn event owner.")
                     return
                 if _te.trigger.event.startswith("on_this_card_"):
                     event_uid = str(ctx.payload.get("card", ctx.payload.get("saint", ctx.payload.get("token", ""))))
@@ -727,8 +740,12 @@ class RuntimeResolutionMixin:
                     if int(saint_inst.owner) == int(source_inst.owner):
                         return
                 if not self._can_resolve_exclusive_trigger_source(ctx.engine, _owner, _source, _te.trigger):
+                    if is_giardino:
+                        ctx.engine.state.log("[DEBUG Giardino] skip: exclusive trigger gate.")
                     return
                 if not self._event_matches(ctx, _owner, _te.trigger.condition):
+                    if is_giardino:
+                        ctx.engine.state.log("[DEBUG Giardino] skip: trigger condition false.")
                     return
                 source_inst = ctx.engine.state.instances.get(_source)
                 source_name = source_inst.definition.name if source_inst is not None else _source
@@ -750,12 +767,36 @@ class RuntimeResolutionMixin:
                     else:
                         self._apply_effect(ctx.engine, _owner, _source, targets, _te.effect)
 
+                    # If a trigger effect opened a reveal/choice prompt, persist
+                    # enough context so resume_pending_effect can continue this
+                    # exact trigger action after the UI selection.
+                    if bool(ctx.engine.state.flags.get("_runtime_waiting_for_reveal")):
+                        flags = ctx.engine.state.flags
+                        flags["_runtime_pending_mode"] = "trigger_action"
+                        flags["_runtime_resume_source"] = _source
+                        flags["_runtime_resume_owner"] = str(_owner)
+                        flags["_runtime_trigger_action"] = str(_te.effect.action or "")
+                        flags["_runtime_trigger_target_player"] = str(_te.effect.target_player or "me")
+                        flags["_runtime_trigger_card_name"] = str(_te.effect.card_name or "")
+                        flags["_runtime_trigger_from_zone"] = str(_te.effect.from_zone or "")
+                        flags["_runtime_trigger_to_zone"] = str(_te.effect.to_zone or "")
+                        flags["_runtime_trigger_to_zone_if"] = str(_te.effect.to_zone_if or "")
+                        flags["_runtime_trigger_amount"] = str(int(_te.effect.amount or 0))
+                        flags["_runtime_trigger_shuffle_after"] = "1" if bool(_te.effect.shuffle_after) else "0"
+                        if is_giardino:
+                            ctx.engine.state.log("[DEBUG Giardino] trigger queued for resume_pending_effect.")
+                        return
+
                     # Trigger-side choose_option needs an explicit follow-up pass:
                     # once the choice is confirmed, apply sibling triggers on the
                     # same source/event whose conditions depend on selected_option_in.
                     choice_ready_after = bool(ctx.engine.state.flags.get("_runtime_choice_ready"))
                     if effect_action == "choose_option" and choice_ready_after:
                         selected_option = str(ctx.engine.state.flags.get("_runtime_selected_option", "")).strip()
+                        if is_giardino:
+                            ctx.engine.state.log(
+                                f"[DEBUG Giardino] choose_option pronto, selected_option='{selected_option or '<empty>'}', event='{_event_name}'."
+                            )
                         if selected_option:
                             for follow_te in script.triggered_effects:
                                 if follow_te is _te:
@@ -765,8 +806,16 @@ class RuntimeResolutionMixin:
                                 if _norm(follow_te.effect.action) == "choose_option":
                                     continue
                                 if not self._event_matches(ctx, _owner, follow_te.trigger.condition):
+                                    if is_giardino:
+                                        ctx.engine.state.log(
+                                            f"[DEBUG Giardino] skip follow action='{follow_te.effect.action}' (condition false)."
+                                        )
                                     continue
                                 follow_targets = self._resolve_targets(ctx.engine, _owner, follow_te.target)
+                                if is_giardino:
+                                    ctx.engine.state.log(
+                                        f"[DEBUG Giardino] run follow action='{follow_te.effect.action}' targets={len(follow_targets)}."
+                                    )
                                 self._log_script_action(ctx.engine, _source, follow_te.effect, follow_targets)
                                 if not follow_targets:
                                     self._apply_effect(ctx.engine, _owner, _source, [], follow_te.effect)

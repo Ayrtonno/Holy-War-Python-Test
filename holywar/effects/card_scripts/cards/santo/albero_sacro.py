@@ -17,12 +17,13 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {"event": "on_preparation_complete", "frequency": "each_turn"},
-            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "empty_saint_slots_controlled_by_owner",
+                "owner": "me",
                 "target_policy": "required_to_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
@@ -40,22 +41,24 @@ SCRIPT = {
         },
         {
             "trigger": {"event": "on_my_turn_end", "frequency": "each_turn"},
-            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "empty_saint_slots_controlled_by_owner",
+                "owner": "me",
                 "target_policy": "required_to_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
             "trigger": {"event": "on_opponent_turn_end", "frequency": "each_turn"},
-            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "empty_saint_slots_controlled_by_owner",
+                "owner": "me",
                 "target_policy": "required_to_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
@@ -87,12 +90,12 @@ SCRIPT = {
         {
             "trigger": {"event": "on_saint_defeated_in_battle", "frequency": "each_turn"},
             "condition": {"event_card_name_is": "Token Albero"},
-            "target": {"type": "source_card"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "increase_faith", "amount": 2},
         },
     ],
@@ -100,17 +103,23 @@ SCRIPT = {
     "on_enter_actions": [
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "empty_saint_slots_controlled_by_owner", "owner": "me"},
-                "selection_mode": "prompt",
-                "cancel_behavior": "abort_step",
+            "target": {
+                "type": "empty_saint_slots_controlled_by_owner",
+                "owner": "me",
                 "target_policy": "required_to_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
             "activation_mode": "mandatory_auto",
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
+                "target_policy": "optional_resolve",
+                "selection_mode": "prompt",
+                "cancel_behavior": "abort_step",
+            },
             "effect": {
                 "action": "summon_generated_token",
                 "placement_policy": "prompt_slot_required",

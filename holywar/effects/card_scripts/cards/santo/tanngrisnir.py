@@ -33,10 +33,12 @@ SCRIPT = {
         {
             "activation_mode": "mandatory_auto",
             "condition": {"controller_has_saint_with_name": "Thor"},
-            "target": {"type": "source_card"},
+            "target": {
+                "type": "source_card",
                 "target_policy": "optional_resolve",
                 "selection_mode": "prompt",
                 "cancel_behavior": "abort_step",
+            },
             "effect": {"action": "remove_from_board_no_sin"},
         },
     ],
