@@ -7,7 +7,7 @@ HAS_OTHER_BAXIAN = {
         "zones": ["field"],
         "owner": "me",
         "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-        "min_count": 1,
+        "min_count": 2,
     }
 }
 
@@ -35,7 +35,7 @@ SCRIPT = {
                 "owner": "opponent",
                 "card_filter": {"card_type_in": ["artefatto"]},
             },
-            "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
+            "effect": {"action": "choose_targets", "min_targets": 0, "max_targets": 1},
         },
         {
             "condition": {

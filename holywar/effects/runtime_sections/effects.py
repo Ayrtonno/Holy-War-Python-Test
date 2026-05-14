@@ -754,6 +754,16 @@ class RuntimeEffectsMixin:
                     by_source = self._temp_faith.setdefault(ek, {}).setdefault(source_uid, [])
                     by_source.append((t_uid, int(effect.amount), marker))
             return
+        if action == "increase_faith_equal_to_base":
+            for t_uid in targets:
+                inst = engine.state.instances.get(t_uid)
+                if inst is None:
+                    continue
+                base_faith = max(0, int(inst.definition.faith or 0))
+                if base_faith <= 0:
+                    continue
+                inst.current_faith = (inst.current_faith or 0) + base_faith
+            return
         if action == "increase_strength":
             for t_uid in targets:
                 engine.state.instances[t_uid].blessed.append(f"buff_str:{int(effect.amount)}")

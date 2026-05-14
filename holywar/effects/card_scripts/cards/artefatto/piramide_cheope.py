@@ -2,6 +2,24 @@
 
 CARD_NAME = """Piramide: Cheope"""
 
+HAS_AT_LEAST_2_PYRAMIDS = {
+    "controller_has_cards": {
+        "zones": ["field"],
+        "owner": "me",
+        "card_filter": {"script_is_pyramid": True},
+        "min_count": 2,
+    }
+}
+
+HAS_AT_LEAST_3_PYRAMIDS = {
+    "controller_has_cards": {
+        "zones": ["field"],
+        "owner": "me",
+        "card_filter": {"script_is_pyramid": True},
+        "min_count": 3,
+    }
+}
+
 SCRIPT = {
     "on_play_mode": "scripted",
     "on_enter_mode": "auto",
@@ -49,5 +67,16 @@ SCRIPT = {
         },
     ],
     "triggered_effects": [],
-    "on_play_actions": [],
+    "on_play_actions": [
+        {
+            "condition": {"all_of": [HAS_AT_LEAST_2_PYRAMIDS, {"not": HAS_AT_LEAST_3_PYRAMIDS}]},
+            "target": {
+                "type": "cards_controlled_by_owner",
+                "zone": "field",
+                "owner": "me",
+                "card_filter": {"card_type_in": ["santo", "token"]},
+            },
+            "effect": {"action": "increase_faith_equal_to_base"},
+        },
+    ],
 }
