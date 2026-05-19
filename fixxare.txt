@@ -1,4 +1,0 @@
-Assicurati che ogni volta che ci sono effetti tipo "cerca", "seleziona", "summona", viene sempre chiesto il bersaglio e/o la zona.
-Passo delle Nubi Gemelle: verifica di avere abbastanza ispirazione per poter evocare il santo selezionato
-Lu Dongbin ha ancora il problema del target nel summon.... deve funzionare diversamente... sempre evocabile, ma se esiste un artefatto sul terreno avversario posso sceglierlo, altrimenti non scelgo nulla e mi aumenta la forza.
-Aggiungi effetti di 8 immortali per evocarli free dalla mano se.... qualcosa

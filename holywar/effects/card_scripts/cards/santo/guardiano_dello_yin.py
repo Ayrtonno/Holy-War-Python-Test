@@ -10,9 +10,9 @@ SCRIPT = {
     "triggered_effects": [
         {
             "trigger": {
-                "event": "on_inspiration_gained",
+                "event": "on_card_drawn",
                 "frequency": "each_time",
-                "condition": {"payload_target_player": "opponent"},
+                "condition": {"event_card_owner": "opponent"},
             },
             "target": {"type": "source_card"},
             "effect": {"action": "remove_sin", "amount": 1, "target_player": "me"},

@@ -3516,7 +3516,7 @@
     "crosses": "4",
     "faith": 4,
     "strength": 2,
-    "effect_text": "Ogni volta che il tuo avversario ottiene Ispirazione, rimuovi 1 Peccato da te stesso.",
+    "effect_text": "Ogni volta che il tuo avversario pesca una carta, rimuovi 1 peccato da te stesso.",
     "expansion": "TAO-1",
     "is_token": false,
     "aliases": []
@@ -3696,7 +3696,7 @@
     "crosses": "6",
     "faith": null,
     "strength": null,
-    "effect_text": "Scegli fino a 2 tuoi Ba Xian nel cimitero e aggiungili alla tua mano. Poi scarta 1 carta.",
+    "effect_text": "Scegli un Ba Xian nel tuo cimitero ed evocalo sul tuo terreno.",
     "expansion": "TAO-1",
     "is_token": false,
     "aliases": [
@@ -3722,7 +3722,7 @@
     "crosses": "5",
     "faith": null,
     "strength": null,
-    "effect_text": "Rivela la tua mano. Per ogni Ba Xian rivelato, pesca 1 carta fino a un massimo di 3. Poi rimetti nel reliquiario 1 carta dalla tua mano.",
+    "effect_text": "Puoi giocare questa carta solo se hai un Ba Xian sul terreno, gioca questa carta per evocare un Ba Xian con nome diverso dalla tua mano al terreno.", 
     "expansion": "TAO-1",
     "is_token": false,
     "aliases": [
@@ -3852,7 +3852,7 @@
     "crosses": "8",
     "faith": 8,
     "strength": null,
-    "effect_text": "Ogni volta che un Ba Xian entra in campo (dalla mano, reliquiario o cimitero), aggiungi 1 Segnalino Armonia su questa carta. Puoi rimuovere 3 Segnalini Armonia: pesca 1 carta o aggiungi alla mano un Ba Xian dal tuo cimitero.",
+    "effect_text": "Finche questa carta + sul terreno, ogni tuo santo ottiene +3 forza per ogni Ba Xian presente sul tuo terreno e +3 fede per ogni Ba Xian nel tuo cimitero.",
     "expansion": "TAO-1",
     "is_token": false,
     "aliases": [
@@ -3886,3 +3886,6 @@
     ]
   }
 ]
+
+
+

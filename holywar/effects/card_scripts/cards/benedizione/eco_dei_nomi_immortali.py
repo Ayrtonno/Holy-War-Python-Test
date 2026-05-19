@@ -13,28 +13,12 @@ BAXIAN_NAMES = [
     "Zhongli Quan",
 ]
 
-HAS_1 = {
+HAS_BAXIAN_FIELD = {
     "controller_has_cards": {
-        "zones": ["hand"],
+        "zones": ["field"],
         "owner": "me",
         "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
         "min_count": 1,
-    }
-}
-HAS_2 = {
-    "controller_has_cards": {
-        "zones": ["hand"],
-        "owner": "me",
-        "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
-        "min_count": 2,
-    }
-}
-HAS_3 = {
-    "controller_has_cards": {
-        "zones": ["hand"],
-        "owner": "me",
-        "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
-        "min_count": 3,
     }
 }
 
@@ -43,24 +27,36 @@ SCRIPT = {
     "on_enter_mode": "auto",
     "on_activate_mode": "auto",
     "play_targeting": "auto",
+    "play_requirements": HAS_BAXIAN_FIELD,
     "triggered_effects": [],
     "on_play_actions": [
-        {"condition": HAS_1, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
-        {"condition": HAS_2, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
-        {"condition": HAS_3, "effect": {"action": "draw_cards", "amount": 1, "target_player": "me"}},
         {
             "target": {
                 "type": "cards_controlled_by_owner",
-                "zone": "hand",
+                "zone": "field",
                 "owner": "me",
-                "card_filter": {"exclude_event_card": True},
+                "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
             },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
         {
             "target": {"type": "selected_target"},
-            "effect": {"action": "move_to_relicario"},
+            "effect": {"action": "store_target_name", "flag": "eco_nomi_field_baxian_name"},
         },
-        {"effect": {"action": "shuffle_deck", "target_player": "me"}},
+        {
+            "target": {
+                "type": "selected_target",
+                "zone": "hand",
+                "owner": "me",
+                "card_filter": {
+                    "name_in": BAXIAN_NAMES,
+                    "name_not_equals_stored": "eco_nomi_field_baxian_name",
+                    "card_type_in": ["santo", "token"],
+                },
+                "min_targets": 1,
+                "max_targets": 1,
+            },
+            "effect": {"action": "summon_target_to_field"},
+        },
     ],
 }

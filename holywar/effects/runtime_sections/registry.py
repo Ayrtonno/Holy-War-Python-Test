@@ -773,6 +773,22 @@ class RuntimeRegistryMixin:
 
                 new_bonus += int(rule.get("self_bonus", 0) or 0)
 
+            # Add contextual faith auras sourced from cards on the field (e.g. dynamic building effects).
+            new_bonus += self.get_context_bonus_amount(
+                engine,
+                owner_idx,
+                context="faith",
+                amount_mode="flat",
+                target_uid=uid,
+            )
+            new_bonus += self.get_context_bonus_amount(
+                engine,
+                owner_idx,
+                context="faith",
+                amount_mode="per_count_div_floor",
+                target_uid=uid,
+            )
+
             # Apply the new bonus if it has changed
             current_faith = inst.current_faith if inst.current_faith is not None else base_faith
             delta = new_bonus - old_bonus
@@ -919,6 +935,12 @@ class RuntimeRegistryMixin:
                 applies_to = _norm(str(rule.get("applies_to", "all")))
                 if applies_to == "self" and target_uid and source_uid != target_uid:
                     continue
+                if target_uid:
+                    target_inst = engine.state.instances.get(target_uid)
+                    allowed_target_types = {_norm(str(v)) for v in list(rule.get("target_card_type_in", []) or [])}
+                    if allowed_target_types:
+                        if target_inst is None or _norm(target_inst.definition.card_type) not in allowed_target_types:
+                            continue
                 req = dict(rule.get("requirement", {}) or {})
                 candidates = self._collect_cards_for_requirement(engine, owner_idx, req)
                 if bool(rule.get("distinct_by_name", False)):

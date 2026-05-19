@@ -11,24 +11,14 @@ SCRIPT = {
     "on_play_actions": [
         {
             "target": {
-                "type": "selected_targets",
+                "type": "selected_target",
                 "zone": "graveyard",
                 "owner": "me",
                 "card_filter": {"name_contains": "ba xian", "card_type_in": ["santo", "token"]},
-                "min_targets": 0,
-                "max_targets": 2,
-            },
-            "effect": {"action": "move_to_hand"},
-        },
-        {
-            "target": {
-                "type": "selected_target",
-                "zone": "hand",
-                "owner": "me",
                 "min_targets": 1,
                 "max_targets": 1,
             },
-            "effect": {"action": "send_to_graveyard"},
+            "effect": {"action": "summon_target_to_field"},
         },
     ],
 }
