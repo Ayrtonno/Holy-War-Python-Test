@@ -2439,6 +2439,16 @@ class RuntimeEffectsMixin:
             if not candidates:
                 flags["_runtime_selected_target"] = ""
                 return
+            selected_for_action = self._selected_target_raw_for_current_action(engine)
+            if selected_for_action:
+                selected_uids = [v.strip() for v in selected_for_action.split(",") if v.strip()]
+                candidate_set = set(candidates)
+                selected_uids = [uid for uid in selected_uids if uid in candidate_set]
+                if max_targets >= 0:
+                    selected_uids = selected_uids[:max_targets]
+                if len(selected_uids) >= min_targets:
+                    flags["_runtime_selected_target"] = ",".join(selected_uids)
+                    return
             flags["_runtime_choice_source"] = source_uid
             flags["_runtime_choice_candidates"] = ";;".join(candidates)
             flags["_runtime_choice_owner"] = str(owner_idx)

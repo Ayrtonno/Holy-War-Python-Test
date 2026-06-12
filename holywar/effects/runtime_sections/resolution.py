@@ -290,10 +290,15 @@ class RuntimeResolutionMixin:
         mode = _norm(script.on_play_mode)
         flags = engine.state.flags
         previous_source = flags.get("_runtime_effect_source")
+        previous_selected_sequence = flags.get("_runtime_selected_target_sequence")
 
         flags["_runtime_effect_source"] = uid
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = str(target or "")
+        if str(target or "").strip().startswith("seq:"):
+            flags["_runtime_selected_target_sequence"] = str(target or "").strip()
+        else:
+            flags.pop("_runtime_selected_target_sequence", None)
         try:
             is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"noop", "none"}:
@@ -318,6 +323,10 @@ class RuntimeResolutionMixin:
             if not flags.get("_runtime_waiting_for_reveal"):
                 flags.pop("_runtime_source_card", None)
                 flags.pop("_runtime_selected_target", None)
+                if previous_selected_sequence is None:
+                    flags.pop("_runtime_selected_target_sequence", None)
+                else:
+                    flags["_runtime_selected_target_sequence"] = previous_selected_sequence
                 flags.pop("_runtime_action_index", None)
 
     # The following methods implement the logic for resolving card effects and managing triggers during gameplay. They interact with the game engine's state and rules API to determine when effects can be activated, to execute the effects of playing or activating cards, and to handle triggered effects based on game events. The methods also manage pending effects that require player input, allowing for complex interactions and timing during the resolution of card effects.
@@ -440,10 +449,15 @@ class RuntimeResolutionMixin:
         mode = _norm(script.on_activate_mode)
         flags = engine.state.flags
         previous_source = flags.get("_runtime_effect_source")
+        previous_selected_sequence = flags.get("_runtime_selected_target_sequence")
 
         flags["_runtime_effect_source"] = uid
         flags["_runtime_source_card"] = uid
         flags["_runtime_selected_target"] = str(target or "")
+        if str(target or "").strip().startswith("seq:"):
+            flags["_runtime_selected_target_sequence"] = str(target or "").strip()
+        else:
+            flags.pop("_runtime_selected_target_sequence", None)
         try:
             is_saint = _norm(inst.definition.card_type) in {"santo", "token"}
             if mode in {"scripted", "custom"} and script.on_activate_actions:
@@ -465,6 +479,10 @@ class RuntimeResolutionMixin:
                 flags["_runtime_effect_source"] = previous_source
             flags.pop("_runtime_source_card", None)
             flags.pop("_runtime_selected_target", None)
+            if previous_selected_sequence is None:
+                flags.pop("_runtime_selected_target_sequence", None)
+            else:
+                flags["_runtime_selected_target_sequence"] = previous_selected_sequence
             flags.pop("_runtime_selected_option", None)
 
     # The following methods implement the logic for resolving card effects and managing triggers during gameplay. They interact with the game engine's state and rules API to determine when effects can be activated, to execute the effects of playing or activating cards, and to handle triggered effects based on game events. The methods also manage pending effects that require player input, allowing for complex interactions and timing during the resolution of card effects.
@@ -890,7 +908,9 @@ class RuntimeResolutionMixin:
 
     # This method retrieves the raw selected target for the current action from the runtime flags. It checks if the raw value starts with "seq:", which indicates that it is a sequence of targets indexed by action index. If it is a sequence, it extracts the relevant target for the current action index. If it is not a sequence, it simply returns the raw value as the selected target. This method is used to determine which target has been selected by the player for the current action being resolved.
     def _selected_target_raw_for_current_action(self, engine: GameEngine) -> str:
-        raw = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
+        raw = str(engine.state.flags.get("_runtime_selected_target_sequence", "")).strip()
+        if not raw:
+            raw = str(engine.state.flags.get("_runtime_selected_target", "")).strip()
         if not raw.startswith("seq:"):
             return raw
 

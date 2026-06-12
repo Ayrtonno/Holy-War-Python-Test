@@ -32,10 +32,12 @@ SCRIPT = {
     "on_play_actions": [
         {
             "target": {
-                "type": "cards_controlled_by_owner",
+                "type": "selected_target",
                 "zone": "field",
                 "owner": "me",
                 "card_filter": {"name_in": BAXIAN_NAMES, "card_type_in": ["santo", "token"]},
+                "min_targets": 1,
+                "max_targets": 1,
             },
             "effect": {"action": "choose_targets", "min_targets": 1, "max_targets": 1},
         },
