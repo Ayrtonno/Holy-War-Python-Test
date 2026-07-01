@@ -105,15 +105,21 @@ class GUIStylesMixin:
     # This method sets up the styles for the main game view, defining a color palette and configuring styles for various ttk widgets such as frames, labels, buttons, entries, comboboxes, scrollbars, and progress bars. The styles include settings for background colors, foreground colors, border colors, fonts, padding, and state-specific appearances (e.g., active, pressed, disabled). The method ensures a consistent visual theme for the game view section of the GUI.
     def _setup_game_styles(self) -> None:
         self._game_palette = {
-            "bg": "#f7f8fa",
-            "surface": "#ffffff",
-            "surface_soft": "#fbfbfc",
-            "line": "#d9dde3",
-            "text": "#1f2328",
-            "muted": "#5b6573",
-            "green": "#2fb34a",
-            "green_dark": "#25933c",
-            "green_soft": "#eaf8ee",
+            "bg": "#0d1117",
+            "bg_alt": "#141a23",
+            "surface": "#18202b",
+            "surface_soft": "#202b38",
+            "surface_raise": "#243140",
+            "line": "#314052",
+            "text": "#f2ead7",
+            "muted": "#9aabbd",
+            "gold": "#d4a94f",
+            "gold_dark": "#9c7931",
+            "gold_soft": "#3b2e18",
+            "green": "#5bc86d",
+            "green_dark": "#3c9953",
+            "green_soft": "#183322",
+            "danger": "#a84f4f",
         }
 
         style = ttk.Style(cast(Any, self))
@@ -126,35 +132,59 @@ class GUIStylesMixin:
 
         style.configure("Game.TFrame", background=p["bg"])
         style.configure("Game.TLabel", background=p["bg"], foreground=p["text"])
+        style.configure("GameHero.TFrame", background=p["bg_alt"])
+        style.configure("GameHeroTitle.TLabel", background=p["bg_alt"], foreground=p["gold"], font=("Georgia", 28, "bold"))
+        style.configure("GameHeroSub.TLabel", background=p["bg_alt"], foreground=p["muted"], font=("Segoe UI", 10))
+        style.configure("GameStatus.TLabel", background=p["gold_soft"], foreground=p["text"], padding=(10, 6), font=("Segoe UI Semibold", 10))
+        style.configure("GameInfo.TLabel", background=p["surface"], foreground=p["gold"], padding=(10, 8), font=("Segoe UI Semibold", 10))
 
         style.configure(
             "Game.TLabelframe",
-            background=p["bg"],
-            bordercolor=p["line"],
-            borderwidth=1,
+            background=p["surface"],
+            bordercolor=p["gold_dark"],
+            borderwidth=2,
             relief="solid",
         )
         style.configure(
             "Game.TLabelframe.Label",
-            background=p["bg"],
-            foreground=p["text"],
+            background=p["surface"],
+            foreground=p["gold"],
+            font=("Segoe UI Semibold", 10),
         )
 
         style.configure(
             "Game.TButton",
-            background=p["surface"],
+            background=p["surface_raise"],
             foreground=p["text"],
             bordercolor=p["line"],
-            lightcolor=p["surface"],
-            darkcolor=p["surface"],
+            lightcolor=p["surface_raise"],
+            darkcolor=p["surface_raise"],
             relief="solid",
             borderwidth=1,
-            padding=(8, 3),
+            padding=(10, 5),
+            font=("Segoe UI Semibold", 9),
+        )
+        style.configure(
+            "GameMenu.TButton",
+            background=p["gold"],
+            foreground="#10151c",
+            bordercolor=p["gold_dark"],
+            lightcolor=p["gold"],
+            darkcolor=p["gold_dark"],
+            relief="solid",
+            borderwidth=1,
+            padding=(16, 10),
+            font=("Segoe UI Semibold", 11),
         )
         style.map(
             "Game.TButton",
-            background=[("active", p["surface_soft"]), ("pressed", "#eef1f4")],
-            foreground=[("disabled", "#9aa3ad")],
+            background=[("active", p["surface_soft"]), ("pressed", p["line"])],
+            foreground=[("disabled", "#748294")],
+        )
+        style.map(
+            "GameMenu.TButton",
+            background=[("active", "#e1ba64"), ("pressed", p["gold_dark"]), ("disabled", "#7e725a")],
+            foreground=[("disabled", "#20252c")],
         )
 
         style.configure(
@@ -219,7 +249,7 @@ class GUIStylesMixin:
         style.configure(
             "Game.Horizontal.TProgressbar",
             background=p["green"],
-            troughcolor="#ffffff",
+            troughcolor=p["bg_alt"],
             bordercolor=p["line"],
             lightcolor=p["green"],
             darkcolor=p["green_dark"],
@@ -362,25 +392,28 @@ class GUIStylesMixin:
             elif cls == "Button":
                 cfg(
                     w,
-                    bg=p["surface"],
+                    bg=p["surface_raise"],
                     fg=p["text"],
                     activebackground=p["surface_soft"],
                     activeforeground=p["text"],
                     relief="solid",
                     bd=1,
+                    highlightbackground=p["gold_dark"],
                     highlightthickness=0,
+                    font=("Segoe UI Semibold", 9),
                 )
             elif cls == "Listbox":
                 cfg(
                     w,
                     bg=p["surface"],
                     fg=p["text"],
-                    selectbackground=p["green_soft"],
+                    selectbackground=p["gold_soft"],
                     selectforeground=p["text"],
-                    highlightbackground=p["line"],
-                    highlightcolor=p["line"],
+                    highlightbackground=p["gold_dark"],
+                    highlightcolor=p["gold_dark"],
                     bd=1,
                     relief="solid",
+                    font=("Consolas", 10),
                 )
             elif cls == "Text":
                 cfg(
@@ -388,10 +421,11 @@ class GUIStylesMixin:
                     bg=p["surface"],
                     fg=p["text"],
                     insertbackground=p["text"],
-                    highlightbackground=p["line"],
-                    highlightcolor=p["line"],
+                    highlightbackground=p["gold_dark"],
+                    highlightcolor=p["gold_dark"],
                     bd=1,
                     relief="solid",
+                    font=("Consolas", 10),
                 )
         except tk.TclError:
             pass

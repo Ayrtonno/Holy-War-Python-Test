@@ -106,20 +106,33 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.deck_manager_frame = ttk.Frame(self)
         self.replay_manager_frame = ttk.Frame(self)
 
-        title = ttk.Label(self.main_menu_frame, text="Holy War", font=("Segoe UI", 26, "bold"))
-        title.pack(pady=(90, 24))
-        ttk.Button(self.main_menu_frame, text="Gioca", command=self.show_game_screen, width=28).pack(pady=10)
+        hero = ttk.Frame(self.main_menu_frame, style="GameHero.TFrame", padding=(48, 56))
+        hero.pack(fill="x", padx=90, pady=(90, 28))
+        title = ttk.Label(hero, text="Holy War", style="GameHeroTitle.TLabel")
+        title.pack(anchor="center")
+        ttk.Label(
+            hero,
+            text="Duel board tattico. Campo, reliquie, catene ed effetti in un HUD piu vicino a un TCG digitale.",
+            style="GameHeroSub.TLabel",
+            justify="center",
+        ).pack(anchor="center", pady=(10, 0))
+
+        menu_actions = ttk.Frame(self.main_menu_frame)
+        menu_actions.pack(pady=10)
+        ttk.Button(menu_actions, text="Gioca", command=self.show_game_screen, width=28, style="GameMenu.TButton").pack(pady=10)
         ttk.Button(
-            self.main_menu_frame,
+            menu_actions,
             text="Crea/Modifica deck",
             command=self.show_deck_manager,
             width=28,
+            style="GameMenu.TButton",
         ).pack(pady=10)
         ttk.Button(
-            self.main_menu_frame,
+            menu_actions,
             text="Replay",
             command=self.show_replay_manager,
             width=28,
+            style="GameMenu.TButton",
         ).pack(pady=10)
 
         top = ttk.Frame(self.game_screen)
@@ -169,7 +182,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         self.p2_rel_combo.bind("<<ComboboxSelected>>", lambda _e: self.update_premade_options())
         self.update_premade_options()
 
-        ttk.Label(self.game_screen, textvariable=self.status_var).pack(fill="x", padx=8)
+        ttk.Label(self.game_screen, textvariable=self.status_var, style="GameStatus.TLabel").pack(fill="x", padx=8, pady=(0, 4))
         self.replay_controls_frame = ttk.Frame(self.game_screen)
         self.replay_controls_frame.pack(fill="x", padx=8, pady=(4, 0))
         self.replay_controls_frame.pack_forget()
@@ -192,7 +205,7 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
         board = ttk.Frame(center)
         board.pack(side="left", fill="both", expand=True)
 
-        self.info_label = ttk.Label(board, text="Nessuna partita")
+        self.info_label = ttk.Label(board, text="Nessuna partita", style="GameInfo.TLabel")
         self.info_label.pack(anchor="w", pady=4, fill="x")
 
         resource_bar = ttk.Frame(board)
@@ -262,10 +275,14 @@ class HolyWarGUI(GUIStylesMixin, GUIDeckManagerMixin, GUITargetingMixin, GUIGame
 
         self.game_screen.configure(style="Game.TFrame")
         self.configure(bg=self._game_palette["bg"])
-        self._apply_game_theme(self.game_screen)
+        self.main_menu_frame.configure(style="Game.TFrame")
+        self.replay_manager_frame.configure(style="Game.TFrame")
 
         self._build_deck_manager_ui()
         self._build_replay_manager_ui()
+        self._apply_game_theme(self.main_menu_frame)
+        self._apply_game_theme(self.game_screen)
+        self._apply_game_theme(self.replay_manager_frame)
 
     def _build_replay_manager_ui(self) -> None:
         top = ttk.Frame(self.replay_manager_frame)

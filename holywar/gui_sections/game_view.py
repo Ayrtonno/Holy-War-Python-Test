@@ -27,6 +27,15 @@ class GUIGameViewMixin:
         except Exception:
             return False
 
+    def _board_text_color(self) -> str:
+        return str(getattr(self, "_game_palette", {}).get("text", "#f2ead7"))
+
+    def _board_special_text_color(self) -> str:
+        return str(getattr(self, "_game_palette", {}).get("gold", "#d4a94f"))
+
+    def _board_alert_text_color(self) -> str:
+        return str(getattr(self, "_game_palette", {}).get("danger", "#a84f4f"))
+
     def _ai_runtime_card_value(self, uid: str) -> int:
         if self.engine is None:
             return 0
@@ -211,14 +220,14 @@ class GUIGameViewMixin:
         self._set_slot_widgets(self.own_defense, own.defense)
         self._set_slot_widgets(self.own_artifacts, own.artifacts, hide_equipped=True)
         self.own_building.configure(text=self.card_label(own.building))
-        self.own_building.configure(fg="#7D3CFF" if self._is_altare_sigilli(own.building) else "black")
+        self.own_building.configure(fg="#a970ff" if self._is_altare_sigilli(own.building) else self._board_text_color())
         self._apply_equipment_highlight(self.own_building, own.building)
 
         self._set_slot_widgets(self.enemy_attack, enemy.attack)
         self._set_slot_widgets(self.enemy_defense, enemy.defense)
         self._set_slot_widgets(self.enemy_artifacts, enemy.artifacts, hide_equipped=True)
         self.enemy_building.configure(text=self.card_label(enemy.building))
-        self.enemy_building.configure(foreground="#7D3CFF" if self._is_altare_sigilli(enemy.building) else "#222222")
+        self.enemy_building.configure(foreground="#a970ff" if self._is_altare_sigilli(enemy.building) else self._board_text_color())
         self._apply_equipment_highlight(self.enemy_building, enemy.building)
         self._apply_blocked_artifact_slot_highlights()
 
@@ -439,6 +448,13 @@ class GUIGameViewMixin:
             if hide_equipped and self._is_equipment_card_equipped(uid):
                 display_uid = None
             widget.configure(text=self.card_label(display_uid))
+            try:
+                widget.configure(fg=self._board_text_color())
+            except tk.TclError:
+                try:
+                    widget.configure(foreground=self._board_text_color())
+                except tk.TclError:
+                    pass
             self._apply_equipment_highlight(widget, display_uid)
 
     # This method retrieves a list of unique identifiers (UIDs) for cards that are currently equipped to the specified card UID. It checks the game engine's state for the card instance corresponding to the provided UID and looks for any tags that indicate an "equipped_by" relationship. If such tags are found, it extracts the UIDs of the equipped cards and returns them in a list. The method also handles cases where the game engine is not initialized or when the provided UID is invalid, returning an empty list in those situations.
@@ -471,10 +487,10 @@ class GUIGameViewMixin:
                 return True
         return False
 
-    # This method applies a visual highlight to a widget based on whether the corresponding card UID has any equipment cards currently equipped. It checks if the card has equipped cards using the `_equipped_uids_for` method and sets the text color of the widget to red if it does, or black if it does not. The method also handles differences in widget types, attempting to configure both "fg" and "foreground" properties as needed, while gracefully handling any exceptions that may arise from unsupported configurations.
+    # This method applies a visual highlight to a widget based on whether the corresponding card UID has any equipment cards currently equipped. It checks if the card has equipped cards using the `_equipped_uids_for` method and sets the text color to a warning tone if it does, or back to the themed board text color if it does not. The method also handles differences in widget types, attempting to configure both "fg" and "foreground" properties as needed, while gracefully handling any exceptions that may arise from unsupported configurations.
     def _apply_equipment_highlight(self, widget, uid: str | None) -> None:
         has_equipment = bool(self._equipped_uids_for(uid))
-        color = "red" if has_equipment else "black"
+        color = self._board_alert_text_color() if has_equipment else self._board_text_color()
         # tk.Button uses "fg", ttk widgets generally use "foreground".
         try:
             widget.configure(fg=color)
@@ -506,11 +522,11 @@ class GUIGameViewMixin:
                 if i in enemy_blocked:
                     lbl.configure(relief="solid", borderwidth=2, foreground="#1f6feb")
                 else:
-                    lbl.configure(relief="flat", borderwidth=0, foreground="black")
+                    lbl.configure(relief="flat", borderwidth=0, foreground=self._board_text_color())
             except tk.TclError:
                 pass
 
-    # This method clears any visual highlights from the card slot widgets by resetting their text color to the default (black). It iterates through all the widgets corresponding to the attack, defense, and artifact slots for both players and sets their text color to black, effectively removing any highlights that may have been applied previously.
+    # This method appends any new log lines generated by the engine to the log panel.
     def _append_new_logs(self) -> None:
         if self.engine is None:
             return
