@@ -42,7 +42,18 @@ Controlli GUI principali:
 ## Architettura Effetti
 
 - `holywar/effects/library.py`: dispatcher leggero
-- `holywar/effects/registry.py`: registry handler per carta (`register_play`, `register_enter`)
+- `holywar/effects/runtime.py`: facade runtime con dataclass/spec comuni
+- `holywar/effects/runtime_sections/registry.py`: bootstrap script e proprieta statiche carta
+- `holywar/effects/runtime_sections/resolution.py`: play/enter/activate e binding trigger
+- `holywar/effects/runtime_sections/effects.py`: dispatcher centrale delle action runtime
+- `holywar/effects/runtime_sections/effects_combat.py`: buff/debuff, scudi, equipment, damage, faith/strength combat effects
+- `holywar/effects/runtime_sections/effects_board.py`: stato turno/campo, swap righe, controllo temporaneo, sigilli e tick speciali
+- `holywar/effects/runtime_sections/effects_decking.py`: draw, mill, recover, ricerca e manipolazione reliquiario/cimitero
+- `holywar/effects/runtime_sections/effects_removal.py`: destroy, excommunicate e spostamenti semplici verso la mano/uscita campo
+- `holywar/effects/runtime_sections/effects_resources.py`: sin, inspiration e faith/flag effects
+- `holywar/effects/runtime_sections/effects_summoning.py`: summon, token e ingressi sul campo
+- `holywar/effects/runtime_sections/effects_targeting.py`: targeting, move tra zone, equipment, token summon
+- `holywar/effects/runtime_sections/effects_conditions.py`: matching eventi/condizioni e requirement cards
 - `holywar/effects/card_scripts/cards/...`: script per carta, uno per file
 - `holywar/effects/cards/...`: moduli legacy ancora presenti solo per compatibilita interna
 
